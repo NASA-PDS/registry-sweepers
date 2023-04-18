@@ -42,7 +42,6 @@
 # We use a slim python-enabled base image.
 FROM python:3.10-slim-bullseye
 
-ARG GIT_BRANCH=main
 ENV INSTALL_WORKDIR=/tmp/registry-sweepers
 
 # Copy dependencies separately so installation is cached
