@@ -1,26 +1,34 @@
 # Registry Sweepers
 
-This module enable to sweep the PDS Registries by:
+This package provides supplementary metadata generation for registry documents, which are necessary for correct function of registry-api, and for common user queries. Execution is idempotent and should be scheduled on a recurring basis.
 
-- adding the superseded_by property on the non latest products
-- adding ancestry to the products
+### Components
 
+#### [Provenance](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/provenance.py)
+The provenance sweeper generates metadata for linking each version-superseded product with the versioned product which supersedes it.  The value of the successor is stored in the `ops:Provenance/ops:superseded_by` property.  This property will not be set for the latest version of any product.
 
-## Prerequisites
+#### [Ancestry](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/ancestry/__init__.py)
+The ancestry sweeper generates membership metadata for each product, i.e. which bundle lidvids and which collection lidvids reference a given product. These values will be stored in properties `ops:Provenance/ops:parent_bundle_identifier` and `ops:Provenance/ops:parent_collection_identifier`, respectively.  
 
-python 3.9
+## Developer Quickstart
 
-## User Quickstart
+### Prerequisites
 
-Install with:
+#### Dependencies
+- Python >=3.9
 
-    pip install registry-sweeper
+#### Environment Variables
+```
+PROV_CREDENTIALS={"admin": "admin"}  // OpenSearch username/password
+PROV_ENDPOINT=https://localhost:9200  // OpenSearch host url and port
+DEV_MODE=1  // disables host verification
+```
 
-To execute, run:
+After cloning the repository, and setting the repository root as the current working directory install the package with `pip install -e .`
 
-    python src/pds/registrysweepers/provenance.py --help
+The wrapper script for the suite of components may be run with `python ./docker/sweepers_driver.py`
 
-Ancestry utility cannot be called from a command line script but is called in `https://github.com/NASA-PDS/registry-sweepers/blob/main/docker/sweepers_driver.py` used in a docker image.
+Alternatively, registry-sweepers may be build from its [Dockerfile](./docker/Dockerfile) and run as a container, providing the same environment variables when running the container.
 
 
 ## Code of Conduct
