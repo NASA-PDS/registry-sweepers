@@ -1,6 +1,6 @@
 # Registry Sweepers
 
-This package provides supplementary metadata generation for registry documents, which are necessary for correct function of registry-api, and for common user queries. Execution is idempotent and should be scheduled on a recurring basis.
+This package provides supplementary metadata generation for registry documents, which is required for registry-api to function correctly, and for common user queries. Execution is idempotent and should be scheduled on a recurring basis.
 
 ### Components
 
