@@ -194,19 +194,30 @@ def write_updated_docs(host: Host, ids_and_updates: Mapping[str, Dict], index_na
     Given an OpenSearch host and a mapping of doc ids onto updates to those docs, write bulk updates to documents in db.
     """
     log.info("Bulk update %d documents", len(ids_and_updates))
+    bulk_update_chunk_threshold = 10000  # threshold is statements count.  There are two products per statement
+    bulk_update_products_threshold = int(bulk_update_chunk_threshold / 2)
 
-    bulk_updates = []
+    bulk_updates: List[str] = []
+    for lidvid, update_content in ids_and_updates.items():
+        if len(bulk_updates) >= bulk_update_chunk_threshold:
+            log.info(
+                f"Bulk update chunk threshold reached ({bulk_update_chunk_threshold} statements, {bulk_update_products_threshold} products), writing chunk to db"
+            )
+            _write_bulk_updates_chunk(host, index_name, bulk_updates)
+            bulk_updates = []
+        bulk_updates.append(json.dumps({"update": {"_id": lidvid}}))
+        bulk_updates.append(json.dumps({"doc": update_content}))
+
+    _write_bulk_updates_chunk(host, index_name, bulk_updates)
+
+
+def _write_bulk_updates_chunk(host: Host, index_name: str, bulk_updates: Iterable[str]):
     cross_cluster_indexes = [f"{node}:{index_name}" for node in host.cross_cluster_remotes]
     headers = {"Content-Type": "application/x-ndjson"}
     path = ",".join([index_name] + cross_cluster_indexes) + "/_bulk"
 
-    for lidvid, update_content in ids_and_updates.items():
-        bulk_updates.append(json.dumps({"update": {"_id": lidvid}}))
-        bulk_updates.append(json.dumps({"doc": update_content}))
-
     bulk_data = "\n".join(bulk_updates) + "\n"
 
-    log.info(f"writing bulk update for {len(bulk_updates)} products...")
     response = requests.put(
         urllib.parse.urljoin(host.url, path),
         auth=(host.username, host.password),
@@ -222,7 +233,7 @@ def write_updated_docs(host: Host, ids_and_updates: Mapping[str, Dict], index_na
             if "error" in item:
                 log.error("update error (%d): %s", item["status"], str(item["error"]))
     else:
-        log.info("bulk updates were successful")
+        log.info("Successfully wrote bulk updates chunk")
 
 
 def coerce_list_type(db_value: Any) -> List[Any]:
