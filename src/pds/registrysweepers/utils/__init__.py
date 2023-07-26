@@ -245,8 +245,10 @@ def _write_bulk_updates_chunk(host: Host, index_name: str, bulk_updates: Iterabl
         headers=headers,
         verify=host.verify,
     )
-    response.raise_for_status()
 
+    # N.B. HTTP status 200 is insufficient as a success check for _bulk API.
+    # See: https://github.com/elastic/elasticsearch/issues/41434
+    response.raise_for_status()
     response_content = response.json()
     if response_content.get("errors"):
         warn_types = {"document_missing_exception"}  # these types represent bad data, not bad sweepers behaviour
