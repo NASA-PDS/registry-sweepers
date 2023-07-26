@@ -77,7 +77,7 @@ def parse_log_level(input: str) -> int:
     try:
         result = int(input)
     except ValueError:
-        result = getattr(logging, input)
+        result = getattr(logging, input.upper())
     return result
 
 
