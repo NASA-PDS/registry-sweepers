@@ -123,6 +123,9 @@ def query_registry_db(
     path = ",".join([index_name] + cross_cluster_indexes) + f"/_search?scroll={scroll_validity_duration_minutes}m"
     served_hits = 0
 
+    last_info_log_at_percentage = 0
+    log.info("Query progress: 0%")
+
     more_data_exists = True
     while more_data_exists:
         resp = retry_call(
@@ -143,14 +146,11 @@ def query_registry_db(
         total_hits = data["hits"]["total"]["value"]
         log.debug(f"   paging query ({served_hits} to {min(served_hits + page_size, total_hits)} of {total_hits})")
 
-        last_info_log_at_percentage = 0
-        log.info("Query progress: 0%")
-
         for hit in data["hits"]["hits"]:
             served_hits += 1
 
             percentage_of_hits_served = int(served_hits / total_hits * 100)
-            if last_info_log_at_percentage is None or percentage_of_hits_served > (last_info_log_at_percentage + 5):
+            if last_info_log_at_percentage is None or percentage_of_hits_served >= (last_info_log_at_percentage + 5):
                 last_info_log_at_percentage = percentage_of_hits_served
                 log.info(f"Query progress: {percentage_of_hits_served}%")
 
