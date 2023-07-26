@@ -37,7 +37,7 @@ When run against the production OpenSearch instance with ~1.1M products, no cros
 
 The overwhelming bottleneck ops are the O(docs_count) db writes in ancestry.
 
-When run on an 8vCPU, 56GB RAM ECS node, the runtime is significantly longer due to the presence of CCR nodes.  Performance has not been benchmarked properly in this context due to the presence of errors preventing actual writes, but in that test, execution time was 1h15m.
+When run on an 8vCPU, 56GB RAM ECS node, the runtime is significantly longer due to the presence of CCR nodes.  Performance has not been benchmarked properly in this context due to the presence of errors preventing actual writes, but in that test, execution time was 1h15m.  CPU utilization stayed at/below 1vCPU and memory utilization peaked at ~14GB.
 
 
 ## Code of Conduct
