@@ -232,9 +232,8 @@ def write_updated_docs(host: Host, ids_and_updates: Mapping[str, Dict], index_na
 
 @retry(exceptions=(HTTPError, RuntimeError), tries=4, delay=2, backoff=2, logger=log)
 def _write_bulk_updates_chunk(host: Host, index_name: str, bulk_updates: Iterable[str]):
-    cross_cluster_indexes = [f"{node}:{index_name}" for node in host.cross_cluster_remotes]
     headers = {"Content-Type": "application/x-ndjson"}
-    path = ",".join([index_name] + cross_cluster_indexes) + "/_bulk"
+    path = f"{index_name}/_bulk"
 
     bulk_data = "\n".join(bulk_updates) + "\n"
 
