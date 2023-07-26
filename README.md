@@ -21,6 +21,7 @@ The ancestry sweeper generates membership metadata for each product, i.e. which 
 ```
 PROV_CREDENTIALS={"admin": "admin"}  // OpenSearch username/password
 PROV_ENDPOINT=https://localhost:9200  // OpenSearch host url and port
+LOGLEVEL - an integer log level or anycase string matching a python log level like `INFO` (optional - defaults to `INFO`))
 DEV_MODE=1  // disables host verification
 ```
 

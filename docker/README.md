@@ -5,6 +5,8 @@ Requires a running deployment of registry
 #### Env Variables
 `PROV_ENDPOINT` - the URL of the registry OpenSearch http endpoint
 `PROV_CREDENTIALS` - a JSON string of format `{"$username": "$password"}`
+`LOGLEVEL` - (optional - defaults to `INFO`) an integer log level or anycase string matching a python log level like `INFO`
+`DEV_MODE=1` - (optional) in dev mode, host cert verification is disabled
 
 
 ### Development
