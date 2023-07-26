@@ -28,7 +28,16 @@ After cloning the repository, and setting the repository root as the current wor
 
 The wrapper script for the suite of components may be run with `python ./docker/sweepers_driver.py`
 
-Alternatively, registry-sweepers may be build from its [Dockerfile](./docker/Dockerfile) and run as a container, providing the same environment variables when running the container.
+Alternatively, registry-sweepers may be build from its [Dockerfile](./docker/Dockerfile) with `docker build -f ./docker/Dockerfile .` and run as a container, providing the same environment variables when running the container.
+
+### Performance
+
+#### Rough Benchmarks
+When run against the production OpenSearch instance with ~1.1M products, no cross-cluster remotes, and (only) ~1k multi-version products, from a local development machine, the runtime is ~20min on first run and ~12min subsequently.  It appears that OpenSearch optimizes away no-op update calls, resulting in significant speedup despite the fact that registry-sweepers reprocesses metadata from scratch, every run.
+
+The overwhelming bottleneck ops are the O(docs_count) db writes in ancestry.
+
+When run on an 8vCPU, 56GB RAM ECS node, the runtime is significantly longer due to the presence of CCR nodes.  Performance has not been benchmarked in this context.
 
 
 ## Code of Conduct
