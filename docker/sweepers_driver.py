@@ -62,7 +62,7 @@ from datetime import datetime
 from typing import Callable, Iterable
 
 from pds.registrysweepers import provenance, ancestry
-from pds.registrysweepers.utils import configure_logging, get_human_readable_elapsed_since
+from pds.registrysweepers.utils import configure_logging, get_human_readable_elapsed_since, parse_log_level
 
 configure_logging(filepath=None, log_level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -92,6 +92,7 @@ except Exception as err:
     logging.error(err)
     raise ValueError(f'Failed to parse username/password from PROV_CREDENTIALS value "{provCredentialsStr}": {err}')
 
+log_level = parse_log_level(os.environ.get('LOGLEVEL', 'INFO'))
 
 def run_factory(sweeper_f: Callable) -> Callable:
     return functools.partial(
@@ -100,7 +101,7 @@ def run_factory(sweeper_f: Callable) -> Callable:
         username=username,
         password=password,
         log_filepath='provenance.log',
-        log_level=logging.INFO,  # TODO: pull this from LOGLEVEL env var
+        log_level=log_level,
         verify_host_certs=True if not dev_mode else False
     )
 
