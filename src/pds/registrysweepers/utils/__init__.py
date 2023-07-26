@@ -276,8 +276,6 @@ def _write_bulk_updates_chunk(host: Host, index_name: str, bulk_updates: Iterabl
                         f"Attempt to update the following documents failed unexpectedly due to {error_type} ({error_reason}): {ids}"
                     )
 
-    log.info("Successfully wrote bulk updates chunk")
-
 
 def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str, List[str]]]:
     """Return a nested aggregation of ids, aggregated first by error type, then by reason"""
