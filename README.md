@@ -28,7 +28,7 @@ After cloning the repository, and setting the repository root as the current wor
 
 The wrapper script for the suite of components may be run with `python ./docker/sweepers_driver.py`
 
-Alternatively, registry-sweepers may be built from its [Dockerfile](./docker/Dockerfile) with `docker build --file ./docker/Dockerfile .` and run as a container, providing those same environment variables when running the container.
+Alternatively, registry-sweepers may be built from its [Dockerfile](./docker/Dockerfile) with `docker image build --file ./docker/Dockerfile .` and run as a container, providing those same environment variables when running the container.
 
 ### Performance
 
