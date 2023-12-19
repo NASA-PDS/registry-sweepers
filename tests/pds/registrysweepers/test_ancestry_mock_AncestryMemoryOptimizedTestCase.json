@@ -1,0 +1,70 @@
+{
+  "--note": [
+    "Example history for three versioned-collection instances (two different collections, one with two versions).",
+    "Each collection has one unique non-agg product, and another which is shared with both other collections.",
+    "This tests the new memory-optimized implementation of ancestry.generation.get_nonaggregate_ancestry_records() to",
+    "ensure that it is accumulating correctly.",
+    "",
+    "Currently, does not incorporate a collection which shares no common elements with any other collections (use 1_2 for this in future)",
+    "",
+    "The overlapping-collection query which underpins the new implementation must be tested manually, separately."
+    ],
+  "get_nonaggregate_ancestry_records": [
+    {
+      "_source": {
+        "collection_lidvid": "a:b:c:bundle:first_collection::1.0",
+        "product_lidvid": [
+          "a:b:c:bundle:first_collection:first_unique_product::1.0",
+          "a:b:c:bundle:first_collection:overlapping_product::1.0"
+        ]
+      }
+    },
+    {
+      "_source": {
+        "collection_lidvid": "a:b:c:bundle:first_collection::2.0",
+        "product_lidvid": [
+          "a:b:c:bundle:first_collection:first_unique_product::2.0",
+          "a:b:c:bundle:first_collection:overlapping_product::1.0"
+        ]
+      }
+    },
+    {
+      "_source": {
+        "collection_lidvid": "a:b:c:bundle:second_collection::1.0",
+        "product_lidvid": [
+          "a:b:c:bundle:first_collection:second_unique_product::1.0",
+          "a:b:c:bundle:first_collection:overlapping_product::1.0"
+        ]
+      }
+    }
+  ],
+  "get_collections_with_shared_products_query": [
+    {
+      "_source": {
+        "collection_lidvid": "a:b:c:bundle:first_collection::1.0",
+        "product_lidvid": [
+          "a:b:c:bundle:first_collection:first_unique_product::1.0",
+          "a:b:c:bundle:first_collection:overlapping_product::1.0"
+        ]
+      }
+    },
+    {
+      "_source": {
+        "collection_lidvid": "a:b:c:bundle:first_collection::2.0",
+        "product_lidvid": [
+          "a:b:c:bundle:first_collection:first_unique_product::2.0",
+          "a:b:c:bundle:first_collection:overlapping_product::1.0"
+        ]
+      }
+    },
+    {
+      "_source": {
+        "collection_lidvid": "a:b:c:bundle:second_collection::1.0",
+        "product_lidvid": [
+          "a:b:c:bundle:first_collection:second_unique_product::1.0",
+          "a:b:c:bundle:first_collection:overlapping_product::1.0"
+        ]
+      }
+    }
+  ]
+}
