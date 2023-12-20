@@ -36,8 +36,9 @@ def query_registry_db(
     scroll_keepalive = f"{scroll_keepalive_minutes}m"
     request_timeout = 20
     query_id = get_random_hex_id()  # This is just used to differentiate queries during logging
-    log.info(f"Initiating query with id {query_id}: {json.dumps(query)}")
-
+    full_query_content = json.dumps(query)
+    logged_query_content = full_query_content if len(full_query_content) < 5000 else "<LARGE QUERY CONTENT OMITTED>"
+    log.info(f"Initiating query with id {query_id}: {logged_query_content}")
     served_hits = 0
 
     last_info_log_at_percentage = 0
