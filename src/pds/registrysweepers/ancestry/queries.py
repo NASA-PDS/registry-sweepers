@@ -70,3 +70,16 @@ def get_nonaggregate_ancestry_records_query(client: OpenSearch, registry_db_mock
     docs = query_f(client, query, _source, index_name="registry-refs")
 
     return docs
+
+
+def get_collections_containing_products_query(
+    nonaggregate_member_lidvid_strs: Iterable[str], client: OpenSearch, registry_db_mock: DbMockTypeDef
+):
+    # Query the registry-refs index for all collections containing any of the given non-aggregate products
+    nonaggregate_member_lidvid_strs = list(nonaggregate_member_lidvid_strs)
+    query: Dict = {"terms": {"product_lidvid": nonaggregate_member_lidvid_strs}}
+    _source = {"includes": ["collection_lidvid"]}
+    query_f = query_registry_db_or_mock(registry_db_mock, "get_collections_with_shared_products_query")
+    docs = query_f(client, query, _source, index_name="registry_refs")
+
+    return docs
