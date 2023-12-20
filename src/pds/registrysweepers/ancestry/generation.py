@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -11,6 +12,7 @@ from pds.registrysweepers.ancestry.queries import DbMockTypeDef
 from pds.registrysweepers.ancestry.queries import get_bundle_ancestry_records_query
 from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_bundles_query
 from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_collections_query
+from pds.registrysweepers.ancestry.queries import get_collections_containing_products_query
 from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_query
 from pds.registrysweepers.utils.misc import coerce_list_type
 from pds.registrysweepers.utils.productidentifiers.factory import PdsProductIdentifierFactory
@@ -164,29 +166,50 @@ def get_nonaggregate_ancestry_records(
 
     collection_refs_query_docs = get_nonaggregate_ancestry_records_query(client, registry_db_mock)
 
-    nonaggregate_ancestry_records_by_lidvid = {}
-    # For each collection, add the collection and its bundle ancestry to all products the collection contains
-    for doc in collection_refs_query_docs:
+    # registry-refs deals with pages of references - each collection has 1-N pages
+    # For each target page of collection references, fetch all collection reference pages which share any non-aggregate
+    # member refs with it, then lazily generate AncestryRecords for each of the target's referenced non-aggregates.
+    for target_collection_page_doc in collection_refs_query_docs:
         try:
-            collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
-            bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
-            nonaggregate_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
+            nonaggregate_lidvid_refs_from_target: List[str] = target_collection_page_doc["_source"]["product_lidvid"]
+            collection_pages_having_shared_products: List[Dict[str, Any]] = [
+                doc["_source"]
+                for doc in get_collections_containing_products_query(
+                    nonaggregate_lidvid_refs_from_target, client, registry_db_mock
+                )
+            ]
+
+            # Convert member refs lists into sets to avoid O(collections*nonaggs) lookup - probably not required though
+            for collection_page in collection_pages_having_shared_products:
+                collection_page["product_lidvid"] = set(collection_page["product_lidvid"])
+
+            for nonagg_ref in nonaggregate_lidvid_refs_from_target:
+                nonagg_lidvid = PdsLidVid.from_string(nonagg_ref)
+                nonagg_bundle_ancestors: Set[PdsLidVid] = set()  # bundle ancestors of non-agg product
+                nonagg_collection_ancestors: Set[PdsLidVid] = set()  # collection ancestors of non-agg product
+
+                for collection_page in collection_pages_having_shared_products:
+                    collection_lidvid = PdsLidVid.from_string(collection_page["collection_lidvid"])
+                    collection_bundle_ancestors = bundle_ancestry_by_collection_lidvid[
+                        collection_lidvid
+                    ]  # bundle ancestors of collections sharing any non-agg member refs with the target collection
+
+                    if nonagg_ref in collection_page["product_lidvid"]:
+                        nonagg_bundle_ancestors.update(collection_bundle_ancestors)
+                        nonagg_collection_ancestors.add(collection_lidvid)
+
+                yield AncestryRecord(
+                    lidvid=nonagg_lidvid,
+                    parent_collection_lidvids=nonagg_collection_ancestors,
+                    parent_bundle_lidvids=nonagg_bundle_ancestors,
+                )
+
         except (ValueError, KeyError) as err:
             log.warning(
-                'Failed to parse collection and/or product LIDVIDs from document in index "%s" with id "%s" due to %s: %s',
-                doc.get("_index"),
-                doc.get("_id"),
+                'Failed to parse collection, collection referencing shared product, and/or product LIDVIDs referenced by document in index "%s" with id "%s" due to %s: %s',
+                target_collection_page_doc.get("_index"),
+                target_collection_page_doc.get("_id"),
                 type(err).__name__,
                 err,
             )
             continue
-
-        for lidvid in nonaggregate_lidvids:
-            if lidvid not in nonaggregate_ancestry_records_by_lidvid:
-                nonaggregate_ancestry_records_by_lidvid[lidvid] = AncestryRecord(lidvid=lidvid)
-
-            record = nonaggregate_ancestry_records_by_lidvid[lidvid]
-            record.parent_bundle_lidvids.update(bundle_ancestry)
-            record.parent_collection_lidvids.add(collection_lidvid)
-
-    return nonaggregate_ancestry_records_by_lidvid.values()
