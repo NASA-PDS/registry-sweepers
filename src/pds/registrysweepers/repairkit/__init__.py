@@ -85,7 +85,9 @@ def generate_updates(
                 "repairkit sweeper detects documents in need of repair - please ~harass~ *request* node user to update their harvest version"
             )
             repair_already_logged_to_error = True
-        yield Update(id=id, content=repairs)
+
+        if document_needed_fixing:
+            yield Update(id=id, content=repairs)
 
 
 def run(
