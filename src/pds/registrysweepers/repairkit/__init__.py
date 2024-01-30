@@ -21,6 +21,7 @@ from pds.registrysweepers.utils import query_registry_db
 from pds.registrysweepers.utils.db.client import get_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import coerce_non_list_type
 from pds.registrysweepers.utils.misc import get_sweeper_version_metadata_key
 
 from . import allarrays
@@ -47,8 +48,16 @@ To get str_a == str_b, re.compile(str_a).fullmatch
 
 """
 
+
+def temporary_fix(document: Dict, fieldname: str) -> Dict:
+    current_value = document[fieldname]
+    expected_value = coerce_non_list_type(current_value, support_null=True)
+    return {} if current_value == expected_value else {fieldname: expected_value}
+
+
 REPAIR_TOOLS = {
     re.compile(".").match: [allarrays.repair],
+    re.compile("^ops:Provenance/ops:superseded_by$").match: [temporary_fix],
 }
 
 log = logging.getLogger(__name__)
