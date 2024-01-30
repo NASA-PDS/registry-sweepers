@@ -97,11 +97,7 @@ def run(
     log.info(f"Starting repairkit v{SWEEPERS_REPAIRKIT_VERSION} sweeper processing...")
 
     unprocessed_docs_query = {
-        "query": {
-            "bool": {
-                "must_not": [{"range": {SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY: {"gte": SWEEPERS_REPAIRKIT_VERSION}}}]
-            }
-        }
+        "query": {"bool": {"must_not": [{"range": {SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY: {"gte": 999}}}]}}
     }
 
     # page_size and bulk_chunk_max_update_count constraints are necessary to avoid choking nodes with very-large docs
