@@ -125,7 +125,7 @@ args = parser.parse_args()
 sweepers = [
     repairkit.run,
     provenance.run,
-    ancestry.run
+    # ancestry.run
 ]
 
 for option, sweeper in optional_sweepers.items():
