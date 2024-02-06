@@ -264,8 +264,8 @@ def _get_nonaggregate_ancestry_records_with_chunking(
     user_configured_max_memory_usage = AncestryRuntimeConstants.max_acceptable_memory_usage
     available_processing_memory = user_configured_max_memory_usage - baseline_memory_usage
     disk_dump_memory_threshold = baseline_memory_usage + (
-        available_processing_memory / 2.5
-    )  # peak expected memory use is during merge, where two dump files are open simultaneously. 0.5 added for overhead after testing revealed 2.0 was insufficient
+        available_processing_memory / 3.0
+    )  # peak expected memory use is during merge, where two dump files are open simultaneously. 1.0 added for overhead after testing revealed 2.5 was insufficient
     log.info(
         f"Max memory use set at {user_configured_max_memory_usage}% - dumps will trigger when memory usage reaches {disk_dump_memory_threshold:.1f}%"
     )
