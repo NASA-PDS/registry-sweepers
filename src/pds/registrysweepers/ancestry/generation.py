@@ -5,6 +5,8 @@ import shutil
 import sys
 import tempfile
 from collections import namedtuple
+from datetime import datetime
+from datetime import timedelta
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -275,6 +277,8 @@ def _get_nonaggregate_ancestry_records_with_chunking(
 
     most_recent_attempted_collection_lidvid: Union[PdsLidVid, None] = None
     nonaggregate_ancestry_records_by_lidvid = {}
+    last_dump_time = datetime.now()
+
     for doc in collection_refs_query_docs:
         try:
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
@@ -293,8 +297,12 @@ def _get_nonaggregate_ancestry_records_with_chunking(
                 record_dict["parent_bundle_lidvids"].update({str(id) for id in bundle_ancestry})
                 record_dict["parent_collection_lidvids"].add(str(collection_lidvid))
 
-                if psutil.virtual_memory().percent >= disk_dump_memory_threshold:
-                    log.debug(
+                if datetime.now() - last_dump_time > timedelta(minutes=10):
+                    # if (
+                    #     sys.getsizeof(nonaggregate_ancestry_records_by_lidvid) / 1024**2 > 1024
+                    # ):  # if chunk is bigger than 1GB
+                    # if psutil.virtual_memory().percent >= disk_dump_memory_threshold:
+                    log.info(
                         f"Memory threshold {disk_dump_memory_threshold:.1f}% reached - dumping serialized history to disk for {len(nonaggregate_ancestry_records_by_lidvid)} products"
                     )
                     make_history_serializable(nonaggregate_ancestry_records_by_lidvid)
@@ -303,6 +311,7 @@ def _get_nonaggregate_ancestry_records_with_chunking(
                         chunk_size_max, sys.getsizeof(nonaggregate_ancestry_records_by_lidvid)
                     )  # slightly problematic due to reuse of pointers vs actual values, but let's try it
                     nonaggregate_ancestry_records_by_lidvid = {}
+                    last_dump_time = datetime.now()
 
             # mark collection for metadata update
             touched_ref_documents.append(
