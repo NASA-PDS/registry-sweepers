@@ -1,6 +1,6 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2024-02-05)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2024-03-26)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.1...«unknown»)
 
@@ -12,8 +12,13 @@
 
 - Investigate/implement non-redundant provenance processing [\#92](https://github.com/NASA-PDS/registry-sweepers/issues/92)
 
+**Defects:**
+
+- When building registry-sweeper version 1.2.1, docker image 1.3.0 was published on docker hub [\#109](https://github.com/NASA-PDS/registry-sweepers/issues/109) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
+
 **Other closed issues:**
 
+- Test latest sweeper changes on all production OpenSearch clusters [\#98](https://github.com/NASA-PDS/registry-sweepers/issues/98)
 - Add node information to select log messages [\#18](https://github.com/NASA-PDS/registry-sweepers/issues/18)
 - Implement functional tests for provenance.py [\#13](https://github.com/NASA-PDS/registry-sweepers/issues/13)
 - Switch utils from raw requests calls to opensearch-py [\#12](https://github.com/NASA-PDS/registry-sweepers/issues/12)
