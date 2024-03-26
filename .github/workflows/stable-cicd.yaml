@@ -47,13 +47,13 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             -   name: 💳 Checkout
-                uses: actions/checkout@v3
+                uses: actions/checkout@v4
                 with:
                     lfs: true
                     token: ${{secrets.ADMIN_GITHUB_TOKEN}}
                     fetch-depth: 0
             -   name: 💵 Python Cache
-                uses: actions/cache@v3
+                uses: actions/cache@v4
                 with:
                     path: ~/.cache/pip
                     # The "key" used to indicate a set of cached files is the operating system runner
@@ -62,18 +62,15 @@ jobs:
                     key: pds-${{runner.os}}-py-${{hashFiles('**/*.whl')}}
                     # To restore a set of files, we only need to match a prefix of the saved key.
                     restore-keys: pds-${{runner.os}}-py-
-            -   name: 🫙 Docker Image Tag Determination
-                id: docker_tag_determination
-                run: echo "::set-output name=image_tag::$(cat ./src/pds/registrysweepers/VERSION.txt)"
             -   name: 💳 Docker Hub Identification
-                uses: docker/login-action@v2
+                uses: docker/login-action@v3
                 with:
                     username: ${{secrets.DOCKERHUB_USERNAME}}
                     password: ${{secrets.DOCKERHUB_TOKEN}}
             -   name: 🎰 QEMU Multiple Machine Emulation
-                uses: docker/setup-qemu-action@v2
+                uses: docker/setup-qemu-action@v3
             -   name: 🚢 Docker Buildx
-                uses: docker/setup-buildx-action@v2
+                uses: docker/setup-buildx-action@v3
             -   name: 🤠 Roundup
                 uses: NASA-PDS/roundup-action@stable
                 with:
@@ -82,8 +79,13 @@ jobs:
                     pypi_username: ${{secrets.PYPI_USERNAME}}
                     pypi_password: ${{secrets.PYPI_PASSWORD}}
                     ADMIN_GITHUB_TOKEN: ${{secrets.ADMIN_GITHUB_TOKEN}}
+            -   name: 🫙 Docker Image Tag Determination
+                id: docker_tag_determination
+                run: |
+                    ref=${{github.ref_name}}
+                    echo "image_tag=${ref#release/}" >> $GITHUB_OUTPUT
             -   name: 🧱 Image Construction and Publication
-                uses: docker/build-push-action@v3
+                uses: docker/build-push-action@v5
                 with:
                     context: ./
                     file: ./docker/Dockerfile
