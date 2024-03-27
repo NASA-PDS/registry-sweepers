@@ -5,8 +5,10 @@ import tempfile
 import unittest
 
 from pds.registrysweepers.ancestry import AncestryRecord
+from pds.registrysweepers.ancestry.utils import load_history_from_filepath
 from pds.registrysweepers.ancestry.utils import make_history_serializable
 from pds.registrysweepers.ancestry.utils import merge_matching_history_chunks
+from pds.registrysweepers.ancestry.utils import write_history_to_filepath
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 
@@ -51,11 +53,11 @@ class TestMergeMatchingHistoryChunksTestCase(unittest.TestCase):
 
         self.temp_dir = tempfile.mkdtemp()
         for fn, file_content in setup_content["inputs"].items():
-            with open(os.path.join(self.temp_dir, fn), "w+") as setup_outfile:
-                json.dump(file_content, setup_outfile)
+            fp = os.path.join(self.temp_dir, fn)
+            write_history_to_filepath(file_content, fp)
 
-        self.dest_fp = os.path.join(self.temp_dir, "dest.json")
-        self.src_fps = [os.path.join(self.temp_dir, f"src{i}.json") for i in range(1, 3)]
+        self.dest_fp = os.path.join(self.temp_dir, "dest.dump")
+        self.src_fps = [os.path.join(self.temp_dir, f"src{i}.dump") for i in range(1, 3)]
 
         self.expected_outputs = setup_content["outputs"]
 
@@ -65,15 +67,10 @@ class TestMergeMatchingHistoryChunksTestCase(unittest.TestCase):
 
     def test_merges_correctly(self):
         merge_matching_history_chunks(self.dest_fp, self.src_fps)
-        for fn, content in self.expected_outputs.items():
+        for fn, expected_content in self.expected_outputs.items():
             fp = os.path.join(self.temp_dir, fn)
-            with open(fp, "r") as result_infile:
-                content = json.load(result_infile)
-                self.assertDictEqual(self.expected_outputs[fn], content)
-                print(fp)
-                print(content)
-                print(self.expected_outputs[fn])
-                print("\n")
+            resultant_content = load_history_from_filepath(fp)
+            self.assertDictEqual(expected_content, resultant_content)
 
 
 if __name__ == "__main__":
