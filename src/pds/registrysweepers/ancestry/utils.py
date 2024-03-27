@@ -44,7 +44,8 @@ def merge_matching_history_chunks(dest_fp: str, src_fps: List[str], max_chunk_si
     dest_file_updated = False
 
     for src_fn in src_fps:
-        log.debug(f"merging from {src_fn}...")
+        src_file_size_mb = os.stat(src_fn).st_size / 1024**2
+        log.debug(f"merging from {src_fn} ({int(src_file_size_mb)}MB)...")
         with open(src_fn, "r") as src_infile:
             src_file_content: Dict[str, SerializableAncestryRecordTypeDef] = json.load(src_infile)
 
