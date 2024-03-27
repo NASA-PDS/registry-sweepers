@@ -106,3 +106,4 @@ typescript
 !.gitattributes
 !.gitignore
 !.gitkeep
+/.run/
