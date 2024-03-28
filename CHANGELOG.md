@@ -1,6 +1,6 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2024-03-26)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2024-03-28)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.1...«unknown»)
 
@@ -14,6 +14,7 @@
 
 **Defects:**
 
+- Timeout bug when running legacy dashboard sync [\#111](https://github.com/NASA-PDS/registry-sweepers/issues/111) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
 - When building registry-sweeper version 1.2.1, docker image 1.3.0 was published on docker hub [\#109](https://github.com/NASA-PDS/registry-sweepers/issues/109) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 
 **Other closed issues:**
