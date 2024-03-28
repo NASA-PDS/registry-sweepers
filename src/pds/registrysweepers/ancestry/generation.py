@@ -24,6 +24,7 @@ from pds.registrysweepers.ancestry.queries import get_collection_ancestry_record
 from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_query
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
 from pds.registrysweepers.ancestry.utils import dump_history_to_disk
+from pds.registrysweepers.ancestry.utils import gb_mem_to_size
 from pds.registrysweepers.ancestry.utils import load_partial_history_to_records
 from pds.registrysweepers.ancestry.utils import make_history_serializable
 from pds.registrysweepers.ancestry.utils import merge_matching_history_chunks
@@ -297,13 +298,16 @@ def _get_nonaggregate_ancestry_records_with_chunking(
                 record_dict["parent_bundle_lidvids"].update({str(id) for id in bundle_ancestry})
                 record_dict["parent_collection_lidvids"].add(str(collection_lidvid))
 
-                if datetime.now() - last_dump_time > timedelta(minutes=10):
-                    # if (
-                    #     sys.getsizeof(nonaggregate_ancestry_records_by_lidvid) / 1024**2 > 1024
-                    # ):  # if chunk is bigger than 1GB
+                # if datetime.now() - last_dump_time > timedelta(minutes=10):
+                max_desired_chunk_memory_usage_gb = 10
+                max_desired_chunk_size = gb_mem_to_size(max_desired_chunk_memory_usage_gb)
+                if sys.getsizeof(nonaggregate_ancestry_records_by_lidvid) > max_desired_chunk_size:
                     # if psutil.virtual_memory().percent >= disk_dump_memory_threshold:
+                    # log.info(
+                    #     f"Memory threshold {disk_dump_memory_threshold:.1f}% reached - dumping serialized history to disk for {len(nonaggregate_ancestry_records_by_lidvid)} products"
+                    # )
                     log.info(
-                        f"Memory threshold {disk_dump_memory_threshold:.1f}% reached - dumping serialized history to disk for {len(nonaggregate_ancestry_records_by_lidvid)} products"
+                        f"Chunk memory size {max_desired_chunk_size:.1f}% reached - dumping serialized history to disk for {len(nonaggregate_ancestry_records_by_lidvid)} products"
                     )
                     make_history_serializable(nonaggregate_ancestry_records_by_lidvid)
                     dump_history_to_disk(on_disk_cache_dir, nonaggregate_ancestry_records_by_lidvid)

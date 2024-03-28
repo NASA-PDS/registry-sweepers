@@ -133,3 +133,8 @@ def load_partial_history_to_records(fn: str) -> Iterable[AncestryRecord]:
 
     for history_dict in content.values():
         yield AncestryRecord.from_dict(history_dict)
+
+
+def gb_mem_to_size(desired_mem_usage_gb) -> int:
+    # rough estimated ratio of memory size to sys.getsizeof() report
+    return desired_mem_usage_gb / 3.1 * 2621536
