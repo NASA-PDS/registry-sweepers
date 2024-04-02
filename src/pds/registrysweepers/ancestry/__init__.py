@@ -43,7 +43,7 @@ def run(
 
     log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing...")
 
-    bundle_records = get_bundle_ancestry_records(client, registry_mock_query_f)
+    bundle_records = list(get_bundle_ancestry_records(client, registry_mock_query_f))
     collection_records = list(get_collection_ancestry_records(client, registry_mock_query_f))
     nonaggregate_records = get_nonaggregate_ancestry_records(client, collection_records, registry_mock_query_f)
 
