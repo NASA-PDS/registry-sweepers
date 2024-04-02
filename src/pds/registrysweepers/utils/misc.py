@@ -3,12 +3,15 @@ import random
 from datetime import datetime
 from typing import Any
 from typing import Callable
+from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import TypeVar
 from typing import Union
 
 T = TypeVar("T")
+K = TypeVar("K")
+V = TypeVar("V")
 
 
 def coerce_list_type(db_value: Union[T, List[T]]) -> List[T]:
@@ -117,3 +120,24 @@ def parse_boolean_env_var(key: str) -> bool:
         raise ValueError(
             f'Could not parse valid boolean from env var "{key}" - expected {valid_truthy_values} for True or {valid_falsy_values} for False'
         )
+
+
+def bin_elements(elements: Iterable[V], key_f: Callable[[V], K]) -> Dict[K, List[V]]:
+    """
+    Given a collection of elements and a function to derive the hashable bin key of an element, return a dict of
+    elements binned by key.
+
+    @param elements: an iterable collection of elements
+    @param key: a key function mapping an element onto its bin value
+    @return: a dict of bin keys onto the elements belonging to that bin
+    """
+
+    result: Dict[K, List[V]] = {}
+    for e in elements:
+        k = key_f(e)
+        if k not in result:
+            result[k] = []
+
+        result[k].append(e)
+
+    return result

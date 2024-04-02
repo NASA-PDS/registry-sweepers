@@ -1,5 +1,6 @@
 import unittest
 
+from pds.registrysweepers.utils.misc import bin_elements
 from pds.registrysweepers.utils.misc import coerce_list_type
 from pds.registrysweepers.utils.misc import coerce_non_list_type
 from pds.registrysweepers.utils.misc import iterate_pages_of_size
@@ -60,6 +61,16 @@ class CoerceNonListTypeTestCase(unittest.TestCase):
     def test_null_support(self):
         arr_null = []
         self.assertEqual(None, coerce_non_list_type(arr_null, support_null=True))
+
+
+class BinElementsTestCase(unittest.TestCase):
+    def test_basic_functionality(self):
+        elements = ["here", "are", "some", "strings"]
+
+        strings_by_first_letter = bin_elements(elements, lambda s: s[0])
+        self.assertSetEqual({"here"}, set(strings_by_first_letter["h"]))
+        self.assertSetEqual({"are"}, set(strings_by_first_letter["a"]))
+        self.assertSetEqual({"some", "strings"}, set(strings_by_first_letter["s"]))
 
 
 if __name__ == "__main__":
