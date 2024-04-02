@@ -11,6 +11,7 @@ from typing import Union
 
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
+from pds.registrysweepers.ancestry.generation import generate_nonaggregate_and_collection_records_iteratively
 from pds.registrysweepers.ancestry.generation import get_bundle_ancestry_records
 from pds.registrysweepers.ancestry.generation import get_collection_ancestry_records
 from pds.registrysweepers.ancestry.generation import get_nonaggregate_ancestry_records
@@ -44,14 +45,11 @@ def run(
     log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing...")
 
     bundle_records = list(get_bundle_ancestry_records(client, registry_mock_query_f))
-    collection_records = list(get_collection_ancestry_records(client, registry_mock_query_f))
-    nonaggregate_records = get_nonaggregate_ancestry_records(client, collection_records, registry_mock_query_f)
+    collection_and_nonaggregate_records = generate_nonaggregate_and_collection_records_iteratively(
+        client, get_collection_ancestry_records(client, registry_mock_query_f), registry_mock_query_f
+    )
 
-    # the order of this chain is now important - writing descendants first ensures that if an ancestor is given a
-    # "processed by sweeper version" flag, it may be assumed that all its descendants have also been processed
-    # this avoids the potential for a bundle/collection to be metadata-marked as up-to-date when execution failed before
-    # its descendants were updated (due to execution interruption, e.g. database overload)
-    ancestry_records = chain(nonaggregate_records, collection_records, bundle_records)
+    ancestry_records = chain(collection_and_nonaggregate_records, bundle_records)
     ancestry_records_to_write = filter(lambda r: not r.skip_write, ancestry_records)
     updates = generate_updates(ancestry_records_to_write, ancestry_records_accumulator, bulk_updates_sink)
 

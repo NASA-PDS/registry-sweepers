@@ -32,6 +32,7 @@ from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import Update
 from pds.registrysweepers.utils.db import write_updated_docs
+from pds.registrysweepers.utils.misc import bin_elements
 from pds.registrysweepers.utils.misc import coerce_list_type
 from pds.registrysweepers.utils.productidentifiers.factory import PdsProductIdentifierFactory
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
@@ -182,6 +183,35 @@ def get_collection_ancestry_records(
     # We could retain the keys for better performance, as they're used by the non-aggregate record generation, but this
     # is cleaner, so we'll regenerate the dict from the records later unless performance is a problem.
     return ancestry_by_collection_lidvid.values()
+
+
+def generate_nonaggregate_and_collection_records_iteratively(
+    client: OpenSearch,
+    all_collections_records: Iterable[AncestryRecord],
+    registry_db_mock: DbMockTypeDef = None,
+) -> Iterable[AncestryRecord]:
+    """
+    Iteratively generate nonaggregate records in chunks, each chunk sharing a common collection LID.  This
+    prevents the need to simultaneously store data in memory for a large volume of nonaggregate records.
+
+    After non-aggregate records are generated, the corresponding collections' records are updated, such that they are
+    only processed and marked up-to-date if their non-aggregates have successfully been updated.
+    """
+
+    collection_records_by_lid = bin_elements(all_collections_records, lambda r: r.lidvid.lid)
+
+    for lid, collections_records_for_lid in collection_records_by_lid.items():
+        if all([record.skip_write for record in collections_records_for_lid]):
+            logging.info(f"Skipping updates for up-to-date collection family: {str(lid)}")  # TODO: SET TO DEBUG INSTEAD
+            continue
+
+        for non_aggregate_record in get_nonaggregate_ancestry_records(
+            client, collections_records_for_lid, registry_db_mock
+        ):
+            yield non_aggregate_record
+
+        for collection_record in collections_records_for_lid:
+            yield collection_record
 
 
 def get_nonaggregate_ancestry_records(
