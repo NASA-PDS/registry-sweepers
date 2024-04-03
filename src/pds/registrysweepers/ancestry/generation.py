@@ -254,6 +254,10 @@ def _get_nonaggregate_ancestry_records_without_chunking(
     # For each collection, add the collection and its bundle ancestry to all products the collection contains
     for doc in collection_refs_query_docs:
         try:
+            if doc["_id"].split("::")[2].startswith("S"):
+                log.info(f'Skipping secondary-collection document {doc["_id"]}')
+                continue
+
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
             nonaggregate_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
         except (ValueError, KeyError) as err:
