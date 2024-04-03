@@ -202,16 +202,24 @@ def generate_nonaggregate_and_collection_records_iteratively(
 
     for lid, collections_records_for_lid in collection_records_by_lid.items():
         if all([record.skip_write for record in collections_records_for_lid]):
-            logging.info(f"Skipping updates for up-to-date collection family: {str(lid)}")  # TODO: SET TO DEBUG INSTEAD
+            log.info(f"Skipping updates for up-to-date collection family: {str(lid)}")  # TODO: SET TO DEBUG INSTEAD
             continue
+        else:
+            log.info(
+                f"Processing all versions of collection {str(lid)}: {[str(id) for id in sorted([r.lidvid for r in collections_records_for_lid])]}"
+            )
 
         for non_aggregate_record in get_nonaggregate_ancestry_records(
             client, collections_records_for_lid, registry_db_mock, utilize_chunking=False
         ):
+            log.info(f"Yielding non-agg {non_aggregate_record.lidvid}")
             yield non_aggregate_record
 
         for collection_record in collections_records_for_lid:
+            log.info(f"Yielding collection {collection_record.lidvid}")
             yield collection_record
+
+        print("LID family complete!")
 
 
 def get_nonaggregate_ancestry_records(
@@ -247,7 +255,6 @@ def _get_nonaggregate_ancestry_records_without_chunking(
     for doc in collection_refs_query_docs:
         try:
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
-            bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
             nonaggregate_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
         except (ValueError, KeyError) as err:
             log.warning(
@@ -256,6 +263,14 @@ def _get_nonaggregate_ancestry_records_without_chunking(
                 doc.get("_id"),
                 type(err).__name__,
                 err,
+            )
+            continue
+
+        try:
+            bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
+        except KeyError:
+            log.debug(
+                f'Failed to resolve history for page {doc.get("_id")} in index {doc.get("_index")} with collection_lidvid {collection_lidvid} - no such collection exists in registry.'
             )
             continue
 
@@ -314,9 +329,16 @@ def _get_nonaggregate_ancestry_records_with_chunking(
         try:
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
             most_recent_attempted_collection_lidvid = collection_lidvid
-            for nonaggregate_lidvid_str in doc["_source"]["product_lidvid"]:
-                bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
 
+            try:
+                bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
+            except KeyError:
+                log.debug(
+                    f'Failed to resolve history for page {doc.get("_id")} in index {doc.get("_index")} with collection_lidvid {collection_lidvid} - no such collection exists in registry.'
+                )
+                continue
+
+            for nonaggregate_lidvid_str in doc["_source"]["product_lidvid"]:
                 if nonaggregate_lidvid_str not in nonaggregate_ancestry_records_by_lidvid:
                     nonaggregate_ancestry_records_by_lidvid[nonaggregate_lidvid_str] = {
                         "lidvid": nonaggregate_lidvid_str,
