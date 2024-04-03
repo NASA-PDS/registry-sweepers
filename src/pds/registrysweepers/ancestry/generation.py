@@ -213,14 +213,10 @@ def generate_nonaggregate_and_collection_records_iteratively(
         for non_aggregate_record in get_nonaggregate_ancestry_records_for_collection_lid(
             client, lid, collections_records_for_lid, registry_db_mock
         ):
-            log.info(f"Yielding non-agg {non_aggregate_record.lidvid}")
             yield non_aggregate_record
 
         for collection_record in collections_records_for_lid:
-            log.info(f"Yielding collection {collection_record.lidvid}")
             yield collection_record
-
-        print("LID family complete!")
 
 
 def get_nonaggregate_ancestry_records(
