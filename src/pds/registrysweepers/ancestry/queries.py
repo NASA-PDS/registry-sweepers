@@ -12,6 +12,7 @@ from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import get_query_hits_count
 from pds.registrysweepers.utils.db import query_registry_db_or_mock
+from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +73,36 @@ def get_nonaggregate_ancestry_records_query(client: OpenSearch, registry_db_mock
         "query": {
             "bool": {
                 "must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]
+            }
+        },
+        "seq_no_primary_term": True,
+    }
+    _source = {"includes": ["collection_lidvid", "batch_id", "product_lidvid"]}
+    query_f = query_registry_db_or_mock(registry_db_mock, "get_nonaggregate_ancestry_records", use_search_after=True)
+
+    # each document will have many product lidvids, so a smaller page size is warranted here
+    docs = query_f(
+        client,
+        "registry-refs",
+        query,
+        _source,
+        page_size=AncestryRuntimeConstants.nonaggregate_ancestry_records_query_page_size,
+        request_timeout_seconds=30,
+        sort_fields=["collection_lidvid", "batch_id"],
+    )
+
+    return docs
+
+
+def get_nonaggregate_ancestry_records_for_collection_lid_query(
+    client: OpenSearch, collection_lid: PdsLid, registry_db_mock: DbMockTypeDef
+) -> Iterable[Dict]:
+    # Query the registry-refs index for the contents of all collections
+    query: Dict = {
+        "query": {
+            "bool": {
+                "must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}],
+                "filter": [{"term": {"collection_lid": str(collection_lid)}}],
             }
         },
         "seq_no_primary_term": True,
