@@ -206,7 +206,7 @@ def generate_nonaggregate_and_collection_records_iteratively(
             continue
 
         for non_aggregate_record in get_nonaggregate_ancestry_records(
-            client, collections_records_for_lid, registry_db_mock
+            client, collections_records_for_lid, registry_db_mock, utilize_chunking=False
         ):
             yield non_aggregate_record
 
