@@ -382,7 +382,6 @@ def _get_nonaggregate_ancestry_records_with_chunking(
 
     most_recent_attempted_collection_lidvid: Union[PdsLidVid, None] = None
     nonaggregate_ancestry_records_by_lidvid = {}
-    last_dump_time = datetime.now()
 
     for doc in collection_refs_query_docs:
         try:
@@ -409,16 +408,9 @@ def _get_nonaggregate_ancestry_records_with_chunking(
                 record_dict["parent_bundle_lidvids"].update({str(id) for id in bundle_ancestry})
                 record_dict["parent_collection_lidvids"].add(str(collection_lidvid))
 
-                # if datetime.now() - last_dump_time > timedelta(minutes=10):
-                max_desired_chunk_memory_usage_gb = 10
-                max_desired_chunk_size = gb_mem_to_size(max_desired_chunk_memory_usage_gb)
-                if sys.getsizeof(nonaggregate_ancestry_records_by_lidvid) > max_desired_chunk_size:
-                    # if psutil.virtual_memory().percent >= disk_dump_memory_threshold:
-                    # log.info(
-                    #     f"Memory threshold {disk_dump_memory_threshold:.1f}% reached - dumping serialized history to disk for {len(nonaggregate_ancestry_records_by_lidvid)} products"
-                    # )
+                if psutil.virtual_memory().percent >= disk_dump_memory_threshold:
                     log.info(
-                        f"Chunk memory size {max_desired_chunk_size:.1f}% reached - dumping serialized history to disk for {len(nonaggregate_ancestry_records_by_lidvid)} products"
+                        f"Memory threshold {disk_dump_memory_threshold:.1f}% reached - dumping serialized history to disk for {len(nonaggregate_ancestry_records_by_lidvid)} products"
                     )
                     make_history_serializable(nonaggregate_ancestry_records_by_lidvid)
                     dump_history_to_disk(on_disk_cache_dir, nonaggregate_ancestry_records_by_lidvid)
