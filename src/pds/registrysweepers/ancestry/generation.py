@@ -203,7 +203,7 @@ def generate_nonaggregate_and_collection_records_iteratively(
 
     for lid, collections_records_for_lid in collection_records_by_lid.items():
         if all([record.skip_write for record in collections_records_for_lid]):
-            log.info(f"Skipping updates for up-to-date collection family: {str(lid)}")  # TODO: SET TO DEBUG INSTEAD
+            log.info(f"Skipping updates for up-to-date collection family: {str(lid)}")
             continue
         else:
             log.info(
