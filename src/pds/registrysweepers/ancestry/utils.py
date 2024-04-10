@@ -11,8 +11,13 @@ from typing import List
 from typing import Set
 from typing import Union
 
-from pds.registrysweepers.ancestry import AncestryRecord
+from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
+from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
+from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.utils.db import Update
 
 log = logging.getLogger(__name__)
 
@@ -138,3 +143,13 @@ def load_partial_history_to_records(fn: str) -> Iterable[AncestryRecord]:
 def gb_mem_to_size(desired_mem_usage_gb) -> int:
     # rough estimated ratio of memory size to sys.getsizeof() report
     return desired_mem_usage_gb / 3.1 * 2621536
+
+
+def update_from_record(record: AncestryRecord) -> Update:
+    doc_id = str(record.lidvid)
+    content = {
+        METADATA_PARENT_BUNDLE_KEY: [str(id) for id in record.parent_bundle_lidvids],
+        METADATA_PARENT_COLLECTION_KEY: [str(id) for id in record.parent_collection_lidvids],
+        SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: int(SWEEPERS_ANCESTRY_VERSION),
+    }
+    return Update(id=doc_id, content=content)
