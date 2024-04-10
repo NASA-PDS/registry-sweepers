@@ -17,13 +17,13 @@ from typing import Union
 import psutil  # type: ignore
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
-from pds.registrysweepers.ancestry.queries import DbMockTypeDef
 from pds.registrysweepers.ancestry.queries import get_bundle_ancestry_records_query
 from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_bundles_query
 from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_collections_query
 from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_for_collection_lid_query
 from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_query
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
+from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.utils import dump_history_to_disk
 from pds.registrysweepers.ancestry.utils import gb_mem_to_size
 from pds.registrysweepers.ancestry.utils import load_partial_history_to_records
@@ -262,6 +262,9 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
 
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
             nonaggregate_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
+        except IndexError as err:
+            doc_id = doc["_id"]
+            log.warning(f'Encountered document with unexpected _id: "{doc_id}"')
         except (ValueError, KeyError) as err:
             log.warning(
                 'Failed to parse collection and/or product LIDVIDs from document in index "%s" with id "%s" due to %s: %s',
