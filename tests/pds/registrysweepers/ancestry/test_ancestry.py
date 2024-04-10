@@ -1,4 +1,5 @@
 import itertools
+import logging
 import os.path
 import unittest
 from typing import Dict
@@ -6,11 +7,16 @@ from typing import List
 from typing import Tuple
 
 from pds.registrysweepers import ancestry
-from pds.registrysweepers.ancestry import AncestryRecord
-from pds.registrysweepers.ancestry import get_collection_ancestry_records
-from pds.registrysweepers.ancestry import get_nonaggregate_ancestry_records
-from pds.registrysweepers.ancestry import SWEEPERS_ANCESTRY_VERSION
-from pds.registrysweepers.ancestry import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.ancestry import generate_updates
+from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
+from pds.registrysweepers.ancestry.generation import generate_nonaggregate_and_collection_records_iteratively
+from pds.registrysweepers.ancestry.generation import get_collection_ancestry_records
+from pds.registrysweepers.ancestry.generation import get_nonaggregate_ancestry_records
+from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
+from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 from tests.mocks.registryquerymock import RegistryQueryMock
@@ -250,6 +256,67 @@ class AncestryMemoryOptimizedTestCase(unittest.TestCase):
 
         for record in expected_records:
             self.assertIn(record, collection_ancestry_records, msg=f"Expected record is produced")
+
+
+class AncestryDeferredPartialUpdatesTestCase(unittest.TestCase):
+    input_file_path = os.path.abspath(
+        "./tests/pds/registrysweepers/ancestry/resources/test_ancestry_mock_AncestryDeferredPartialUpdatesTestCase.json"
+    )
+    registry_query_mock = RegistryQueryMock(input_file_path)
+
+    def test_ancestor_partial_history_accumulation(self):
+        """
+        TODO: document
+        """
+
+        configure_logging(filepath=None, log_level=logging.DEBUG)
+
+        mb = PdsLidVid.from_string("a:b:c:matching_bundle::1.0")
+        nmb = PdsLidVid.from_string("a:b:c:nonmatching_bundle::1.0")
+        mc = PdsLidVid.from_string("a:b:c:matching_bundle:matching_collection::1.0")
+        nmc = PdsLidVid.from_string("a:b:c:nonmatching_bundle:nonmatching_collection::1.0")
+
+        mup1 = PdsLidVid.from_string(
+            "a:b:c:matching_bundle:matching_collection:matching_collection_unique_product_1::1.0"
+        )
+        mup2 = PdsLidVid.from_string(
+            "a:b:c:matching_bundle:matching_collection:matching_collection_unique_product_2::1.0"
+        )
+        nmup1 = PdsLidVid.from_string(
+            "a:b:c:nonmatching_bundle:nonmatching_collection:nonmatching_collection_unique_product_1::1.0"
+        )
+        nmup2 = PdsLidVid.from_string(
+            "a:b:c:nonmatching_bundle:nonmatching_collection:nonmatching_collection_unique_product_2::1.0"
+        )
+        op = PdsLidVid.from_string("a:b:c:matching_bundle:matching_collection:overlapping_product::1.0")
+
+        query_mock_f = self.registry_query_mock.get_mocked_query
+        collection_ancestry_records = [
+            AncestryRecord(lidvid=mc, parent_bundle_lidvids={mb}, parent_collection_lidvids=set()),
+            AncestryRecord(lidvid=nmc, parent_bundle_lidvids={nmb}, parent_collection_lidvids=set()),
+        ]
+
+        collection_and_nonaggregate_records = list(
+            generate_nonaggregate_and_collection_records_iteratively(None, collection_ancestry_records, query_mock_f)
+        )
+
+        updates = list(generate_updates(None, collection_and_nonaggregate_records, None, None, query_mock_f))
+
+        # TODO: increase to two nonmatching collections and two shared products
+
+        incomplete_opu1 = next(
+            u for u in updates if u.id == str(op) and len(u.content[METADATA_PARENT_COLLECTION_KEY]) == 1
+        )
+        self.assertIn(str(mb), incomplete_opu1.content[METADATA_PARENT_BUNDLE_KEY])
+        self.assertNotIn(str(nmb), incomplete_opu1.content[METADATA_PARENT_BUNDLE_KEY])
+        self.assertIn(str(mc), incomplete_opu1.content[METADATA_PARENT_COLLECTION_KEY])
+        self.assertNotIn(str(nmc), incomplete_opu1.content[METADATA_PARENT_COLLECTION_KEY])
+
+        opu1 = next(u for u in updates if u.id == str(op) and len(u.content[METADATA_PARENT_COLLECTION_KEY]) > 1)
+        self.assertIn(str(mb), opu1.content[METADATA_PARENT_BUNDLE_KEY])
+        self.assertIn(str(nmb), opu1.content[METADATA_PARENT_BUNDLE_KEY])
+        self.assertIn(str(mc), opu1.content[METADATA_PARENT_COLLECTION_KEY])
+        self.assertIn(str(nmc), opu1.content[METADATA_PARENT_COLLECTION_KEY])
 
 
 if __name__ == "__main__":

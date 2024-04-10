@@ -1,4 +1,7 @@
+import json
 import logging
+import os
+import tempfile
 from itertools import chain
 from typing import Callable
 from typing import Dict
@@ -11,12 +14,17 @@ from typing import Union
 
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
 from pds.registrysweepers.ancestry.generation import generate_nonaggregate_and_collection_records_iteratively
 from pds.registrysweepers.ancestry.generation import get_bundle_ancestry_records
 from pds.registrysweepers.ancestry.generation import get_collection_ancestry_records
 from pds.registrysweepers.ancestry.generation import get_nonaggregate_ancestry_records
+from pds.registrysweepers.ancestry.queries import get_existing_ancestry_for_product
 from pds.registrysweepers.ancestry.queries import get_orphaned_documents
 from pds.registrysweepers.ancestry.queries import get_orphaned_documents_count
+from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
+from pds.registrysweepers.ancestry.utils import update_from_record
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
@@ -25,11 +33,9 @@ from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 log = logging.getLogger(__name__)
-
-METADATA_PARENT_BUNDLE_KEY = "ops:Provenance/ops:parent_bundle_identifier"
-METADATA_PARENT_COLLECTION_KEY = "ops:Provenance/ops:parent_collection_identifier"
 
 
 def run(
@@ -51,7 +57,9 @@ def run(
 
     ancestry_records = chain(collection_and_nonaggregate_records, bundle_records)
     ancestry_records_to_write = filter(lambda r: not r.skip_write, ancestry_records)
-    updates = generate_updates(ancestry_records_to_write, ancestry_records_accumulator, bulk_updates_sink)
+    updates = generate_updates(
+        client, ancestry_records_to_write, ancestry_records_accumulator, bulk_updates_sink, registry_mock_query_f
+    )
 
     if bulk_updates_sink is None:
         log.info("Ensuring metadata keys are present in database index...")
@@ -108,39 +116,83 @@ def run(
 
 
 def generate_updates(
-    ancestry_records: Iterable[AncestryRecord], ancestry_records_accumulator=None, bulk_updates_sink=None
+    client: OpenSearch,
+    ancestry_records: Iterable[AncestryRecord],
+    ancestry_records_accumulator=None,
+    bulk_updates_sink=None,
+    registry_db_mock: DbMockTypeDef = None,
 ) -> Iterable[Update]:
-    updates: Set[str] = set()
+    """
+    Given a collection of AncestryRecords, yield corresponding Update objects.
+
+    Ideally, there should be one record per product, but this is not necessarily the case due to the potential of
+    nonaggregate products to be shared between collections with different LIDs.  In that case, it is necessary to:
+      - defer processing of all records which conflict with a previously-processed record
+      - retrieve the conflicting records which have been written to db, since the streaming collection-iterative
+        approach prevents efficiently detecting conflicts until the first partial history is already processed/written.
+      - merge all deferred/retrieved partial histories into a full history for each distinct product lidvid
+      - yield those full-history updates, which will overwrite the partial histories initially written to db
+    """
+    updated_doc_ids: Set[str] = set()
 
     log.info("Generating document bulk updates for AncestryRecords...")
 
-    for record in ancestry_records:
-        # Tee the stream of records into the accumulator, if one was provided (functional testing).
-        if ancestry_records_accumulator is not None:
-            ancestry_records_accumulator.append(record)
+    # stream/yield Updates for AncestryRecords, deferring processing of conflicting AncestryRecords and storing them in
+    # a temporary file
+    with tempfile.NamedTemporaryFile(mode="w+", delete=False) as deferred_records_file:
+        for record in ancestry_records:
+            # Tee the stream of records into the accumulator, if one was provided (functional testing).
+            if ancestry_records_accumulator is not None:
+                ancestry_records_accumulator.append(record)
 
-        if record.lidvid.is_collection() and len(record.parent_bundle_lidvids) == 0:
-            log.warning(f"Collection {record.lidvid} is not referenced by any bundle.")
+            if record.lidvid.is_collection() and len(record.parent_bundle_lidvids) == 0:
+                log.warning(f"Collection {record.lidvid} is not referenced by any bundle.")
 
-        doc_id = str(record.lidvid)
-        update_content = {
-            METADATA_PARENT_BUNDLE_KEY: [str(id) for id in record.parent_bundle_lidvids],
-            METADATA_PARENT_COLLECTION_KEY: [str(id) for id in record.parent_collection_lidvids],
-            SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: int(SWEEPERS_ANCESTRY_VERSION),
-        }
+            update = update_from_record(record)
 
-        # Tee the stream of bulk update KVs into the accumulator, if one was provided (functional testing).
-        if bulk_updates_sink is not None:
-            bulk_updates_sink.append((doc_id, update_content))
+            # Tee the stream of bulk update KVs into the accumulator, if one was provided (functional testing).
+            if bulk_updates_sink is not None:
+                bulk_updates_sink.append((update.id, update.content))
 
-        if doc_id in updates:
-            log.error(
-                f"Multiple updates detected for doc_id {doc_id} - cannot create update! (new content {update_content} will not be written)"
+            if update.id in updated_doc_ids:
+                log.error(
+                    f"Multiple updates detected for doc_id {update.id} - deferring subsequent parts"
+                    " - storing in {deferred_updates_file.name}"
+                )
+                deferred_records_file.write(json.dumps(record.to_dict(sort_lists=False)) + "\n")
+                deferred_records_file.flush()
+                continue
+
+            updated_doc_ids.add(update.id)
+            yield update
+
+        # Merge all deferred records with matching lidvids
+        with open(deferred_records_file.name, "r") as deferred_records_file:  # type: ignore
+            deferred_records_by_lidvid: Dict[PdsLidVid, AncestryRecord] = {}
+            for l in deferred_records_file.readlines():
+                record = AncestryRecord.from_dict(json.loads(l))
+                if record.lidvid in deferred_records_by_lidvid:
+                    deferred_records_by_lidvid[record.lidvid].update_with(record)
+                else:
+                    deferred_records_by_lidvid.update({record.lidvid: record})
+
+        # Retrieve the first partial history (already written to db) for each lidvid, merge with its deferred history,
+        # then yield a full-history-update for that lidvid
+        for record in deferred_records_by_lidvid.values():
+            doc = get_existing_ancestry_for_product(client, record.lidvid, registry_db_mock)
+            partial_record_from_db = AncestryRecord.from_dict(
+                {
+                    "lidvid": doc["lidvid"],
+                    "parent_bundle_lidvids": doc[METADATA_PARENT_BUNDLE_KEY],
+                    "parent_collection_lidvids": doc[METADATA_PARENT_COLLECTION_KEY],
+                }
             )
-            continue
+            record.update_with(partial_record_from_db)
+            update = update_from_record(record)
+            yield update
+            # TODO: Check that ancestry version is equal to current, throw if not.
 
-        updates.add(doc_id)
-        yield Update(id=doc_id, content=update_content)
+        os.remove(deferred_records_file.name)
 
 
 if __name__ == "__main__":
