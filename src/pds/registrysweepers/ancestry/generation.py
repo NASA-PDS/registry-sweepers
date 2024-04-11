@@ -90,19 +90,6 @@ def get_ancestry_by_collection_lidvid(collections_docs: Iterable[Dict]) -> Mappi
     return ancestry_by_collection_lidvid
 
 
-def get_collection_aliases_by_lid(collections_docs: Iterable[Dict]) -> Dict[PdsLid, Set[PdsLid]]:
-    aliases_by_lid: Dict[PdsLid, Set[PdsLid]] = {}
-    for doc in collections_docs:
-        alternate_ids: List[str] = doc["_source"].get("alternate_ids", [])
-        lids: Set[PdsLid] = {PdsProductIdentifierFactory.from_string(id).lid for id in alternate_ids}
-        for lid in lids:
-            if lid not in aliases_by_lid:
-                aliases_by_lid[lid] = set()
-            aliases_by_lid[lid].update(lids)
-
-    return aliases_by_lid
-
-
 def get_ancestry_by_collection_lid(
     ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord]
 ) -> Mapping[PdsLid, Set[AncestryRecord]]:
@@ -123,9 +110,6 @@ def get_collection_ancestry_records(
     log.info("Generating AncestryRecords for collections...")
     bundles_docs = get_collection_ancestry_records_bundles_query(client, registry_db_mock)
     collections_docs = list(get_collection_ancestry_records_collections_query(client, registry_db_mock))
-
-    # Prepare LID alias sets for every LID
-    collection_aliases_by_lid: Dict[PdsLid, Set[PdsLid]] = get_collection_aliases_by_lid(collections_docs)
 
     # Prepare empty ancestry records for collections, with fast access by LID or LIDVID
     ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord] = get_ancestry_by_collection_lidvid(

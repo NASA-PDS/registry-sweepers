@@ -60,7 +60,7 @@ def get_collection_ancestry_records_collections_query(
 ) -> Iterable[Dict]:
     # Query the registry for all collection identifiers
     query = product_class_query_factory(ProductClass.COLLECTION)
-    _source = {"includes": ["lidvid", "alternate_ids", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
+    _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
     query_f = query_registry_db_or_mock(db_mock, "get_collection_ancestry_records_collections", use_search_after=True)
     docs = query_f(client, "registry", query, _source)
 
