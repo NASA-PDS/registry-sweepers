@@ -294,7 +294,7 @@ def update_as_statements(update: Update) -> Iterable[str]:
 def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: Iterable[str]):
     bulk_data = "\n".join(bulk_updates) + "\n"
 
-    request_timeout = 90
+    request_timeout = 180
     response_content = client.bulk(index=index_name, body=bulk_data, request_timeout=request_timeout)
 
     if response_content.get("errors"):
