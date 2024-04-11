@@ -87,6 +87,14 @@ class AncestryBasicTestCase(unittest.TestCase):
 
         cls.updates_by_lidvid_str = {id: content for id, content in cls.bulk_updates}
 
+    def test_correct_record_counts(self):
+        self.assertEqual(1, len(self.bundle_records))
+        self.assertEqual(4, len(self.collection_records))
+        self.assertEqual(6, len(self.nonaggregate_records))
+
+    def test_correct_update_counts(self):
+        self.assertEqual(11, len(self.updates_by_lidvid_str))
+
     def test_bundles_have_no_ancestry(self):
         for record in self.bundle_records:
             self.assertTrue(len(record.parent_bundle_lidvids) == 0)
@@ -175,6 +183,10 @@ class AncestryMalformedDocsTestCase(unittest.TestCase):
         self.nonaggregate_records_by_lidvid_str = {
             str(r.lidvid): r for r in self.ancestry_records if r.lidvid.is_basic_product()
         }
+
+        self.assertEqual(1, len(self.bundle_records))
+        self.assertEqual(1, len(self.collection_records))
+        self.assertEqual(2, len(self.nonaggregate_records))
 
         self.updates_by_lidvid_str = {id: content for id, content in self.bulk_updates}
 
