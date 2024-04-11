@@ -167,9 +167,8 @@ def get_collection_ancestry_records(
                     )
             elif isinstance(identifier, PdsLid):
                 try:
-                    for alias in collection_aliases_by_lid[identifier]:
-                        for record in ancestry_by_collection_lid[alias]:
-                            record.parent_bundle_lidvids.add(bundle_lidvid)
+                    for record in ancestry_by_collection_lid[identifier.lid]:
+                        record.parent_bundle_lidvids.add(bundle_lidvid)
                 except KeyError:
                     log.warning(
                         f"No versions of collection {identifier} referenced by bundle {bundle_lidvid} "
