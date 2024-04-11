@@ -55,10 +55,12 @@
       }
     }
   ],
-  "get_nonaggregate_ancestry_records": [
+  "get_nonaggregate_ancestry_records_for_collection_lid-a:b:c:bundle:lidrefcollection": [
     {
+      "_id": "a:b:c:bundle:lidrefcollection::1.0::P1",
       "_source": {
         "collection_lidvid": "a:b:c:bundle:lidrefcollection::1.0",
+        "batch_id": 1,
         "product_lidvid": [
           "a:b:c:bundle:lidrefcollection:collectionuniqueproduct::1.0",
           "a:b:c:bundle:lidrefcollection:collectionsharedproduct::1.0"
@@ -66,17 +68,23 @@
       }
     },
     {
+      "_id": "a:b:c:bundle:lidrefcollection::2.0::P1",
       "_source": {
         "collection_lidvid": "a:b:c:bundle:lidrefcollection::2.0",
+        "batch_id": 1,
         "product_lidvid": [
           "a:b:c:bundle:lidrefcollection:collectionuniqueproduct::2.0",
           "a:b:c:bundle:lidrefcollection:collectionsharedproduct::1.0"
         ]
       }
-    },
+    }
+  ],
+  "get_nonaggregate_ancestry_records_for_collection_lid-a:b:c:bundle:lidvidrefcollection": [
     {
+      "_id": "a:b:c:bundle:lidvidrefcollection::1.0::P1",
       "_source": {
         "collection_lidvid": "a:b:c:bundle:lidvidrefcollection::1.0",
+        "batch_id": 1,
         "product_lidvid": [
           "a:b:c:bundle:lidvidrefcollection:collectionuniqueproduct::1.0",
           "a:b:c:bundle:lidvidrefcollection:collectionsharedproduct::1.0"
@@ -84,8 +92,10 @@
       }
     },
     {
+      "_id": "a:b:c:bundle:lidvidrefcollection::2.0::P1",
       "_source": {
         "collection_lidvid": "a:b:c:bundle:lidvidrefcollection::2.0",
+        "batch_id": 1,
         "product_lidvid": [
           "a:b:c:bundle:lidvidrefcollection:collectionuniqueproduct::2.0",
           "a:b:c:bundle:lidvidrefcollection:collectionsharedproduct::1.0"
@@ -93,7 +103,5 @@
       }
     }
   ],
-  "get_orphaned_ancestry_docs": [],
-  "get_nonaggregate_ancestry_records_for_collection_lid-a:b:c:bundle:lidrefcollection": [],
-  "get_nonaggregate_ancestry_records_for_collection_lid-a:b:c:bundle:lidvidrefcollection": []
+  "get_orphaned_ancestry_docs": []
 }
