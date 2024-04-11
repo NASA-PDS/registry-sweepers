@@ -204,11 +204,12 @@ def generate_deferred_updates(
                     "parent_collection_lidvids": doc["_source"][METADATA_PARENT_COLLECTION_KEY],
                 }
             )
+            record.update_with(partial_record_from_db)
+            update = update_from_record(record)
+            yield update
         except (KeyError, ValueError) as err:
             log.error(f'Failed to parse valid AncestryRecord from document with id "{doc["_id"]}: {err}"')
-        record.update_with(partial_record_from_db)
-        update = update_from_record(record)
-        yield update
+
         # TODO: Check that ancestry version is equal to current, throw if not.
 
 
