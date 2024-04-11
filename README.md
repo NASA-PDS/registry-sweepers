@@ -28,6 +28,9 @@ PROV_CREDENTIALS={"admin": "admin"}  // OpenSearch username/password
 PROV_ENDPOINT=https://localhost:9200  // OpenSearch host url and port
 LOGLEVEL - an integer log level or anycase string matching a python log level like `INFO` (optional - defaults to `INFO`))
 DEV_MODE=1  // disables host verification
+
+// tqdm dependency may cause fatal crashes on some architectures when breakpoints are used in debug mode with Cython speedup extension enabled
+PYDEVD_USE_CYTHON=NO // disables Cython speedup extension
 ```
 
 With `--legacy-sync` option, you also need the list of the cross-cluster-search node configured to access all the node's OpensSearch domains:
