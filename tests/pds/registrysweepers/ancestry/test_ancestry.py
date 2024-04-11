@@ -1,12 +1,14 @@
 import itertools
 import logging
 import os.path
+import tempfile
 import unittest
 from typing import Dict
 from typing import List
 from typing import Tuple
 
 from pds.registrysweepers import ancestry
+from pds.registrysweepers.ancestry import generate_deferred_updates
 from pds.registrysweepers.ancestry import generate_updates
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
@@ -312,7 +314,13 @@ class AncestryDeferredPartialUpdatesTestCase(unittest.TestCase):
             generate_nonaggregate_and_collection_records_iteratively(None, collection_ancestry_records, query_mock_f)
         )
 
-        updates = list(generate_updates(None, collection_and_nonaggregate_records, None, None, query_mock_f))
+        deferred_records_file = tempfile.NamedTemporaryFile(mode="w+", delete=False)
+        non_deferred_updates = list(
+            generate_updates(collection_and_nonaggregate_records, deferred_records_file.name, None, None)
+        )
+        deferred_updates = list(generate_deferred_updates(None, deferred_records_file.name, query_mock_f))
+        updates = non_deferred_updates + deferred_updates
+        os.remove(deferred_records_file.name)
 
         # TODO: increase to two nonmatching collections and two shared products
 
