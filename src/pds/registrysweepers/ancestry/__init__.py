@@ -196,13 +196,16 @@ def generate_deferred_updates(
     # then yield a full-history-update for that lidvid
     for record in deferred_records_by_lidvid.values():
         doc = get_existing_ancestry_for_product(client, record.lidvid, registry_db_mock)
-        partial_record_from_db = AncestryRecord.from_dict(
-            {
-                "lidvid": doc["lidvid"],
-                "parent_bundle_lidvids": doc[METADATA_PARENT_BUNDLE_KEY],
-                "parent_collection_lidvids": doc[METADATA_PARENT_COLLECTION_KEY],
-            }
-        )
+        try:
+            partial_record_from_db = AncestryRecord.from_dict(
+                {
+                    "lidvid": doc["_source"]["lidvid"],
+                    "parent_bundle_lidvids": doc["_source"][METADATA_PARENT_BUNDLE_KEY],
+                    "parent_collection_lidvids": doc["_source"][METADATA_PARENT_COLLECTION_KEY],
+                }
+            )
+        except (KeyError, ValueError) as err:
+            log.error(f'Failed to parse valid AncestryRecord from document with id "{doc["_id"]}: {err}"')
         record.update_with(partial_record_from_db)
         update = update_from_record(record)
         yield update

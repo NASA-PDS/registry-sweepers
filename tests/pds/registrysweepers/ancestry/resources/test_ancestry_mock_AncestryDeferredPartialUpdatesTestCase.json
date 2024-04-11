@@ -53,7 +53,9 @@
       }
     }
   ],
-  "get_existing_ancestry_for_product-a:b:c:matching_bundle:matching_collection:overlapping_product::1.0": [{
+  "get_existing_ancestry_for_product-a:b:c:matching_bundle:matching_collection:overlapping_product::1.0": [
+    {
+      "_source": {
     "lidvid": "a:b:c:matching_bundle:matching_collection:overlapping_product::1.0",
     "ops:Provenance/ops:parent_bundle_identifier": [
       "a:b:c:matching_bundle::1.0"
@@ -62,5 +64,7 @@
       "a:b:c:matching_bundle:matching_collection::1.0"
     ],
     "ops:Provenance/ops:registry_sweepers_ancestry_version": 1
-  }]
+  }
+    }
+  ]
 }

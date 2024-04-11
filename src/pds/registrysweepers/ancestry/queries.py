@@ -170,9 +170,16 @@ def get_existing_ancestry_for_product(
             }
         },
     }
-    _source = {"includes": ["lidvid", METADATA_PARENT_BUNDLE_KEY, METADATA_PARENT_COLLECTION_KEY]}
+    _source = {
+        "includes": [
+            "lidvid",
+            METADATA_PARENT_BUNDLE_KEY,
+            METADATA_PARENT_COLLECTION_KEY,
+            SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
+        ]
+    }
     query_f = query_registry_db_or_mock(
-        registry_db_mock, f"get_existing_ancestry_for_product-{product_lidvid}", use_search_after=False
+        registry_db_mock, f"get_existing_ancestry_for_product-{product_lidvid}", use_search_after=True
     )
 
     docs = query_f(
