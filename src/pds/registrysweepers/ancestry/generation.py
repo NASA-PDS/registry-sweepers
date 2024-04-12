@@ -244,7 +244,15 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
                 continue
 
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
-            nonaggregate_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
+            referenced_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
+            nonaggregate_lidvids = [id for id in referenced_lidvids if id.is_basic_product()]
+
+            erroneous_lidvids = [id for id in referenced_lidvids if not id.is_basic_product()]
+            if len(erroneous_lidvids) > 0:
+                log.error(
+                    f'registry-refs document with id {doc["_id"]} references one or more aggregate products in its product_lidvid refs list: {[str(id) for id in erroneous_lidvids]}'
+                )
+
         except IndexError as err:
             doc_id = doc["_id"]
             log.warning(f'Encountered document with unexpected _id: "{doc_id}"')
