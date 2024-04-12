@@ -20,6 +20,10 @@ class AncestryRecord:
     # equivalent record is known to already exist due to up-to-date ancestry version flag in the source document
     skip_write: bool = False
 
+    def __post_init__(self):
+        if not isinstance(self.lidvid, PdsLidVid):
+            raise ValueError('Cannot initialise AncestryRecord with non-PdsLidVid value for "lidvid"')
+
     def __repr__(self):
         return f"AncestryRecord(lidvid={self.lidvid}, parent_collection_lidvids={sorted([str(x) for x in self.parent_collection_lidvids])}, parent_bundle_lidvids={sorted([str(x) for x in self.parent_bundle_lidvids])})"
 
