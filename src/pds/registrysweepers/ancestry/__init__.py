@@ -167,7 +167,7 @@ def generate_updates(
                 bulk_updates_sink.append((update.id, update.content))
 
             if update.id in updated_doc_ids:
-                log.error(
+                log.debug(
                     f"Multiple updates detected for doc_id {update.id} - deferring subsequent parts"
                     " - storing in {deferred_updates_file.name}"
                 )
