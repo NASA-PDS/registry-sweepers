@@ -1,0 +1,70 @@
+{
+  "--note": [
+    "Example history for two collections with different LIDVIDs, each having two unique non-agg products and",
+    "another which exists in both collections.",
+    "This tests correct accumulation of history when a non-aggregate product derives its history from collections",
+    "which are processed in different chunks (as records are chunked by collection LID)"
+  ],
+  "get_nonaggregate_ancestry_records_for_collection_lid-a:b:c:matching_bundle:matching_collection": [
+    {
+      "_id": "a:b:c:matching_bundle:matching_collection::1.0::P1",
+      "_source": {
+        "collection_lidvid": "a:b:c:matching_bundle:matching_collection::1.0",
+        "batch_id": 1,
+        "product_lidvid": [
+          "a:b:c:matching_bundle:matching_collection:matching_collection_unique_product_1::1.0",
+          "a:b:c:matching_bundle:matching_collection:overlapping_product::1.0"
+        ]
+      }
+    },
+    {
+      "_id": "a:b:c:matching_bundle:matching_collection::1.0::P2",
+      "_source": {
+        "collection_lidvid": "a:b:c:matching_bundle:matching_collection::1.0",
+        "batch_id": 2,
+        "product_lidvid": [
+          "a:b:c:matching_bundle:matching_collection:matching_collection_unique_product_2::1.0",
+          "a:b:c:matching_bundle:matching_collection:overlapping_product::1.0"
+        ]
+      }
+    }
+  ],
+  "get_nonaggregate_ancestry_records_for_collection_lid-a:b:c:nonmatching_bundle:nonmatching_collection": [
+    {
+      "_id": "a:b:c:nonmatching_bundle:nonmatching_collection::1.0::P1",
+      "_source": {
+        "collection_lidvid": "a:b:c:nonmatching_bundle:nonmatching_collection::1.0",
+        "batch_id": 1,
+        "product_lidvid": [
+          "a:b:c:nonmatching_bundle:nonmatching_collection:nonmatching_collection_unique_product_1::1.0",
+          "a:b:c:matching_bundle:matching_collection:overlapping_product::1.0"
+        ]
+      }
+    },
+    {
+      "_id": "a:b:c:nonmatching_bundle:nonmatching_collection::1.0::P2",
+      "_source": {
+        "collection_lidvid": "a:b:c:nonmatching_bundle:nonmatching_collection::1.0",
+        "batch_id": 2,
+        "product_lidvid": [
+          "a:b:c:nonmatching_bundle:nonmatching_collection:nonmatching_collection_unique_product_2::1.0",
+          "a:b:c:matching_bundle:matching_collection:overlapping_product::1.0"
+        ]
+      }
+    }
+  ],
+  "get_existing_ancestry_for_product-a:b:c:matching_bundle:matching_collection:overlapping_product::1.0": [
+    {
+      "_source": {
+    "lidvid": "a:b:c:matching_bundle:matching_collection:overlapping_product::1.0",
+    "ops:Provenance/ops:parent_bundle_identifier": [
+      "a:b:c:matching_bundle::1.0"
+    ],
+    "ops:Provenance/ops:parent_collection_identifier": [
+      "a:b:c:matching_bundle:matching_collection::1.0"
+    ],
+    "ops:Provenance/ops:registry_sweepers_ancestry_version": 1
+  }
+    }
+  ]
+}

@@ -16,6 +16,7 @@ from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import get_random_hex_id
 from retry import retry
 from retry.api import retry_call
+from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
@@ -139,76 +140,68 @@ def query_registry_db_with_search_after(
     sort_fields = sort_fields or ["lidvid"]
 
     query_id = get_random_hex_id()  # This is just used to differentiate queries during logging
-    log.debug(f"Initiating query with id {query_id}: {json.dumps(query)}")
 
     served_hits = 0
-
-    last_info_log_at_percentage = 0
-    log.debug(f"Query {query_id} progress: 0%")
-
+    current_page = 1
     more_data_exists = True
     search_after_values: Union[List, None] = None
-    current_page = 1
     expected_pages = None
-    while more_data_exists:
-        if search_after_values is not None:
-            query["search_after"] = search_after_values
-            log.debug(
-                f"Query {query_id} paging {page_size} hits (page {current_page} of {expected_pages}) with sort fields {sort_fields} and search-after values {search_after_values}"
+    expected_hits = get_query_hits_count(client, index_name, query)
+    log.debug(f"Query {query_id} returns {expected_hits} total hits: {json.dumps(query)}")
+
+    with tqdm(total=expected_hits, desc=f"Query {query_id}") as pbar:
+        while more_data_exists:
+            if search_after_values is not None:
+                query["search_after"] = search_after_values
+                log.debug(
+                    f"Query {query_id} paging {page_size} hits (page {current_page} of {expected_pages}) with sort fields {sort_fields} and search-after values {search_after_values}"
+                )
+
+            def fetch_func():
+                return client.search(
+                    index=index_name,
+                    body=query,
+                    request_timeout=request_timeout_seconds,
+                    size=page_size,
+                    sort=sort_fields,
+                    _source_includes=_source.get("includes", []),  # TODO: Break out from the enclosing _source object
+                    _source_excludes=_source.get("excludes", []),  # TODO: Break out from the enclosing _source object,
+                    track_total_hits=True,
+                )
+
+            results = retry_call(
+                fetch_func,
+                tries=6,
+                delay=2,
+                backoff=2,
+                logger=log,
             )
 
-        def fetch_func():
-            return client.search(
-                index=index_name,
-                body=query,
-                request_timeout=request_timeout_seconds,
-                size=page_size,
-                sort=sort_fields,
-                _source_includes=_source.get("includes", []),  # TODO: Break out from the enclosing _source object
-                _source_excludes=_source.get("excludes", []),  # TODO: Break out from the enclosing _source object,
-                track_total_hits=True,
-            )
+            total_hits = results["hits"]["total"]["value"]
+            current_page += 1
+            expected_pages = math.ceil(total_hits / page_size)
 
-        results = retry_call(
-            fetch_func,
-            tries=6,
-            delay=2,
-            backoff=2,
-            logger=log,
-        )
+            response_hits = results["hits"]["hits"]
+            for hit in response_hits:
+                served_hits += 1
+                pbar.update()
+                yield hit
 
-        total_hits = results["hits"]["total"]["value"]
-        current_page += 1
-        expected_pages = math.ceil(total_hits / page_size)
-        if served_hits == 0:
-            log.debug(f"Query {query_id} returns {total_hits} total hits")
+                # simpler to set the value after every hit than worry about OBO errors detecting the last hit in the page
+                search_after_values = [hit["_source"].get(field) for field in sort_fields]
 
-        response_hits = results["hits"]["hits"]
-        for hit in response_hits:
-            served_hits += 1
+            # This is a temporary, ad-hoc guard against empty/erroneous responses which do not return non-200 status codes.
+            # Previously, this has cause infinite loops in production due to served_hits sticking and never reaching the
+            # expected total hits value.
+            # TODO: Remove this upon implementation of https://github.com/NASA-PDS/registry-sweepers/issues/42
+            hits_data_present_in_response = len(response_hits) > 0
+            if not hits_data_present_in_response and served_hits < total_hits:
+                log.error(
+                    f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
+                )
+                break
 
-            percentage_of_hits_served = int(served_hits / total_hits * 100)
-            if last_info_log_at_percentage is None or percentage_of_hits_served >= (last_info_log_at_percentage + 5):
-                last_info_log_at_percentage = percentage_of_hits_served
-                log.debug(f"Query {query_id} progress: {percentage_of_hits_served}%")
-
-            yield hit
-
-            # simpler to set the value after every hit than worry about OBO errors detecting the last hit in the page
-            search_after_values = [hit["_source"].get(field) for field in sort_fields]
-
-        # This is a temporary, ad-hoc guard against empty/erroneous responses which do not return non-200 status codes.
-        # Previously, this has cause infinite loops in production due to served_hits sticking and never reaching the
-        # expected total hits value.
-        # TODO: Remove this upon implementation of https://github.com/NASA-PDS/registry-sweepers/issues/42
-        hits_data_present_in_response = len(response_hits) > 0
-        if not hits_data_present_in_response and served_hits < total_hits:
-            log.error(
-                f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
-            )
-            break
-
-        more_data_exists = served_hits < results["hits"]["total"]["value"]
+            more_data_exists = served_hits < results["hits"]["total"]["value"]
 
     log.debug(f"Query {query_id} complete!")
 
@@ -245,7 +238,7 @@ def write_updated_docs(
     index_name: str,
     bulk_chunk_max_update_count: Union[int, None] = None,
 ):
-    log.info("Updating a lazily-generated collection of product documents...")
+    log.info("Writing document updates...")
     updated_doc_count = 0
 
     bulk_buffer_max_size_mb = 30.0
@@ -282,7 +275,7 @@ def write_updated_docs(
         log.debug(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
 
-    log.info(f"Updated documents for {updated_doc_count} total products!")
+    log.info(f"Updated documents for {updated_doc_count} products!")
 
 
 def update_as_statements(update: Update) -> Iterable[str]:
@@ -301,7 +294,7 @@ def update_as_statements(update: Update) -> Iterable[str]:
 def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: Iterable[str]):
     bulk_data = "\n".join(bulk_updates) + "\n"
 
-    request_timeout = 90
+    request_timeout = 180
     response_content = client.bulk(index=index_name, body=bulk_data, request_timeout=request_timeout)
 
     if response_content.get("errors"):

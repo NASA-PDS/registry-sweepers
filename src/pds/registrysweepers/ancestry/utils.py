@@ -2,6 +2,7 @@ import gc
 import json
 import logging
 import os
+import pickle
 import sys
 from datetime import datetime
 from typing import Dict
@@ -10,8 +11,13 @@ from typing import List
 from typing import Set
 from typing import Union
 
-from pds.registrysweepers.ancestry import AncestryRecord
+from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
+from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
+from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.utils.db import Update
 
 log = logging.getLogger(__name__)
 
@@ -25,28 +31,36 @@ def make_history_serializable(history: Dict[str, Dict[str, Union[str, Set[str], 
     log.debug("    complete!")
 
 
+def load_history_from_filepath(filepath) -> Dict[str, SerializableAncestryRecordTypeDef]:
+    with open(filepath, "rb") as f:
+        return pickle.load(f)
+
+
+def write_history_to_filepath(history: Dict[str, SerializableAncestryRecordTypeDef], filepath: str):
+    with open(filepath, "w+b") as outfile:
+        pickle.dump(history, outfile)
+
+
 def dump_history_to_disk(parent_dir: str, history: Dict[str, SerializableAncestryRecordTypeDef]) -> str:
     """Dump set of history records to disk and return the filepath"""
-    temp_fp = os.path.join(parent_dir, datetime.now().isoformat().replace(":", "-"))
-    log.debug(f"Dumping history to {temp_fp} for later merging...")
-    with open(temp_fp, "w+") as outfile:
-        json.dump(history, outfile)
+    output_filepath = os.path.join(parent_dir, datetime.now().isoformat().replace(":", "-"))
+    log.debug(f"Dumping history to {output_filepath} for later merging...")
+    write_history_to_filepath(history, output_filepath)
     log.debug("    complete!")
 
-    return temp_fp
+    return output_filepath
 
 
 def merge_matching_history_chunks(dest_fp: str, src_fps: List[str], max_chunk_size: Union[int, None] = None):
     log.debug(f"Performing merges into {dest_fp} using max_chunk_size={max_chunk_size}")
-    with open(dest_fp, "r") as dest_infile:
-        dest_file_content: Dict[str, SerializableAncestryRecordTypeDef] = json.load(dest_infile)
+    dest_file_content = load_history_from_filepath(dest_fp)
 
     dest_file_updated = False
 
     for src_fn in src_fps:
-        log.debug(f"merging from {src_fn}...")
-        with open(src_fn, "r") as src_infile:
-            src_file_content: Dict[str, SerializableAncestryRecordTypeDef] = json.load(src_infile)
+        src_file_size_mb = os.stat(src_fn).st_size / 1024**2
+        log.debug(f"merging from {src_fn} ({int(src_file_size_mb)}MB)...")
+        src_file_content = load_history_from_filepath(src_fn)
 
         src_file_updated = False
 
@@ -70,15 +84,14 @@ def merge_matching_history_chunks(dest_fp: str, src_fps: List[str], max_chunk_si
 
         if src_file_updated:
             # Overwrite the content of the source file with any remaining history not absorbed
-            with open(src_fn, "w+") as src_outfile:
-                json.dump(src_file_content, src_outfile)
+            write_history_to_filepath(src_file_content, src_fn)
 
         # this prevents a memory spike when reading in the next chunk of src_file_content
         del src_file_content
         gc.collect()
 
         dest_parent_dir = os.path.split(dest_fp)[0]
-        split_filepath = split_chunk_if_oversized(max_chunk_size, dest_parent_dir, dest_file_content)
+        split_filepath = split_content_chunk_if_oversized(max_chunk_size, dest_parent_dir, dest_file_content)
         if split_filepath is not None:
             # the path of the newly-created file with the split-off data is appended and will be processed next
             # intuitively it seems like this is most-likely to create the fewest additional split-off files as it should
@@ -89,13 +102,14 @@ def merge_matching_history_chunks(dest_fp: str, src_fps: List[str], max_chunk_si
 
     if dest_file_updated:
         # Overwrite the content of the destination file with updated history including absorbed elements
-        with open(dest_fp, "w+") as src_outfile:
-            json.dump(dest_file_content, src_outfile)
+        write_history_to_filepath(dest_file_content, dest_fp)
 
     log.debug("    complete!")
 
 
-def split_chunk_if_oversized(max_chunk_size: Union[int, None], parent_dir: str, content: Dict) -> Union[str, None]:
+def split_content_chunk_if_oversized(
+    max_chunk_size: Union[int, None], parent_dir: str, content: Dict
+) -> Union[str, None]:
     """
     To keep memory usage near expected bounds, it's necessary to avoid accumulation into a merge destination chunk such
     that its size balloons beyond the size of a pre-merge chunk.  This is achieved by splitting the chunk approximately
@@ -124,3 +138,18 @@ def load_partial_history_to_records(fn: str) -> Iterable[AncestryRecord]:
 
     for history_dict in content.values():
         yield AncestryRecord.from_dict(history_dict)
+
+
+def gb_mem_to_size(desired_mem_usage_gb) -> int:
+    # rough estimated ratio of memory size to sys.getsizeof() report
+    return desired_mem_usage_gb / 3.1 * 2621536
+
+
+def update_from_record(record: AncestryRecord) -> Update:
+    doc_id = str(record.lidvid)
+    content = {
+        METADATA_PARENT_BUNDLE_KEY: [str(id) for id in record.parent_bundle_lidvids],
+        METADATA_PARENT_COLLECTION_KEY: [str(id) for id in record.parent_collection_lidvids],
+        SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: int(SWEEPERS_ANCESTRY_VERSION),
+    }
+    return Update(id=doc_id, content=content)

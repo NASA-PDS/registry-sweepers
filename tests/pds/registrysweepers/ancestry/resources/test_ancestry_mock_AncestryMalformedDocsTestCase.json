@@ -63,19 +63,12 @@
       }
     }
   ],
-  "get_nonaggregate_ancestry_records": [
+  "get_nonaggregate_ancestry_records_for_collection_lid-a:b:c:bundle:lidrefcollection": [
     {
+      "_id": "a:b:c:matching_bundle:matching_collection::1.0::P1",
       "_source": {
         "collection_lidvid": "a:b:c:bundle:lidrefcollection::1.0",
-        "product_lidvid": [
-          "a:b:c:bundle:lidrefcollection:collectionuniqueproduct::1.0",
-          "a:b:c:bundle:lidrefcollection:collectionsharedproduct::1.0"
-        ]
-      }
-    },
-    {
-      "_source": {
-        "_": "example of record with missing 'collection_lidvid' field",
+        "batch_id": 1,
         "product_lidvid": [
           "a:b:c:bundle:lidrefcollection:collectionuniqueproduct::1.0",
           "a:b:c:bundle:lidrefcollection:collectionsharedproduct::1.0"

@@ -5,6 +5,8 @@ import shutil
 import sys
 import tempfile
 from collections import namedtuple
+from datetime import datetime
+from datetime import timedelta
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -15,13 +17,15 @@ from typing import Union
 import psutil  # type: ignore
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
-from pds.registrysweepers.ancestry.queries import DbMockTypeDef
 from pds.registrysweepers.ancestry.queries import get_bundle_ancestry_records_query
 from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_bundles_query
 from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_collections_query
+from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_for_collection_lid_query
 from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_query
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
+from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.utils import dump_history_to_disk
+from pds.registrysweepers.ancestry.utils import gb_mem_to_size
 from pds.registrysweepers.ancestry.utils import load_partial_history_to_records
 from pds.registrysweepers.ancestry.utils import make_history_serializable
 from pds.registrysweepers.ancestry.utils import merge_matching_history_chunks
@@ -29,6 +33,7 @@ from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import Update
 from pds.registrysweepers.utils.db import write_updated_docs
+from pds.registrysweepers.utils.misc import bin_elements
 from pds.registrysweepers.utils.misc import coerce_list_type
 from pds.registrysweepers.utils.productidentifiers.factory import PdsProductIdentifierFactory
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
@@ -85,19 +90,6 @@ def get_ancestry_by_collection_lidvid(collections_docs: Iterable[Dict]) -> Mappi
     return ancestry_by_collection_lidvid
 
 
-def get_collection_aliases_by_lid(collections_docs: Iterable[Dict]) -> Dict[PdsLid, Set[PdsLid]]:
-    aliases_by_lid: Dict[PdsLid, Set[PdsLid]] = {}
-    for doc in collections_docs:
-        alternate_ids: List[str] = doc["_source"].get("alternate_ids", [])
-        lids: Set[PdsLid] = {PdsProductIdentifierFactory.from_string(id).lid for id in alternate_ids}
-        for lid in lids:
-            if lid not in aliases_by_lid:
-                aliases_by_lid[lid] = set()
-            aliases_by_lid[lid].update(lids)
-
-    return aliases_by_lid
-
-
 def get_ancestry_by_collection_lid(
     ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord]
 ) -> Mapping[PdsLid, Set[AncestryRecord]]:
@@ -118,9 +110,6 @@ def get_collection_ancestry_records(
     log.info("Generating AncestryRecords for collections...")
     bundles_docs = get_collection_ancestry_records_bundles_query(client, registry_db_mock)
     collections_docs = list(get_collection_ancestry_records_collections_query(client, registry_db_mock))
-
-    # Prepare LID alias sets for every LID
-    collection_aliases_by_lid: Dict[PdsLid, Set[PdsLid]] = get_collection_aliases_by_lid(collections_docs)
 
     # Prepare empty ancestry records for collections, with fast access by LID or LIDVID
     ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord] = get_ancestry_by_collection_lidvid(
@@ -162,9 +151,8 @@ def get_collection_ancestry_records(
                     )
             elif isinstance(identifier, PdsLid):
                 try:
-                    for alias in collection_aliases_by_lid[identifier]:
-                        for record in ancestry_by_collection_lid[alias]:
-                            record.parent_bundle_lidvids.add(bundle_lidvid)
+                    for record in ancestry_by_collection_lid[identifier.lid]:
+                        record.parent_bundle_lidvids.add(bundle_lidvid)
                 except KeyError:
                     log.warning(
                         f"No versions of collection {identifier} referenced by bundle {bundle_lidvid} "
@@ -181,6 +169,39 @@ def get_collection_ancestry_records(
     return ancestry_by_collection_lidvid.values()
 
 
+def generate_nonaggregate_and_collection_records_iteratively(
+    client: OpenSearch,
+    all_collections_records: Iterable[AncestryRecord],
+    registry_db_mock: DbMockTypeDef = None,
+) -> Iterable[AncestryRecord]:
+    """
+    Iteratively generate nonaggregate records in chunks, each chunk sharing a common collection LID.  This
+    prevents the need to simultaneously store data in memory for a large volume of nonaggregate records.
+
+    After non-aggregate records are generated, the corresponding collections' records are updated, such that they are
+    only processed and marked up-to-date if their non-aggregates have successfully been updated.
+    """
+
+    collection_records_by_lid = bin_elements(all_collections_records, lambda r: r.lidvid.lid)
+
+    for lid, collections_records_for_lid in collection_records_by_lid.items():
+        if all([record.skip_write for record in collections_records_for_lid]):
+            log.info(f"Skipping updates for up-to-date collection family: {str(lid)}")
+            continue
+        else:
+            log.info(
+                f"Processing all versions of collection {str(lid)}: {[str(id) for id in sorted([r.lidvid for r in collections_records_for_lid])]}"
+            )
+
+        for non_aggregate_record in get_nonaggregate_ancestry_records_for_collection_lid(
+            client, lid, collections_records_for_lid, registry_db_mock
+        ):
+            yield non_aggregate_record
+
+        for collection_record in collections_records_for_lid:
+            yield collection_record
+
+
 def get_nonaggregate_ancestry_records(
     client: OpenSearch,
     collection_ancestry_records: Iterable[AncestryRecord],
@@ -193,6 +214,75 @@ def get_nonaggregate_ancestry_records(
         else _get_nonaggregate_ancestry_records_without_chunking
     )
     return f(client, collection_ancestry_records, registry_db_mock)
+
+
+def get_nonaggregate_ancestry_records_for_collection_lid(
+    client: OpenSearch,
+    collection_lid: PdsLid,
+    collection_ancestry_records: Iterable[AncestryRecord],
+    registry_db_mock: DbMockTypeDef = None,
+) -> Iterable[AncestryRecord]:
+    log.info(
+        f"Generating AncestryRecords for non-aggregate products of collections with LID {str(collection_lid)}, using non-chunked input/output..."
+    )
+
+    # Generate lookup for the parent bundles of all collections - these will be applied to non-aggregate products too.
+    bundle_ancestry_by_collection_lidvid = {
+        record.lidvid: record.parent_bundle_lidvids for record in collection_ancestry_records
+    }
+
+    collection_refs_query_docs = get_nonaggregate_ancestry_records_for_collection_lid_query(
+        client, collection_lid, registry_db_mock
+    )
+
+    nonaggregate_ancestry_records_by_lidvid = {}
+    # For each collection, add the collection and its bundle ancestry to all products the collection contains
+    for doc in collection_refs_query_docs:
+        try:
+            if doc["_id"].split("::")[2].startswith("S"):
+                log.info(f'Skipping secondary-collection document {doc["_id"]}')
+                continue
+
+            collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
+            referenced_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
+            nonaggregate_lidvids = [id for id in referenced_lidvids if id.is_basic_product()]
+
+            erroneous_lidvids = [id for id in referenced_lidvids if not id.is_basic_product()]
+            if len(erroneous_lidvids) > 0:
+                log.error(
+                    f'registry-refs document with id {doc["_id"]} references one or more aggregate products in its product_lidvid refs list: {[str(id) for id in erroneous_lidvids]}'
+                )
+
+        except IndexError as err:
+            doc_id = doc["_id"]
+            log.warning(f'Encountered document with unexpected _id: "{doc_id}"')
+        except (ValueError, KeyError) as err:
+            log.warning(
+                'Failed to parse collection and/or product LIDVIDs from document in index "%s" with id "%s" due to %s: %s',
+                doc.get("_index"),
+                doc.get("_id"),
+                type(err).__name__,
+                err,
+            )
+            continue
+
+        try:
+            bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
+        except KeyError:
+            log.debug(
+                f'Failed to resolve history for page {doc.get("_id")} in index {doc.get("_index")} with collection_lidvid {collection_lidvid} - no such collection exists in registry.'
+            )
+            continue
+
+        for lidvid in nonaggregate_lidvids:
+            if lidvid not in nonaggregate_ancestry_records_by_lidvid:
+                nonaggregate_ancestry_records_by_lidvid[lidvid] = AncestryRecord(lidvid=lidvid)
+
+            record = nonaggregate_ancestry_records_by_lidvid[lidvid]
+            record.parent_bundle_lidvids.update(bundle_ancestry)
+            record.parent_collection_lidvids.add(collection_lidvid)
+
+    return nonaggregate_ancestry_records_by_lidvid.values()
 
 
 def _get_nonaggregate_ancestry_records_without_chunking(
@@ -213,8 +303,11 @@ def _get_nonaggregate_ancestry_records_without_chunking(
     # For each collection, add the collection and its bundle ancestry to all products the collection contains
     for doc in collection_refs_query_docs:
         try:
+            if doc["_id"].split("::")[2].startswith("S"):
+                log.info(f'Skipping secondary-collection document {doc["_id"]}')
+                continue
+
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
-            bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
             nonaggregate_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
         except (ValueError, KeyError) as err:
             log.warning(
@@ -223,6 +316,14 @@ def _get_nonaggregate_ancestry_records_without_chunking(
                 doc.get("_id"),
                 type(err).__name__,
                 err,
+            )
+            continue
+
+        try:
+            bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
+        except KeyError:
+            log.debug(
+                f'Failed to resolve history for page {doc.get("_id")} in index {doc.get("_index")} with collection_lidvid {collection_lidvid} - no such collection exists in registry.'
             )
             continue
 
@@ -264,8 +365,8 @@ def _get_nonaggregate_ancestry_records_with_chunking(
     user_configured_max_memory_usage = AncestryRuntimeConstants.max_acceptable_memory_usage
     available_processing_memory = user_configured_max_memory_usage - baseline_memory_usage
     disk_dump_memory_threshold = baseline_memory_usage + (
-        available_processing_memory / 2.5
-    )  # peak expected memory use is during merge, where two dump files are open simultaneously. 0.5 added for overhead after testing revealed 2.0 was insufficient
+        available_processing_memory / 3.0
+    )  # peak expected memory use is during merge, where two dump files are open simultaneously. 1.0 added for overhead after testing revealed 2.5 was insufficient
     log.info(
         f"Max memory use set at {user_configured_max_memory_usage}% - dumps will trigger when memory usage reaches {disk_dump_memory_threshold:.1f}%"
     )
@@ -275,13 +376,21 @@ def _get_nonaggregate_ancestry_records_with_chunking(
 
     most_recent_attempted_collection_lidvid: Union[PdsLidVid, None] = None
     nonaggregate_ancestry_records_by_lidvid = {}
+
     for doc in collection_refs_query_docs:
         try:
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
             most_recent_attempted_collection_lidvid = collection_lidvid
-            for nonaggregate_lidvid_str in doc["_source"]["product_lidvid"]:
-                bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
 
+            try:
+                bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
+            except KeyError:
+                log.debug(
+                    f'Failed to resolve history for page {doc.get("_id")} in index {doc.get("_index")} with collection_lidvid {collection_lidvid} - no such collection exists in registry.'
+                )
+                continue
+
+            for nonaggregate_lidvid_str in doc["_source"]["product_lidvid"]:
                 if nonaggregate_lidvid_str not in nonaggregate_ancestry_records_by_lidvid:
                     nonaggregate_ancestry_records_by_lidvid[nonaggregate_lidvid_str] = {
                         "lidvid": nonaggregate_lidvid_str,
@@ -294,7 +403,7 @@ def _get_nonaggregate_ancestry_records_with_chunking(
                 record_dict["parent_collection_lidvids"].add(str(collection_lidvid))
 
                 if psutil.virtual_memory().percent >= disk_dump_memory_threshold:
-                    log.debug(
+                    log.info(
                         f"Memory threshold {disk_dump_memory_threshold:.1f}% reached - dumping serialized history to disk for {len(nonaggregate_ancestry_records_by_lidvid)} products"
                     )
                     make_history_serializable(nonaggregate_ancestry_records_by_lidvid)
@@ -303,6 +412,7 @@ def _get_nonaggregate_ancestry_records_with_chunking(
                         chunk_size_max, sys.getsizeof(nonaggregate_ancestry_records_by_lidvid)
                     )  # slightly problematic due to reuse of pointers vs actual values, but let's try it
                     nonaggregate_ancestry_records_by_lidvid = {}
+                    last_dump_time = datetime.now()
 
             # mark collection for metadata update
             touched_ref_documents.append(

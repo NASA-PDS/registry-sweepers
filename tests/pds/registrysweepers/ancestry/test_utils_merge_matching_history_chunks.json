@@ -1,6 +1,6 @@
 {
   "inputs": {
-    "dest.json": {
+    "dest.dump": {
       "a:b:c:d:e:A::1.0": {
         "lidvid": "a:b:c:d:e:A::1.0",
         "parent_collection_lidvids": [
@@ -20,7 +20,7 @@
         ]
       }
     },
-    "src1.json": {
+    "src1.dump": {
       "a:b:c:d:e:A::1.0": {
         "lidvid": "a:b:c:d:e:A::1.0",
         "parent_collection_lidvids": [
@@ -40,7 +40,7 @@
         ]
       }
     },
-    "src2.json": {
+    "src2.dump": {
       "a:b:c:d:e:A::1.0": {
         "lidvid": "a:b:c:d:e:A::1.0",
         "parent_collection_lidvids": [
@@ -62,7 +62,7 @@
     }
   },
   "outputs": {
-    "dest.json": {
+    "dest.dump": {
       "a:b:c:d:e:A::1.0": {
         "lidvid": "a:b:c:d:e:A::1.0",
         "parent_collection_lidvids": [
@@ -86,7 +86,7 @@
         ]
       }
     },
-    "src1.json": {
+    "src1.dump": {
       "a:b:c:d:e:a::1.0": {
         "lidvid": "a:b:c:d:e:a::1.0",
         "parent_collection_lidvids": [
@@ -97,7 +97,7 @@
         ]
       }
     },
-    "src2.json": {
+    "src2.dump": {
       "a:b:c:d:e:b::1.0": {
         "lidvid": "a:b:c:d:e:b::1.0",
         "parent_collection_lidvids": [
