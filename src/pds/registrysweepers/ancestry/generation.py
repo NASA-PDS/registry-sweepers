@@ -17,13 +17,13 @@ from typing import Union
 import psutil  # type: ignore
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
-from pds.registrysweepers.ancestry.queries import DbMockTypeDef
 from pds.registrysweepers.ancestry.queries import get_bundle_ancestry_records_query
 from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_bundles_query
 from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_collections_query
 from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_for_collection_lid_query
 from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_query
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
+from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.utils import dump_history_to_disk
 from pds.registrysweepers.ancestry.utils import gb_mem_to_size
 from pds.registrysweepers.ancestry.utils import load_partial_history_to_records
@@ -90,19 +90,6 @@ def get_ancestry_by_collection_lidvid(collections_docs: Iterable[Dict]) -> Mappi
     return ancestry_by_collection_lidvid
 
 
-def get_collection_aliases_by_lid(collections_docs: Iterable[Dict]) -> Dict[PdsLid, Set[PdsLid]]:
-    aliases_by_lid: Dict[PdsLid, Set[PdsLid]] = {}
-    for doc in collections_docs:
-        alternate_ids: List[str] = doc["_source"].get("alternate_ids", [])
-        lids: Set[PdsLid] = {PdsProductIdentifierFactory.from_string(id).lid for id in alternate_ids}
-        for lid in lids:
-            if lid not in aliases_by_lid:
-                aliases_by_lid[lid] = set()
-            aliases_by_lid[lid].update(lids)
-
-    return aliases_by_lid
-
-
 def get_ancestry_by_collection_lid(
     ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord]
 ) -> Mapping[PdsLid, Set[AncestryRecord]]:
@@ -123,9 +110,6 @@ def get_collection_ancestry_records(
     log.info("Generating AncestryRecords for collections...")
     bundles_docs = get_collection_ancestry_records_bundles_query(client, registry_db_mock)
     collections_docs = list(get_collection_ancestry_records_collections_query(client, registry_db_mock))
-
-    # Prepare LID alias sets for every LID
-    collection_aliases_by_lid: Dict[PdsLid, Set[PdsLid]] = get_collection_aliases_by_lid(collections_docs)
 
     # Prepare empty ancestry records for collections, with fast access by LID or LIDVID
     ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord] = get_ancestry_by_collection_lidvid(
@@ -167,9 +151,8 @@ def get_collection_ancestry_records(
                     )
             elif isinstance(identifier, PdsLid):
                 try:
-                    for alias in collection_aliases_by_lid[identifier]:
-                        for record in ancestry_by_collection_lid[alias]:
-                            record.parent_bundle_lidvids.add(bundle_lidvid)
+                    for record in ancestry_by_collection_lid[identifier.lid]:
+                        record.parent_bundle_lidvids.add(bundle_lidvid)
                 except KeyError:
                     log.warning(
                         f"No versions of collection {identifier} referenced by bundle {bundle_lidvid} "
@@ -261,7 +244,18 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
                 continue
 
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
-            nonaggregate_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
+            referenced_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
+            nonaggregate_lidvids = [id for id in referenced_lidvids if id.is_basic_product()]
+
+            erroneous_lidvids = [id for id in referenced_lidvids if not id.is_basic_product()]
+            if len(erroneous_lidvids) > 0:
+                log.error(
+                    f'registry-refs document with id {doc["_id"]} references one or more aggregate products in its product_lidvid refs list: {[str(id) for id in erroneous_lidvids]}'
+                )
+
+        except IndexError as err:
+            doc_id = doc["_id"]
+            log.warning(f'Encountered document with unexpected _id: "{doc_id}"')
         except (ValueError, KeyError) as err:
             log.warning(
                 'Failed to parse collection and/or product LIDVIDs from document in index "%s" with id "%s" due to %s: %s',

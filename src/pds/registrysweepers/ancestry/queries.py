@@ -1,22 +1,22 @@
 import logging
 from enum import auto
 from enum import Enum
-from typing import Callable
 from typing import Dict
 from typing import Iterable
-from typing import Optional
 
 from opensearchpy import OpenSearch
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
+from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import get_query_hits_count
 from pds.registrysweepers.utils.db import query_registry_db_or_mock
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
+from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 log = logging.getLogger(__name__)
-
-DbMockTypeDef = Optional[Callable[[str], Iterable[Dict]]]
 
 
 class ProductClass(Enum):
@@ -60,7 +60,7 @@ def get_collection_ancestry_records_collections_query(
 ) -> Iterable[Dict]:
     # Query the registry for all collection identifiers
     query = product_class_query_factory(ProductClass.COLLECTION)
-    _source = {"includes": ["lidvid", "alternate_ids", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
+    _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
     query_f = query_registry_db_or_mock(db_mock, "get_collection_ancestry_records_collections", use_search_after=True)
     docs = query_f(client, "registry", query, _source)
 
@@ -108,7 +108,11 @@ def get_nonaggregate_ancestry_records_for_collection_lid_query(
         "seq_no_primary_term": True,
     }
     _source = {"includes": ["collection_lidvid", "batch_id", "product_lidvid"]}
-    query_f = query_registry_db_or_mock(registry_db_mock, "get_nonaggregate_ancestry_records", use_search_after=True)
+    query_f = query_registry_db_or_mock(
+        registry_db_mock,
+        f"get_nonaggregate_ancestry_records_for_collection_lid-{collection_lid}",
+        use_search_after=True,
+    )
 
     # each document will have many product lidvids, so a smaller page size is warranted here
     docs = query_f(
@@ -150,3 +154,39 @@ def get_orphaned_documents_count(client: OpenSearch, index_name: str) -> int:
     # Query an index documents without an up-to-date ancestry version reference - this would indicate a product which is
     # orphaned and is getting missed in processing
     return get_query_hits_count(client, index_name, _orphaned_docs_query)
+
+
+def get_existing_ancestry_for_product(
+    client: OpenSearch, product_lidvid: PdsLidVid, registry_db_mock: DbMockTypeDef
+) -> Dict:
+    # Retrieve ancestry for a single document.  It would be simpler to just pull it by id, but this is compatible with
+    # the existing functional testing framework.
+    query: Dict = {
+        "query": {
+            "bool": {
+                "filter": [
+                    {"term": {"lidvid": str(product_lidvid)}},
+                ],
+            }
+        },
+    }
+    _source = {
+        "includes": [
+            "lidvid",
+            METADATA_PARENT_BUNDLE_KEY,
+            METADATA_PARENT_COLLECTION_KEY,
+            SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
+        ]
+    }
+    query_f = query_registry_db_or_mock(
+        registry_db_mock, f"get_existing_ancestry_for_product-{product_lidvid}", use_search_after=True
+    )
+
+    docs = query_f(
+        client,
+        "registry",
+        query,
+        _source,
+    )
+
+    return list(docs)[0]

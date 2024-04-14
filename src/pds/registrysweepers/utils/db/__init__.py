@@ -238,7 +238,7 @@ def write_updated_docs(
     index_name: str,
     bulk_chunk_max_update_count: Union[int, None] = None,
 ):
-    log.info("Updating a lazily-generated collection of product documents...")
+    log.info("Writing document updates...")
     updated_doc_count = 0
 
     bulk_buffer_max_size_mb = 30.0
@@ -275,7 +275,7 @@ def write_updated_docs(
         log.debug(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
 
-    log.info(f"Updated documents for {updated_doc_count} total products!")
+    log.info(f"Updated documents for {updated_doc_count} products!")
 
 
 def update_as_statements(update: Update) -> Iterable[str]:
@@ -294,7 +294,7 @@ def update_as_statements(update: Update) -> Iterable[str]:
 def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: Iterable[str]):
     bulk_data = "\n".join(bulk_updates) + "\n"
 
-    request_timeout = 90
+    request_timeout = 180
     response_content = client.bulk(index=index_name, body=bulk_data, request_timeout=request_timeout)
 
     if response_content.get("errors"):
