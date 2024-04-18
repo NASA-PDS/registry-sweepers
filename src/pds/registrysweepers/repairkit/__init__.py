@@ -22,6 +22,7 @@ from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
+from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
 
 """
@@ -95,10 +96,16 @@ def run(
 
     # page_size and bulk_chunk_max_update_count constraints are necessary to avoid choking nodes with very-large docs
     # i.e. ATM and GEO
-    all_docs = query_registry_db_with_search_after(client, "registry", unprocessed_docs_query, {}, page_size=5000)
+    all_docs = query_registry_db_with_search_after(
+        client, resolve_multitenant_index_name("registry"), unprocessed_docs_query, {}, page_size=5000
+    )
     updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
-    ensure_index_mapping(client, "registry", SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, "integer")
-    write_updated_docs(client, updates, index_name="registry", bulk_chunk_max_update_count=20000)
+    ensure_index_mapping(
+        client, resolve_multitenant_index_name("registry"), SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, "integer"
+    )
+    write_updated_docs(
+        client, updates, index_name=resolve_multitenant_index_name("registry"), bulk_chunk_max_update_count=20000
+    )
 
     log.info("Repairkit sweeper processing complete!")
 
