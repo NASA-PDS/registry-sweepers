@@ -10,5 +10,4 @@ def resolve_multitenant_index_name(index_type: str):
     elif index_type not in supported_index_types:
         raise ValueError(f'index_type "{index_type}" not supported (expected one of {supported_index_types})')
     else:
-        raise NotImplementedError("the format has not yet been confirmed")
-        return f"{node_id}_{index_type}"
+        return f"{node_id}-{index_type}"
