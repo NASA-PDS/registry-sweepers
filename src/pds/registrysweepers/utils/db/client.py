@@ -43,7 +43,7 @@ def get_opensearch_client(
 
     use_ssl = scheme.lower() == "https"
 
-    test_url = f"{endpoint_url}/_cat/indices"
+    test_url = f"{endpoint_url}/_search"
     try:
         log.info(
             f'Testing access to OpenSearch endpoint {test_url} with{"out" if not credentials_supplied else ""} user/pass credentials...'
@@ -68,12 +68,12 @@ def get_opensearch_client(
         log.error(msg)
         raise RuntimeError(msg)
 
-    log.info("Testing OpenSearch client with index list operation...")
+    log.info("Testing OpenSearch client with search operation...")
     try:
-        client.indices.get("*")
-        log.info(f"OpenSearch client index list test succeeded")
+        resp = client.search()
+        log.info(f"OpenSearch client search test succeeded")
     except Exception as err:
-        msg = f"OpenSearch client index list test failed with {err}"
+        msg = f"OpenSearch client search test failed with {err}"
         log.error(msg)
         raise RuntimeError(msg)
 
