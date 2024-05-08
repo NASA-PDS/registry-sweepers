@@ -4,11 +4,9 @@ import os
 from typing import Union
 
 import boto3
-import requests
 from opensearchpy import AWSV4SignerAuth
 from opensearchpy.client import OpenSearch
 from opensearchpy.connection.http_requests import RequestsHttpConnection
-from requests_aws4auth import AWS4Auth
 
 log = logging.getLogger()
 
@@ -32,7 +30,7 @@ def get_opensearch_client(
     endpoint_url: str, username: Union[str, None] = None, password: Union[str, None] = None, verify_certs: bool = True
 ) -> OpenSearch:
     if not (username is None) == (password is None):
-        raise ValueError(f"must provide both username and password, or neither")
+        raise ValueError("must provide both username and password, or neither")
 
     credentials_supplied = username is not None
 
@@ -81,7 +79,7 @@ def get_aws_opensearch_client(endpoint_url: str) -> OpenSearch:
     log.info("Testing AWS IAM OpenSearch client with search operation...")
     try:
         resp = client.search()
-        log.info(f"OpenSearch client search test succeeded")
+        log.info("OpenSearch client search test succeeded")
     except Exception as err:
         msg = f"OpenSearch client search test failed with {err}"
         log.error(msg)
