@@ -40,15 +40,9 @@
 #
 # - The EN (i.e. primary) OpenSearch endpoint is provided in the environment
 #   variable PROV_ENDPOINT
-# - The username/password is provided as a JSON key/value in the environment
+# - [OPTIONAL] The username/password is provided as a JSON key/value in the environment
 #   variable PROV_CREDENTIALS
-# - The remotes available through cross cluster search to be processed are
-#   provided as a JSON list of strings - each string containing the space
-#   separated list of remotes (as they appear on the provenance command line)
-#   Each set of remotes is used in an execution of provenance. The value of
-#   this is specified in the environment variable PROV_REMOTES. If this
-#   variable is empty or not defined, provenance is run without specifying
-#   remotes and only the PROV_ENDPOINT is processed.
+# - The relevant node id (ex. en-prod) is provided in the environment variable MULTITENANCY_NODE_ID
 # - The directory containing the provenance.py file is in PATH and is
 #   executable.
 #
@@ -83,18 +77,19 @@ if opensearch_endpoint.strip() == '':
     raise RuntimeError('Environment variable PROV_ENDPOINT must be provided')
 log.info(f'Targeting OpenSearch endpoint "{opensearch_endpoint}"')
 
-try:
-    provCredentialsStr = os.environ["PROV_CREDENTIALS"]
-except KeyError:
-    raise RuntimeError('Environment variable PROV_CREDENTIALS must be provided')
+provCredentialsStr = os.environ.get("PROV_CREDENTIALS", "")
 
-try:
-    provCredentials = json.loads(provCredentialsStr)
-    username = list(provCredentials.keys())[0]
-    password = provCredentials[username]
-except Exception as err:
-    logging.error(err)
-    raise ValueError(f'Failed to parse username/password from PROV_CREDENTIALS value "{provCredentialsStr}": {err}')
+# Check that credentials are properly-formed, if supplied
+if len(provCredentialsStr.strip()) > 0:
+    try:
+        provCredentials = json.loads(provCredentialsStr)
+        username = list(provCredentials.keys())[0]
+        password = provCredentials[username]
+    except Exception as err:
+        logging.error(err)
+        raise ValueError(f'Failed to parse username/password from PROV_CREDENTIALS value "{provCredentialsStr}": {err}')
+else:
+    username, password = None, None
 
 log_level = parse_log_level(os.environ.get('LOGLEVEL', 'INFO'))
 

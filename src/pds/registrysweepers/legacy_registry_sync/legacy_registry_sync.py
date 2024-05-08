@@ -1,11 +1,11 @@
 import json
 import logging
 import sys
-import opensearchpy.helpers
-
-from opensearchpy import OpenSearch
 from time import sleep
 from typing import Union
+
+import opensearchpy.helpers
+from opensearchpy import OpenSearch
 from pds.registrysweepers.legacy_registry_sync.opensearch_loaded_product import get_already_loaded_lidvids
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
 from pds.registrysweepers.utils import configure_logging
@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 SOLR_URL = "https://pds.nasa.gov/services/search/search"
 OS_INDEX = "legacy_registry"
 MAX_RETRIES = 5
+
 
 def create_legacy_registry_index(es_conn=None):
     """
@@ -61,4 +62,3 @@ def run(
     ):
         if not ok:
             log.error(item)
-
