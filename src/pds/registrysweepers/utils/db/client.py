@@ -14,10 +14,12 @@ def get_opensearch_client_from_environment(verify_certs: bool = True) -> OpenSea
 
     username, password = creds_dict.popitem()
 
-    return get_opensearch_client(endpoint_url, username, password, verify_certs)
+    return get_userpass_opensearch_client(endpoint_url, username, password, verify_certs)
 
 
-def get_opensearch_client(endpoint_url: str, username: str, password: str, verify_certs: bool = True) -> OpenSearch:
+def get_userpass_opensearch_client(
+    endpoint_url: str, username: str, password: str, verify_certs: bool = True
+) -> OpenSearch:
     try:
         scheme, host, port_str = endpoint_url.replace("://", ":", 1).split(":")
         port = int(port_str)
