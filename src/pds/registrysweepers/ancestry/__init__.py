@@ -31,7 +31,7 @@ from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_M
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_args
 from pds.registrysweepers.utils.db import write_updated_docs
-from pds.registrysweepers.utils.db.client import get_opensearch_client
+from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
@@ -221,7 +221,7 @@ if __name__ == "__main__":
     """
 
     args = parse_args(description=cli_description)
-    client = get_opensearch_client(
+    client = get_userpass_opensearch_client(
         endpoint_url=args.base_URL, username=args.username, password=args.password, verify_certs=not args.insecure
     )
 

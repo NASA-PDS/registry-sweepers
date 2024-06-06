@@ -139,6 +139,14 @@ def query_registry_db_with_search_after(
     # (see first !IMPORTANT! note)
     sort_fields = sort_fields or ["lidvid"]
 
+    # TODO: stop accepted {'query': <content>} and start accepting just <content> itself, to prevent the need for this guard
+    if "search_after" in query.keys():
+        log.error(
+            f'Provided query object contains "search_after" content when none should exist - was a dict object reused?: got {query}.'
+        )
+        log.info("Discarding erroneous search_after values.")
+        query.pop("search_after")
+
     query_id = get_random_hex_id()  # This is just used to differentiate queries during logging
 
     served_hits = 0
