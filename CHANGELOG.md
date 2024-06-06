@@ -1,6 +1,6 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2024-04-14)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2024-06-06)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.1...«unknown»)
 
@@ -14,11 +14,14 @@
 
 **Defects:**
 
+- Nonaggregate products present in "foreign" collections/bundles do not have correct ancestry. [\#114](https://github.com/NASA-PDS/registry-sweepers/issues/114)
+- `superseded_by` fields with `null` values causing multiple versions of same products to appear in API searches [\#112](https://github.com/NASA-PDS/registry-sweepers/issues/112) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
 - Timeout bug when running legacy dashboard sync [\#111](https://github.com/NASA-PDS/registry-sweepers/issues/111) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
 - When building registry-sweeper version 1.2.1, docker image 1.3.0 was published on docker hub [\#109](https://github.com/NASA-PDS/registry-sweepers/issues/109) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 
 **Other closed issues:**
 
+- Run sweepers locally against PSA prod [\#108](https://github.com/NASA-PDS/registry-sweepers/issues/108) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
 - Test latest sweeper changes on all production OpenSearch clusters [\#98](https://github.com/NASA-PDS/registry-sweepers/issues/98)
 - Add node information to select log messages [\#18](https://github.com/NASA-PDS/registry-sweepers/issues/18)
 - Implement functional tests for provenance.py [\#13](https://github.com/NASA-PDS/registry-sweepers/issues/13)
