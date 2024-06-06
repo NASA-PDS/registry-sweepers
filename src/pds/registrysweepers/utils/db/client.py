@@ -1,15 +1,12 @@
 import json
 import os
 
-import boto3
 import requests
 from botocore.credentials import Credentials
-from botocore.credentials import ReadOnlyCredentials
-from opensearchpy import AWSV4SignerAuth
 from opensearchpy import OpenSearch
 from opensearchpy import RequestsAWSV4SignerAuth
 from opensearchpy import RequestsHttpConnection
-from requests_aws4auth import AWS4Auth
+from requests_aws4auth import AWS4Auth  # type: ignore
 
 
 def get_opensearch_client_from_environment(verify_certs: bool = True) -> OpenSearch:
@@ -58,21 +55,7 @@ def get_aws_credentials_from_ssm(iam_role_name: str) -> Credentials:
 
 def get_aws_aoss_client_from_ssm(endpoint_url: str, iam_role_name: str) -> OpenSearch:
     # https://opensearch.org/blog/aws-sigv4-support-for-clients/
-
     credentials = get_aws_credentials_from_ssm(iam_role_name)
-
-    print(credentials)
-
-    # auth = AWS4Auth(access_key_id,
-    #                 secret_access_key,
-    #                 'us-west-2',
-    #                 'aoss',
-    #                 # token
-    #                 )
-
-    boto3.Session().get_credentials()
-    botocore.credentials.Credentials
-
     auth = RequestsAWSV4SignerAuth(credentials, "us-west-2")
     return get_aws_opensearch_client(endpoint_url, auth)
 

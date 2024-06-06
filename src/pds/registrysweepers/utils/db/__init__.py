@@ -144,7 +144,7 @@ def query_registry_db_with_search_after(
         log.error(
             f'Provided query object contains "search_after" content when none should exist - was a dict object reused?: got {query}.'
         )
-        log.info(f"Discarding erroneous search_after values.")
+        log.info("Discarding erroneous search_after values.")
         query.pop("search_after")
 
     query_id = get_random_hex_id()  # This is just used to differentiate queries during logging
