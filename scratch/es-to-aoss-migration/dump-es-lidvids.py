@@ -1,4 +1,3 @@
-import json
 import os
 
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after

@@ -1,15 +1,10 @@
-import json
 import os
 
-import requests
 from opensearchpy import RequestsAWSV4SignerAuth, OpenSearch, RequestsHttpConnection
-from requests_aws4auth import AWS4Auth
 
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
-from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment, get_aws_aoss_client_from_ssm, \
-    get_aws_credentials_from_ssm
+from pds.registrysweepers.utils.db.client import get_aws_credentials_from_ssm
 
-#START VALIDATED CODE
 iam_role_name = 'temp-mcp-ec2-opensearch-role'
 aoss_host = 'b3rqys09xmx9i19yn64i.us-west-2.aoss.amazonaws.com'
 
@@ -17,13 +12,6 @@ credentials = get_aws_credentials_from_ssm(iam_role_name)
 
 auth = RequestsAWSV4SignerAuth(credentials, 'us-west-2', 'aoss')
 
-# ## VALIDATED
-# url = f'https://{aoss_host_endpoint_url}/_search'
-# response = requests.post(url=url, data="", auth=auth)
-# print(response.content)
-# exit(0)
-
-## VALIDATED
 def get_client() -> OpenSearch:
     client = OpenSearch(
             hosts=[{"host": aoss_host, "port": 443}],
@@ -33,8 +21,6 @@ def get_client() -> OpenSearch:
             connection_class=RequestsHttpConnection
         )
     return client
-# print(client.search())
-# exit(0)
 
 index_configs = [
     {'name': 'registry', 'sort_fields': ['lidvid']},
