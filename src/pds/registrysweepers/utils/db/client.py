@@ -13,13 +13,27 @@ def get_opensearch_client_from_environment(verify_certs: bool = True) -> OpenSea
     """Extract necessary details from the existing (at time of development) runtime environment and construct a client"""
     # TODO: consider re-working these environment variables at some point
 
-    endpoint_url = os.environ["PROV_ENDPOINT"]
-    creds_str = os.environ["PROV_CREDENTIALS"]
-    creds_dict = json.loads(creds_str)
+    endpoint_url_env_var_key = "PROV_ENDPOINT"
+    userpass_env_var_key = "PROV_CREDENTIALS"
+    iam_role_env_var_key = "SWEEPERS_IAM_ROLE_NAME"
 
-    username, password = creds_dict.popitem()
+    endpoint_url = os.environ.get(endpoint_url_env_var_key) or None
+    if endpoint_url is None:
+        raise EnvironmentError(f'env var "{endpoint_url_env_var_key}" is required')
 
-    return get_userpass_opensearch_client(endpoint_url, username, password, verify_certs)
+    creds_str = os.environ.get("PROV_CREDENTIALS") or None
+    iam_role_name = os.environ.get(iam_role_env_var_key) or None
+
+    if creds_str is not None and iam_role_name is not None:
+        raise EnvironmentError(f'Only one of env vars ["{userpass_env_var_key}", "{iam_role_env_var_key}"] may be set')
+    if creds_str is not None:
+        creds_dict = json.loads(creds_str)
+        username, password = creds_dict.popitem()
+        return get_userpass_opensearch_client(endpoint_url, username, password, verify_certs)
+    elif iam_role_name is not None:
+        return get_aws_aoss_client_from_ssm(endpoint_url, iam_role_name)
+    else:
+        raise EnvironmentError(f'One of env vars ["{userpass_env_var_key}", "{iam_role_env_var_key}"] must be set')
 
 
 def get_userpass_opensearch_client(
