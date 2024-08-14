@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import requests
@@ -27,8 +28,13 @@ def get_opensearch_client_from_environment(verify_certs: bool = True) -> OpenSea
     if creds_str is not None and iam_role_name is not None:
         raise EnvironmentError(f'Only one of env vars ["{userpass_env_var_key}", "{iam_role_env_var_key}"] may be set')
     if creds_str is not None:
-        creds_dict = json.loads(creds_str)
-        username, password = creds_dict.popitem()
+        try:
+            creds_dict = json.loads(creds_str)
+            username, password = creds_dict.popitem()
+        except Exception as err:
+            logging.error(err)
+            raise ValueError(f'Failed to parse username/password from PROV_CREDENTIALS value "{creds_str}": {err}')
+
         return get_userpass_opensearch_client(endpoint_url, username, password, verify_certs)
     elif iam_role_name is not None:
         return get_aws_aoss_client_from_ssm(endpoint_url, iam_role_name)
