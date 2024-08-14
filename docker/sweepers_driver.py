@@ -30,7 +30,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
-# Python driver for provenance
+# Python driver for provenance (OUTDATED TODO: Update documentation)
 # ============================
 #
 # This script is provided to support the scheduled execution of PDS Registry
