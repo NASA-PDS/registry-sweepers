@@ -62,7 +62,10 @@ def get_userpass_opensearch_client(
 
 
 def get_aws_credentials_from_ssm(iam_role_name: str) -> Credentials:
-    response = requests.get(f"http://169.254.169.254/latest/meta-data/iam/security-credentials/{iam_role_name}")
+    url = f"http://169.254.169.254/latest/meta-data/iam/security-credentials/{iam_role_name}"
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise RuntimeError(f'Got HTTP{response.status_code} when attempting to retrieve SSM credentials from {url}')
     content = response.json()
 
     access_key_id = content["AccessKeyId"]
