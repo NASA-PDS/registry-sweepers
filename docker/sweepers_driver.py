@@ -30,7 +30,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
-# Python driver for provenance
+# Python driver for provenance (OUTDATED TODO: Update documentation)
 # ============================
 #
 # This script is provided to support the scheduled execution of PDS Registry
@@ -77,24 +77,6 @@ if dev_mode:
     import urllib3
 
     urllib3.disable_warnings()
-
-opensearch_endpoint = os.environ.get('PROV_ENDPOINT', '')
-if opensearch_endpoint.strip() == '':
-    raise RuntimeError('Environment variable PROV_ENDPOINT must be provided')
-log.info(f'Targeting OpenSearch endpoint "{opensearch_endpoint}"')
-
-try:
-    provCredentialsStr = os.environ["PROV_CREDENTIALS"]
-except KeyError:
-    raise RuntimeError('Environment variable PROV_CREDENTIALS must be provided')
-
-try:
-    provCredentials = json.loads(provCredentialsStr)
-    username = list(provCredentials.keys())[0]
-    password = provCredentials[username]
-except Exception as err:
-    logging.error(err)
-    raise ValueError(f'Failed to parse username/password from PROV_CREDENTIALS value "{provCredentialsStr}": {err}')
 
 log_level = parse_log_level(os.environ.get('LOGLEVEL', 'INFO'))
 

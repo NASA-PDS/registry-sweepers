@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import requests
@@ -13,13 +14,32 @@ def get_opensearch_client_from_environment(verify_certs: bool = True) -> OpenSea
     """Extract necessary details from the existing (at time of development) runtime environment and construct a client"""
     # TODO: consider re-working these environment variables at some point
 
-    endpoint_url = os.environ["PROV_ENDPOINT"]
-    creds_str = os.environ["PROV_CREDENTIALS"]
-    creds_dict = json.loads(creds_str)
+    endpoint_url_env_var_key = "PROV_ENDPOINT"
+    userpass_env_var_key = "PROV_CREDENTIALS"
+    iam_role_env_var_key = "SWEEPERS_IAM_ROLE_NAME"
 
-    username, password = creds_dict.popitem()
+    endpoint_url = os.environ.get(endpoint_url_env_var_key) or None
+    if endpoint_url is None:
+        raise EnvironmentError(f'env var "{endpoint_url_env_var_key}" is required')
 
-    return get_userpass_opensearch_client(endpoint_url, username, password, verify_certs)
+    creds_str = os.environ.get("PROV_CREDENTIALS") or None
+    iam_role_name = os.environ.get(iam_role_env_var_key) or None
+
+    if creds_str is not None and iam_role_name is not None:
+        raise EnvironmentError(f'Only one of env vars ["{userpass_env_var_key}", "{iam_role_env_var_key}"] may be set')
+    if creds_str is not None:
+        try:
+            creds_dict = json.loads(creds_str)
+            username, password = creds_dict.popitem()
+        except Exception as err:
+            logging.error(err)
+            raise ValueError(f'Failed to parse username/password from PROV_CREDENTIALS value "{creds_str}": {err}')
+
+        return get_userpass_opensearch_client(endpoint_url, username, password, verify_certs)
+    elif iam_role_name is not None:
+        return get_aws_aoss_client_from_ssm(endpoint_url, iam_role_name)
+    else:
+        raise EnvironmentError(f'One of env vars ["{userpass_env_var_key}", "{iam_role_env_var_key}"] must be set')
 
 
 def get_userpass_opensearch_client(
@@ -42,7 +62,10 @@ def get_userpass_opensearch_client(
 
 
 def get_aws_credentials_from_ssm(iam_role_name: str) -> Credentials:
-    response = requests.get(f"http://169.254.169.254/latest/meta-data/iam/security-credentials/{iam_role_name}")
+    url = f"http://169.254.169.254/latest/meta-data/iam/security-credentials/{iam_role_name}"
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise RuntimeError(f"Got HTTP{response.status_code} when attempting to retrieve SSM credentials from {url}")
     content = response.json()
 
     access_key_id = content["AccessKeyId"]
@@ -56,7 +79,7 @@ def get_aws_credentials_from_ssm(iam_role_name: str) -> Credentials:
 def get_aws_aoss_client_from_ssm(endpoint_url: str, iam_role_name: str) -> OpenSearch:
     # https://opensearch.org/blog/aws-sigv4-support-for-clients/
     credentials = get_aws_credentials_from_ssm(iam_role_name)
-    auth = RequestsAWSV4SignerAuth(credentials, "us-west-2")
+    auth = RequestsAWSV4SignerAuth(credentials, "us-west-2", "aoss")
     return get_aws_opensearch_client(endpoint_url, auth)
 
 
