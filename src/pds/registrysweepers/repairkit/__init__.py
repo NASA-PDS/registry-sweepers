@@ -18,6 +18,7 @@ from pds.registrysweepers.repairkit.versioning import SWEEPERS_REPAIRKIT_VERSION
 from pds.registrysweepers.repairkit.versioning import SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_args
+from pds.registrysweepers.utils.db import get_query_hits_count
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
@@ -86,31 +87,41 @@ def run(
     configure_logging(filepath=log_filepath, log_level=log_level)
     log.info(f"Starting repairkit v{SWEEPERS_REPAIRKIT_VERSION} sweeper processing...")
 
-    unprocessed_docs_query = {
-        "query": {
-            "bool": {
-                "must_not": [{"range": {SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY: {"gte": SWEEPERS_REPAIRKIT_VERSION}}}]
+    def get_unprocessed_docs_query():
+        return {
+            "query": {
+                "bool": {
+                    "must_not": [
+                        {"range": {SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY: {"gte": SWEEPERS_REPAIRKIT_VERSION}}}
+                    ]
+                }
             }
         }
-    }
 
     # page_size and bulk_chunk_max_update_count constraints are necessary to avoid choking nodes with very-large docs
     # i.e. ATM and GEO
-    all_docs = query_registry_db_with_search_after(
-        client,
-        resolve_multitenant_index_name("registry"),
-        unprocessed_docs_query,
-        {},
-        page_size=500,
-        request_timeout_seconds=180,
-    )
-    updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
-    ensure_index_mapping(
-        client, resolve_multitenant_index_name("registry"), SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, "integer"
-    )
-    write_updated_docs(
-        client, updates, index_name=resolve_multitenant_index_name("registry"), bulk_chunk_max_update_count=20000
-    )
+    index_name = resolve_multitenant_index_name("registry")
+    update_max_chunk_size = 20000
+    while get_query_hits_count(client, index_name, get_unprocessed_docs_query()) > 0:
+        all_docs = query_registry_db_with_search_after(
+            client,
+            index_name,
+            get_unprocessed_docs_query(),
+            {},
+            page_size=500,
+            limit=update_max_chunk_size,
+            request_timeout_seconds=180,
+        )
+        updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
+        ensure_index_mapping(
+            client, resolve_multitenant_index_name("registry"), SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, "integer"
+        )
+        write_updated_docs(
+            client,
+            updates,
+            index_name=resolve_multitenant_index_name("registry"),
+            bulk_chunk_max_update_count=update_max_chunk_size,
+        )
 
     log.info("Repairkit sweeper processing complete!")
 
