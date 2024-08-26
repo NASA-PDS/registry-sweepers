@@ -124,6 +124,7 @@ def query_registry_db_with_search_after(
     query: Dict,
     _source: Dict,
     page_size: int = 10000,
+    limit: Union[int, None] = None,
     sort_fields: Union[List[str], None] = None,
     request_timeout_seconds: int = 20,
 ) -> Iterable[Dict]:
@@ -154,8 +155,10 @@ def query_registry_db_with_search_after(
     more_data_exists = True
     search_after_values: Union[List, None] = None
     expected_pages = None
-    expected_hits = get_query_hits_count(client, index_name, query)
-    log.debug(f"Query {query_id} returns {expected_hits} total hits: {json.dumps(query)}")
+    total_hits = get_query_hits_count(client, index_name, query)
+    expected_hits = limit if limit is not None else total_hits
+    limit_log_msg_part = f" (limited to {expected_hits} hits)" if limit is not None else ""
+    log.debug(f"Query {query_id} returns {total_hits} total hits{limit_log_msg_part}: {json.dumps(query)}")
 
     with tqdm(total=expected_hits, desc=f"Query {query_id}") as pbar:
         while more_data_exists:
@@ -194,6 +197,10 @@ def query_registry_db_with_search_after(
                 served_hits += 1
                 pbar.update()
                 yield hit
+
+                if limit is not None and served_hits >= limit:
+                    log.debug(f"Query {query_id} complete! (limit of {expected_hits} hits reached)")
+                    return
 
                 # simpler to set the value after every hit than worry about OBO errors detecting the last hit in the page
                 search_after_values = [hit["_source"].get(field) for field in sort_fields]
