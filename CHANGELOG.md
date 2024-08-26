@@ -22,6 +22,7 @@
 **Other closed issues:**
 
 - Registry-sweeper upgrade for multitenant registry [\#120](https://github.com/NASA-PDS/registry-sweepers/issues/120) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
+- Investigate questionable repairkit behaviour [\#119](https://github.com/NASA-PDS/registry-sweepers/issues/119)
 - Run sweepers locally against PSA prod [\#108](https://github.com/NASA-PDS/registry-sweepers/issues/108) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
 - Test latest sweeper changes on all production OpenSearch clusters [\#98](https://github.com/NASA-PDS/registry-sweepers/issues/98)
 - Add node information to select log messages [\#18](https://github.com/NASA-PDS/registry-sweepers/issues/18)
