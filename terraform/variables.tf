@@ -10,7 +10,7 @@ variable "node_name_abbr" {
 
 variable "venue" {
   description = "Deployment venue (prod, test, dev, delta, gamma, etc.)"
-  default     = "dev"
+  default     = "prod"
 }
 
 variable "aws_region" {
@@ -52,7 +52,7 @@ variable "prov_remote_lists" {
 
 variable "aws_ecr_repository" {
   description = "Name of the AWS ECR Repository"
-  default     = "pds-registry-api-service"
+  default     = "pds-registry-sweepers"
 }
 
 variable "aws_fg_image" {
