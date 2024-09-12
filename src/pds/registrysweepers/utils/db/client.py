@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import Union
 
 import requests
 from botocore.credentials import Credentials
@@ -61,7 +62,7 @@ def get_userpass_opensearch_client(
     )
 
 
-def get_aws_credentials_from_ssm(iam_role_name: str) -> Credentials:
+def get_aws_credentials_from_ec2_metadata_service(iam_role_name: str) -> Credentials:
     url = f"http://169.254.169.254/latest/meta-data/iam/security-credentials/{iam_role_name}"
     response = requests.get(url)
     if response.status_code != 200:
@@ -76,9 +77,26 @@ def get_aws_credentials_from_ssm(iam_role_name: str) -> Credentials:
     return credentials
 
 
+def get_aws_credentials_from_environment() -> Union[Credentials, None]:
+    """Available when task is running in Fargate"""
+    logging.info(f"Attempting to retrieve AWS credentials from environment...")
+    try:
+        access_key_id = os.environ["AWS_ACCESS_KEY_ID"]
+        secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
+        token = os.environ["AWS_SESSION_TOKEN"]
+        credentials = Credentials(access_key_id, secret_access_key, token)
+        logging.info(f"Got AWS credentials from environment")
+        return credentials
+
+    except KeyError as err:
+        logging.info(f"No AWS credentials present in environment")
+        logging.debug(err)
+        return None
+
+
 def get_aws_aoss_client_from_ssm(endpoint_url: str, iam_role_name: str) -> OpenSearch:
     # https://opensearch.org/blog/aws-sigv4-support-for-clients/
-    credentials = get_aws_credentials_from_ssm(iam_role_name)
+    credentials = get_aws_credentials_from_environment() or get_aws_credentials_from_ec2_metadata_service(iam_role_name)
     auth = RequestsAWSV4SignerAuth(credentials, "us-west-2", "aoss")
     return get_aws_opensearch_client(endpoint_url, auth)
 
