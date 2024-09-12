@@ -1,7 +1,9 @@
 import json
 import logging
 import os
+from typing import Union
 
+import boto3
 import requests
 from botocore.credentials import Credentials
 from opensearchpy import OpenSearch
@@ -61,7 +63,7 @@ def get_userpass_opensearch_client(
     )
 
 
-def get_aws_credentials_from_ssm(iam_role_name: str) -> Credentials:
+def get_aws_credentials_from_ec2_metadata_service(iam_role_name: str) -> Credentials:
     url = f"http://169.254.169.254/latest/meta-data/iam/security-credentials/{iam_role_name}"
     response = requests.get(url)
     if response.status_code != 200:
@@ -78,7 +80,7 @@ def get_aws_credentials_from_ssm(iam_role_name: str) -> Credentials:
 
 def get_aws_aoss_client_from_ssm(endpoint_url: str, iam_role_name: str) -> OpenSearch:
     # https://opensearch.org/blog/aws-sigv4-support-for-clients/
-    credentials = get_aws_credentials_from_ssm(iam_role_name)
+    credentials = boto3.Session().get_credentials()
     auth = RequestsAWSV4SignerAuth(credentials, "us-west-2", "aoss")
     return get_aws_opensearch_client(endpoint_url, auth)
 
