@@ -3,12 +3,12 @@ import os
 from opensearchpy import RequestsAWSV4SignerAuth, OpenSearch, RequestsHttpConnection
 
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
-from pds.registrysweepers.utils.db.client import get_aws_credentials_from_ec2_metadata_service
+from pds.registrysweepers.utils.db.client import get_aws_credentials_from_ssm
 
 iam_role_name = 'temp-mcp-ec2-opensearch-role'
 aoss_host = 'b3rqys09xmx9i19yn64i.us-west-2.aoss.amazonaws.com'
 
-credentials = get_aws_credentials_from_ec2_metadata_service(iam_role_name)
+credentials = get_aws_credentials_from_ssm(iam_role_name)
 
 auth = RequestsAWSV4SignerAuth(credentials, 'us-west-2', 'aoss')
 
