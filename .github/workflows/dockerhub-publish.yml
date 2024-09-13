@@ -23,8 +23,7 @@ name:  Publish Image to DockerHub
 #
 # What event starts this workflow: manual trigger only
 
-on:
-    workflow_dispatch:
+on: workflow_dispatch
 
 
 # What to Do
