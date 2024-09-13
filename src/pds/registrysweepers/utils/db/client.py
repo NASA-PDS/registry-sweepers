@@ -78,8 +78,26 @@ def get_aws_credentials_from_ec2_metadata_service(iam_role_name: str) -> Credent
     return credentials
 
 
+def log_assumed_identity() -> None:
+    sts_client = boto3.client("sts")
+
+    response = sts_client.get_caller_identity()
+
+    arn = response["Arn"]
+    logging.info(f"Caller ARN: {arn}")
+
+    if "assumed-role" in arn:
+        role_name = arn.split("/")[-2]
+        logging.info(f"Role Name: {role_name}")
+    else:
+        role_name = None
+        logging.info("The credentials are not associated with an assumed role.")
+
+
 def get_aws_aoss_client_from_ssm(endpoint_url: str, iam_role_name: str) -> OpenSearch:
     # https://opensearch.org/blog/aws-sigv4-support-for-clients/
+    log_assumed_identity()
+
     credentials = boto3.Session().get_credentials()
     auth = RequestsAWSV4SignerAuth(credentials, "us-west-2", "aoss")
     return get_aws_opensearch_client(endpoint_url, auth)
