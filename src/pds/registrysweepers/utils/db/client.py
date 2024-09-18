@@ -102,10 +102,6 @@ def get_aws_aoss_client_from_ssm(endpoint_url: str, iam_role_name: str) -> OpenS
     get_assumed_identity()
 
     credentials = boto3.Session().get_credentials()
-
-    # TODO: DELETE ME DO NOT MERGE
-    logging.info(credentials.token)
-    # END TODO
     auth = RequestsAWSV4SignerAuth(credentials, "us-west-2", "aoss")
     return get_aws_opensearch_client(endpoint_url, auth)
 
