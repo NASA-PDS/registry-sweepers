@@ -39,7 +39,7 @@ def get_opensearch_client_from_environment(verify_certs: bool = True) -> OpenSea
 
         return get_userpass_opensearch_client(endpoint_url, username, password, verify_certs)
     elif iam_role_name is not None:
-        return get_aws_aoss_client_from_ssm(endpoint_url, iam_role_name)
+        return get_aws_aoss_client_from_ssm(endpoint_url)
     else:
         raise EnvironmentError(f'One of env vars ["{userpass_env_var_key}", "{iam_role_env_var_key}"] must be set')
 
@@ -94,7 +94,7 @@ def log_assumed_identity() -> None:
         logging.info("The credentials are not associated with an assumed role.")
 
 
-def get_aws_aoss_client_from_ssm(endpoint_url: str, iam_role_name: str) -> OpenSearch:
+def get_aws_aoss_client_from_ssm(endpoint_url: str) -> OpenSearch:
     # https://opensearch.org/blog/aws-sigv4-support-for-clients/
     log_assumed_identity()
 
