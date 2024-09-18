@@ -20,3 +20,7 @@ This requirement is not impacted by the current version
 
 
 This requirement is not impacted by the current version
+## As an archivist, I want to validate that the number of records in a collection's metadata equals number of collection products loaded into registry ([#142](https://github.com/NASA-PDS/registry-sweepers/issues/142)) 
+
+
+This requirement is not impacted by the current version
