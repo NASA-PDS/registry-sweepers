@@ -17,18 +17,13 @@ def get_opensearch_client_from_environment(verify_certs: bool = True) -> OpenSea
     # TODO: consider re-working these environment variables at some point
 
     endpoint_url_env_var_key = "PROV_ENDPOINT"
-    userpass_env_var_key = "PROV_CREDENTIALS"
-    iam_role_env_var_key = "SWEEPERS_IAM_ROLE_NAME"
 
     endpoint_url = os.environ.get(endpoint_url_env_var_key) or None
     if endpoint_url is None:
         raise EnvironmentError(f'env var "{endpoint_url_env_var_key}" is required')
 
-    creds_str = os.environ.get("PROV_CREDENTIALS") or None
-    iam_role_name = os.environ.get(iam_role_env_var_key) or None
+    creds_str = os.environ.get("PROV_CREDENTIALS", None)
 
-    if creds_str is not None and iam_role_name is not None:
-        raise EnvironmentError(f'Only one of env vars ["{userpass_env_var_key}", "{iam_role_env_var_key}"] may be set')
     if creds_str is not None:
         try:
             creds_dict = json.loads(creds_str)
@@ -38,10 +33,8 @@ def get_opensearch_client_from_environment(verify_certs: bool = True) -> OpenSea
             raise ValueError(f'Failed to parse username/password from PROV_CREDENTIALS value "{creds_str}": {err}')
 
         return get_userpass_opensearch_client(endpoint_url, username, password, verify_certs)
-    elif iam_role_name is not None:
-        return get_aws_aoss_client_from_ssm(endpoint_url, iam_role_name)
     else:
-        raise EnvironmentError(f'One of env vars ["{userpass_env_var_key}", "{iam_role_env_var_key}"] must be set')
+        return get_aws_aoss_client_from_ssm(endpoint_url)
 
 
 def get_userpass_opensearch_client(
@@ -78,8 +71,26 @@ def get_aws_credentials_from_ec2_metadata_service(iam_role_name: str) -> Credent
     return credentials
 
 
-def get_aws_aoss_client_from_ssm(endpoint_url: str, iam_role_name: str) -> OpenSearch:
+def log_assumed_identity() -> None:
+    sts_client = boto3.client("sts")
+
+    response = sts_client.get_caller_identity()
+
+    arn = response["Arn"]
+    logging.info(f"Caller ARN: {arn}")
+
+    if "assumed-role" in arn:
+        role_name = arn.split("/")[-2]
+        logging.info(f"Role Name: {role_name}")
+    else:
+        role_name = None
+        logging.info("The credentials are not associated with an assumed role.")
+
+
+def get_aws_aoss_client_from_ssm(endpoint_url: str) -> OpenSearch:
     # https://opensearch.org/blog/aws-sigv4-support-for-clients/
+    log_assumed_identity()
+
     credentials = boto3.Session().get_credentials()
     auth = RequestsAWSV4SignerAuth(credentials, "us-west-2", "aoss")
     return get_aws_opensearch_client(endpoint_url, auth)
