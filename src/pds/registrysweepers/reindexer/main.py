@@ -25,11 +25,18 @@ from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 
+def do_local_test_init(client: OpenSearch):
+    doc_id = "urn:nasa:pds:insight_rad::2.1"
+    new_content = {"doc": {"edunntest": "someValue"}}
+    client.update("registry", doc_id, new_content)
+
+
 def run(
     client: OpenSearch,
     log_filepath: Union[str, None] = None,
     log_level: int = logging.INFO,
 ):
+    do_local_test_init(client)
     ensure_index_mapping(client, resolve_multitenant_index_name("registry"), REINDEXER_FLAG_METADATA_KEY, "date")
 
     print("complete")
