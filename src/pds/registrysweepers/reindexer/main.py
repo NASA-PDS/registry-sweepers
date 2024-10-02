@@ -1,34 +1,130 @@
-import json
 import logging
-import os
-import tempfile
-from itertools import chain
-from typing import Callable
+from datetime import datetime
+from typing import Any
 from typing import Dict
 from typing import Iterable
-from typing import List
-from typing import Optional
 from typing import Set
-from typing import TextIO
-from typing import Tuple
 from typing import Union
 
 from opensearchpy import OpenSearch
 from pds.registrysweepers.reindexer.constants import REINDEXER_FLAG_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_args
+from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
-from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
+
+log = logging.getLogger(__name__)
 
 
 def do_local_test_init(client: OpenSearch):
     doc_id = "urn:nasa:pds:insight_rad::2.1"
-    new_content = {"doc": {"edunntest": "someValue"}}
+    new_content = {"doc": {"edunnKeywordTest": "someKeyword", "edunnDatetimeTest": "2018-02-01T00:00:00Z"}}
     client.update("registry", doc_id, new_content)
+
+
+def get_docs_query():
+    """Return a query to get all docs which haven't been reindexed by this sweeper"""
+    # TODO: Remove this once query_registry_db_with_search_after is modified to remove mutation side-effects
+    return {"query": {"bool": {"filter": {"bool": {"must_not": {"exists": {"field": REINDEXER_FLAG_METADATA_KEY}}}}}}}
+
+
+def fetch_dd_field_types(client: OpenSearch) -> Dict[str, str]:
+    dd_index_name = resolve_multitenant_index_name("registry-dd")
+    name_key = "es_field_name"
+    type_key = "es_data_type"
+    dd_docs = query_registry_db_with_search_after(
+        client,
+        dd_index_name,
+        _source={"includes": ["es_field_name", "es_data_type"]},
+        query={"query": {"match_all": {}}},
+        sort_fields=[name_key],
+    )
+    doc_sources = iter(doc["_source"] for doc in dd_docs)
+    dd_types = {
+        source[name_key]: source[type_key] for source in doc_sources if name_key in source and type_key in source
+    }
+    return dd_types
+
+
+def accumulate_missing_mappings(
+    dd_field_types_by_name: Dict[str, str], mapping_field_types_by_field_name: Dict[str, str], docs: Iterable[dict]
+) -> Dict[str, str]:
+    """
+    Iterate over all properties of all docs, test whether they are present in the given set of mapping keys, and
+    return a mapping of the missing properties onto their types.
+    TODO: figure out whether this should return a mapping, or just the names
+    @param dd_field_types_by_name: a mapping of document property names onto their types, derived from the data-dictionary db data
+    @param mapping_field_types_by_field_name: a mapping of document property names onto their types, derived from the existing index mappings
+    @param docs: an iterable collection of product documents
+    """
+    missing_mapping_updates = {}
+    dd_not_defines_type_property_names = set()  # used to prevent duplicate WARN logs
+    bad_mapping_property_names = set()  # used to log mappings requiring manual attention
+    problem_docs_count = 0
+    total_docs_count = 0
+    for doc in docs:
+        problem_detected_in_document_already = False
+        total_docs_count += 1
+
+        for property_name, value in doc["_source"].items():
+            canonical_type = dd_field_types_by_name.get(property_name)
+            current_mapping_type = mapping_field_types_by_field_name.get(property_name)
+
+            mapping_missing = property_name not in mapping_field_types_by_field_name
+            dd_defines_type_for_property = property_name in dd_field_types_by_name
+            mapping_is_bad = all(
+                [canonical_type != current_mapping_type, canonical_type is not None, current_mapping_type is not None]
+            )
+
+            if not dd_defines_type_for_property and property_name not in dd_not_defines_type_property_names:
+                log.warning(
+                    f"Property {property_name} does not have an entry in the DD index - this may indicate a problem"
+                )
+                dd_not_defines_type_property_names.add(property_name)
+
+            if mapping_is_bad and property_name not in bad_mapping_property_names:
+                log.warning(
+                    f'Property {property_name} is defined in data dictionary as type "{canonical_type}" but exists in index mapping as type "{current_mapping_type}".)'
+                )
+                bad_mapping_property_names.add(property_name)
+
+            if (mapping_missing or mapping_is_bad) and not problem_detected_in_document_already:
+                problem_detected_in_document_already = True
+                problem_docs_count += 1
+
+            if mapping_missing and property_name not in missing_mapping_updates:
+                if dd_defines_type_for_property:
+                    log.info(
+                        f'Property {property_name} will be updated to type "{canonical_type}" from data dictionary'
+                    )
+                    missing_mapping_updates[property_name] = canonical_type
+                else:
+                    default_type = "keyword"
+                    log.warning(
+                        f'Property {property_name} is missing from the index mappings and does not have an entry in the data dictionary index - defaulting to type "{default_type}"'
+                    )
+                    missing_mapping_updates[property_name] = default_type
+
+    log.info(
+        f"Detected {problem_docs_count} docs with {len(missing_mapping_updates)} missing mappings and {len(bad_mapping_property_names)} mappings conflicting with the DD, out of a total of {total_docs_count} docs"
+    )
+
+    if len(bad_mapping_property_names) > 0:
+        log.error(
+            f"The following mappings have a type which does not match the type described by the data dictionary: {bad_mapping_property_names} - in-place update is not possible, data will need to be manually reindexed with manual updates (or that functionality must be added to this sweeper"
+        )
+
+    return missing_mapping_updates
+
+
+def generate_updates(timestamp: datetime, docs: Iterable[Dict]) -> Iterable[Update]:
+    for document in docs:
+        id = document["_id"]
+        yield Update(id=id, content={REINDEXER_FLAG_METADATA_KEY: timestamp.isoformat()})
 
 
 def run(
@@ -36,11 +132,47 @@ def run(
     log_filepath: Union[str, None] = None,
     log_level: int = logging.INFO,
 ):
-    do_local_test_init(client)
-    ensure_index_mapping(client, resolve_multitenant_index_name("registry"), REINDEXER_FLAG_METADATA_KEY, "date")
+    configure_logging(filepath=log_filepath, log_level=log_level)
 
-    print("complete")
-    pass
+    do_local_test_init(client)
+    sweeper_start_timestamp = datetime.now()
+    products_index_name = resolve_multitenant_index_name("registry")
+    ensure_index_mapping(client, products_index_name, REINDEXER_FLAG_METADATA_KEY, "date")
+
+    # TODO: implement point-in-time search to ensure consistency between the two scans - otherwise there is a risk of
+    #  inconsistency if problematic data is harvested during sweeper execution.  Alternatively, add a filter on
+    #  "ops:Harvest_Info/ops:harvest_date_time" which excludes anything harvested more-recently than sweeper start
+
+    dd_field_types_by_field_name = fetch_dd_field_types(client)
+    mapping_field_types_by_field_name = {
+        k: v["type"]
+        for k, v in client.indices.get_mapping(products_index_name)[products_index_name]["mappings"][
+            "properties"
+        ].items()
+    }
+    missing_mappings = accumulate_missing_mappings(
+        dd_field_types_by_field_name,
+        mapping_field_types_by_field_name,
+        query_registry_db_with_search_after(client, products_index_name, _source={}, query=get_docs_query()),
+    )
+    for property, mapping_typename in missing_mappings.items():
+        log.info(f"Updating index {products_index_name} with missing mapping ({property}, {mapping_typename})")
+        ensure_index_mapping(client, products_index_name, property, mapping_typename)
+
+    updates = generate_updates(
+        sweeper_start_timestamp,
+        query_registry_db_with_search_after(client, products_index_name, _source={}, query=get_docs_query()),
+    )
+    log.info(
+        f"Updating newly-processed documents with {REINDEXER_FLAG_METADATA_KEY}={sweeper_start_timestamp.isoformat()}..."
+    )
+    write_updated_docs(
+        client,
+        updates,
+        index_name=products_index_name,
+    )
+
+    log.info("Completed reindexer sweeper processing!")
 
 
 if __name__ == "__main__":
