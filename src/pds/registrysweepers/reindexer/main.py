@@ -30,6 +30,8 @@ def run(
     log_filepath: Union[str, None] = None,
     log_level: int = logging.INFO,
 ):
+    ensure_index_mapping(client, resolve_multitenant_index_name("registry"), REINDEXER_FLAG_METADATA_KEY, "date")
+
     print("complete")
     pass
 
@@ -37,14 +39,14 @@ def run(
 if __name__ == "__main__":
     cli_description = f"""
     Tests untested documents in registry index to ensure that all properties are present in the index mapping (i.e. that
-    they are searchable).
+    they are searchable).  Mapping types are derived from <<<to be determined>>>
 
-    When a document is tested, metadata attribute {REINDEXER_FLAG_METADATA_KEY} is given a value of true if any fields
-    are missing from the index mapping, or false if otherwise.  The presence of attribute {REINDEXER_FLAG_METADATA_KEY}
-    indicates that the document has been tested and may be skipped in future.
+    When a document is tested, metadata attribute {REINDEXER_FLAG_METADATA_KEY} is given a value equal to the timestamp
+    at sweeper runtime. The presence of attribute {REINDEXER_FLAG_METADATA_KEY} indicates that the document has been
+    tested and may be skipped in future.
 
-    Once complete, the sweeper will create a temporary index, reindex all documents having
-    {REINDEXER_FLAG_METADATA_KEY}=true to the temporary index, delete those documents then reindex them
+    Writing a new value to this attribute triggers a re-index of the entire document, ensuring that the document is
+    fully-searchable.
 
     """
 
