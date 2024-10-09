@@ -1,10 +1,8 @@
 import logging
 from datetime import datetime
 from datetime import timezone
-from typing import Any
 from typing import Dict
 from typing import Iterable
-from typing import Set
 from typing import Union
 
 from opensearchpy import OpenSearch
@@ -30,7 +28,7 @@ def do_local_test_init(client: OpenSearch):
 def get_docs_query(filter_to_harvested_before: datetime):
     """
     Return a query to get all docs which haven't been reindexed by this sweeper and which haven't been harvested
-    during this sweeper run
+    since this sweeper process instance started running
     """
     # TODO: Remove this once query_registry_db_with_search_after is modified to remove mutation side-effects
     return {
