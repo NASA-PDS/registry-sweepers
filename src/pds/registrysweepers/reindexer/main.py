@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from datetime import timezone
 from typing import Any
 from typing import Dict
 from typing import Iterable
@@ -26,10 +27,26 @@ def do_local_test_init(client: OpenSearch):
     client.update("registry", doc_id, new_content)
 
 
-def get_docs_query():
-    """Return a query to get all docs which haven't been reindexed by this sweeper"""
+def get_docs_query(filter_to_harvested_before: datetime):
+    """
+    Return a query to get all docs which haven't been reindexed by this sweeper and which haven't been harvested
+    during this sweeper run
+    """
     # TODO: Remove this once query_registry_db_with_search_after is modified to remove mutation side-effects
-    return {"query": {"bool": {"filter": {"bool": {"must_not": {"exists": {"field": REINDEXER_FLAG_METADATA_KEY}}}}}}}
+    return {
+        "query": {
+            "bool": {
+                "must_not": [{"exists": {"field": REINDEXER_FLAG_METADATA_KEY}}],
+                "must": {
+                    "range": {
+                        "ops:Harvest_Info/ops:harvest_date_time": {
+                            "lt": filter_to_harvested_before.astimezone(timezone.utc).isoformat()
+                        }
+                    }
+                },
+            }
+        }
+    }
 
 
 def fetch_dd_field_types(client: OpenSearch) -> Dict[str, str]:
@@ -56,7 +73,6 @@ def accumulate_missing_mappings(
     """
     Iterate over all properties of all docs, test whether they are present in the given set of mapping keys, and
     return a mapping of the missing properties onto their types.
-    TODO: figure out whether this should return a mapping, or just the names
     @param dd_field_types_by_name: a mapping of document property names onto their types, derived from the data-dictionary db data
     @param mapping_field_types_by_field_name: a mapping of document property names onto their types, derived from the existing index mappings
     @param docs: an iterable collection of product documents
@@ -139,10 +155,6 @@ def run(
     products_index_name = resolve_multitenant_index_name("registry")
     ensure_index_mapping(client, products_index_name, REINDEXER_FLAG_METADATA_KEY, "date")
 
-    # TODO: implement point-in-time search to ensure consistency between the two scans - otherwise there is a risk of
-    #  inconsistency if problematic data is harvested during sweeper execution.  Alternatively, add a filter on
-    #  "ops:Harvest_Info/ops:harvest_date_time" which excludes anything harvested more-recently than sweeper start
-
     dd_field_types_by_field_name = fetch_dd_field_types(client)
     mapping_field_types_by_field_name = {
         k: v["type"]
@@ -153,7 +165,9 @@ def run(
     missing_mappings = accumulate_missing_mappings(
         dd_field_types_by_field_name,
         mapping_field_types_by_field_name,
-        query_registry_db_with_search_after(client, products_index_name, _source={}, query=get_docs_query()),
+        query_registry_db_with_search_after(
+            client, products_index_name, _source={}, query=get_docs_query(sweeper_start_timestamp)
+        ),
     )
     for property, mapping_typename in missing_mappings.items():
         log.info(f"Updating index {products_index_name} with missing mapping ({property}, {mapping_typename})")
@@ -161,7 +175,9 @@ def run(
 
     updates = generate_updates(
         sweeper_start_timestamp,
-        query_registry_db_with_search_after(client, products_index_name, _source={}, query=get_docs_query()),
+        query_registry_db_with_search_after(
+            client, products_index_name, _source={}, query=get_docs_query(sweeper_start_timestamp)
+        ),
     )
     log.info(
         f"Updating newly-processed documents with {REINDEXER_FLAG_METADATA_KEY}={sweeper_start_timestamp.isoformat()}..."
