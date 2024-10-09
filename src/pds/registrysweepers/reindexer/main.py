@@ -19,12 +19,6 @@ from pds.registrysweepers.utils.db.update import Update
 log = logging.getLogger(__name__)
 
 
-def do_local_test_init(client: OpenSearch):
-    doc_id = "urn:nasa:pds:insight_rad::2.1"
-    new_content = {"doc": {"edunnKeywordTest": "someKeyword", "edunnDatetimeTest": "2018-02-01T00:00:00Z"}}
-    client.update("registry", doc_id, new_content)
-
-
 def get_docs_query(filter_to_harvested_before: datetime):
     """
     Return a query to get all docs which haven't been reindexed by this sweeper and which haven't been harvested
@@ -178,7 +172,6 @@ def run(
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
 
-    do_local_test_init(client)
     sweeper_start_timestamp = datetime.now()
     products_index_name = resolve_multitenant_index_name("registry")
     ensure_index_mapping(client, products_index_name, REINDEXER_FLAG_METADATA_KEY, "date")
