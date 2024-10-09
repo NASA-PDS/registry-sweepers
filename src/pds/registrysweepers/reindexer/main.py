@@ -78,8 +78,13 @@ def accumulate_missing_mappings(
     @param docs: an iterable collection of product documents
     """
     missing_mapping_updates = {}
+
     dd_not_defines_type_property_names = set()  # used to prevent duplicate WARN logs
     bad_mapping_property_names = set()  # used to log mappings requiring manual attention
+
+    earliest_problem_doc_harvested_at = None
+    latest_problem_doc_harvested_at = None
+    problematic_harvest_versions = set()
     problem_docs_count = 0
     total_docs_count = 0
     for doc in docs:
@@ -111,6 +116,25 @@ def accumulate_missing_mappings(
             if (mapping_missing or mapping_is_bad) and not problem_detected_in_document_already:
                 problem_detected_in_document_already = True
                 problem_docs_count += 1
+                try:
+                    doc_harvest_time = datetime.fromisoformat(
+                        doc["_source"]["ops:Harvest_Info/ops:harvest_date_time"][0].replace("Z", ""),
+                    )
+                    earliest_problem_doc_harvested_at = min(
+                        doc_harvest_time, earliest_problem_doc_harvested_at or datetime.max
+                    )
+                    latest_problem_doc_harvested_at = max(
+                        doc_harvest_time, latest_problem_doc_harvested_at or datetime.min
+                    )
+                except (KeyError, ValueError) as err:
+                    log.warning(
+                        f'Unable to parse "ops:Harvest_Info/ops:harvest_date_time" as zulu-formatted date from document {doc["_id"]}: {err}'
+                    )
+
+                try:
+                    problematic_harvest_versions.update(doc["_source"]["ops:Harvest_Info/ops:harvest_version"])
+                except KeyError as err:
+                    log.warning(f'Unable to extract harvest version from document {doc["_id"]}: {err}')
 
             if mapping_missing and property_name not in missing_mapping_updates:
                 if dd_defines_type_for_property:
@@ -128,6 +152,12 @@ def accumulate_missing_mappings(
     log.info(
         f"Detected {problem_docs_count} docs with {len(missing_mapping_updates)} missing mappings and {len(bad_mapping_property_names)} mappings conflicting with the DD, out of a total of {total_docs_count} docs"
     )
+
+    if problem_docs_count > 0:
+        log.warning(
+            f"Problems were detected with docs having harvest timestamps between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"
+        )
+        log.warning(f"Problems were detected with docs having harvest versions {sorted(problematic_harvest_versions)}")
 
     if len(bad_mapping_property_names) > 0:
         log.error(
