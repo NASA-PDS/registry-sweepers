@@ -69,7 +69,7 @@ def accumulate_missing_mappings(
     @param mapping_field_types_by_field_name: a mapping of document property names onto their types, derived from the existing index mappings
     @param docs: an iterable collection of product documents
     """
-    missing_mapping_updates = {}
+    missing_mapping_updates: Dict[str, str] = {}
 
     dd_not_defines_type_property_names = set()  # used to prevent duplicate WARN logs
     bad_mapping_property_names = set()  # used to log mappings requiring manual attention
@@ -133,7 +133,7 @@ def accumulate_missing_mappings(
                     log.info(
                         f'Property {property_name} will be updated to type "{canonical_type}" from data dictionary'
                     )
-                    missing_mapping_updates[property_name] = canonical_type
+                    missing_mapping_updates[property_name] = canonical_type  # type: ignore
                 else:
                     default_type = "keyword"
                     log.warning(
@@ -147,7 +147,7 @@ def accumulate_missing_mappings(
 
     if problem_docs_count > 0:
         log.warning(
-            f"Problems were detected with docs having harvest timestamps between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"
+            f"Problems were detected with docs having harvest timestamps between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"  # type: ignore
         )
         log.warning(f"Problems were detected with docs having harvest versions {sorted(problematic_harvest_versions)}")
 
