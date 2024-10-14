@@ -1,8 +1,16 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2024-09-18)
+## [1.3.0](https://github.com/NASA-PDS/registry-sweepers/tree/1.3.0) (2024-10-14)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.1...«unknown»)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/release/1.3.0...1.3.0)
+
+**Other closed issues:**
+
+- Deploy Registry-Sweeper in MCP Prod [\#135](https://github.com/NASA-PDS/registry-sweepers/issues/135)
+
+## [release/1.3.0](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.3.0) (2024-09-18)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.1...release/1.3.0)
 
 **Requirements:**
 
@@ -15,7 +23,6 @@
 **Defects:**
 
 - Nonaggregate products present in "foreign" collections/bundles do not have correct ancestry. [\#114](https://github.com/NASA-PDS/registry-sweepers/issues/114)
-- `superseded_by` fields with `null` values causing multiple versions of same products to appear in API searches [\#112](https://github.com/NASA-PDS/registry-sweepers/issues/112) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
 - Timeout bug when running legacy dashboard sync [\#111](https://github.com/NASA-PDS/registry-sweepers/issues/111) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
 - When building registry-sweeper version 1.2.1, docker image 1.3.0 was published on docker hub [\#109](https://github.com/NASA-PDS/registry-sweepers/issues/109) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 
@@ -31,7 +38,11 @@
 
 ## [v1.2.1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.2.1) (2024-01-24)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.0...v1.2.1)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/release/1.2.1...v1.2.1)
+
+## [release/1.2.1](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.2.1) (2024-01-23)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.0...release/1.2.1)
 
 **Defects:**
 
