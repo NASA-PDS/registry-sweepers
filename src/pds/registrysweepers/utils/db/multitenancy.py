@@ -2,7 +2,7 @@ import os
 
 
 def resolve_multitenant_index_name(index_type: str):
-    supported_index_types = {"registry", "registry-refs"}
+    supported_index_types = {"registry", "registry-refs", "registry-dd"}
     node_id = os.environ.get("MULTITENANCY_NODE_ID", "").strip(" ")
 
     if node_id == "":
