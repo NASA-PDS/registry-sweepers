@@ -10,6 +10,7 @@ from pds.registrysweepers.reindexer.constants import REINDEXER_FLAG_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_args
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+from pds.registrysweepers.utils.db import query_registry_db_with_search_after_until_zero_hits
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
@@ -196,7 +197,7 @@ def run(
 
     updates = generate_updates(
         sweeper_start_timestamp,
-        query_registry_db_with_search_after(
+        query_registry_db_with_search_after_until_zero_hits(
             client, products_index_name, _source={}, query=get_docs_query(sweeper_start_timestamp)
         ),
     )
