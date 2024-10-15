@@ -142,18 +142,30 @@ def accumulate_missing_mappings(
                     missing_mapping_updates[property_name] = default_type
 
     log.info(
-        f"Detected {problem_docs_count} docs with {len(missing_mapping_updates)} missing mappings and {len(bad_mapping_property_names)} mappings conflicting with the DD, out of a total of {total_docs_count} docs"
+        f"RESULT: Detected {problem_docs_count} docs with {len(missing_mapping_updates)} missing mappings and {len(bad_mapping_property_names)} mappings conflicting with the DD, out of a total of {total_docs_count} docs"
     )
 
     if problem_docs_count > 0:
         log.warning(
-            f"Problems were detected with docs having harvest timestamps between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"  # type: ignore
+            f"RESULT: Problems were detected with docs having harvest timestamps between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"  # type: ignore
         )
-        log.warning(f"Problems were detected with docs having harvest versions {sorted(problematic_harvest_versions)}")
+        log.warning(
+            f"RESULT: Problems were detected with docs having harvest versions {sorted(problematic_harvest_versions)}"
+        )
+
+    if len(missing_mapping_updates) > 0:
+        log.info(
+            f"RESULT: Mappings will be added for the following properties: {sorted(missing_mapping_updates.keys())}"
+        )
+
+    if len(dd_not_defines_type_property_names) > 0:
+        log.info(
+            f"RESULT: Mappings were not found in the DD for the following properties, and a default type will be applied: {sorted(dd_not_defines_type_property_names)}"
+        )
 
     if len(bad_mapping_property_names) > 0:
         log.error(
-            f"The following mappings have a type which does not match the type described by the data dictionary: {bad_mapping_property_names} - in-place update is not possible, data will need to be manually reindexed with manual updates (or that functionality must be added to this sweeper"
+            f"RESULT: The following mappings have a type which does not match the type described by the data dictionary: {bad_mapping_property_names} - in-place update is not possible, data will need to be manually reindexed with manual updates (or that functionality must be added to this sweeper"
         )
 
     return missing_mapping_updates
