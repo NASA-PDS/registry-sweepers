@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import math
@@ -116,6 +117,42 @@ def query_registry_db_with_scroll(
     )
 
     log.debug(f"Query {query_id} complete!")
+
+
+def query_registry_db_with_search_after_until_zero_hits(
+    client: OpenSearch,
+    index_name: str,
+    query: Dict,
+    _source: Dict,
+    page_size: int = 10000,
+    limit: Union[int, None] = None,
+    sort_fields: Union[List[str], None] = None,
+    request_timeout_seconds: int = 20,
+) -> Iterable[Dict]:
+    """
+    WARNING: Assumes query will eventually return zero hits - if this is not true, this function will loop indefinitely.
+
+    Wraps query_registry_db_with_search_after(), repeatedly starting a new query until the query returns zero hits.
+
+    This is used when a sweeper needs to iterate over hits where the sweeper mutates in a way which affects the results
+    of the query, for example when a sweeper (like repairkit or reindexer) sets a processing flag on processed documents
+    and excludes those documents from future runs.
+
+    See: https://github.com/NASA-PDS/registry-sweepers/issues/119
+    """
+    while get_query_hits_count(client, index_name, query) > 0:
+        results = query_registry_db_with_search_after(
+            client,
+            index_name,
+            copy.deepcopy(query),
+            _source,
+            page_size,
+            limit,
+            sort_fields,
+            request_timeout_seconds,
+        )
+        for doc in results:
+            yield doc
 
 
 def query_registry_db_with_search_after(
