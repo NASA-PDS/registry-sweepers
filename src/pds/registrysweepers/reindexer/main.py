@@ -196,7 +196,7 @@ def run(
 
     updates = generate_updates(
         sweeper_start_timestamp,
-        query_registry_db_with_search_after(
+        query_registry_db_with_search_after_until_zero_hits(
             client, products_index_name, _source={}, query=get_docs_query(sweeper_start_timestamp)
         ),
     )
