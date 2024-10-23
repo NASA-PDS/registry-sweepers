@@ -219,7 +219,7 @@ def run(
     # within generate_updates() to ensure that the second stage (update generation) hasn't picked up any products which
     # weren't processed in the first stage (missing mapping accumulation)
     batch_size_limit = 100000
-    sort_fields = ["ops:Harvest_Info.ops:harvest_date_time"]
+    sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
     with tqdm(
         total=get_query_hits_count(client, products_index_name, get_docs_query(sweeper_start_timestamp)),
         desc=f"Reindexer sweeper progress",
