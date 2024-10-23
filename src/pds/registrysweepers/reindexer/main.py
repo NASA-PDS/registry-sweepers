@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from datetime import timezone
+from typing import Collection
 from typing import Dict
 from typing import Iterable
 from typing import Union
@@ -9,12 +10,14 @@ from opensearchpy import OpenSearch
 from pds.registrysweepers.reindexer.constants import REINDEXER_FLAG_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_args
+from pds.registrysweepers.utils.db import get_query_hits_count
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
+from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +60,12 @@ def fetch_dd_field_types(client: OpenSearch) -> Dict[str, str]:
         source[name_key]: source[type_key] for source in doc_sources if name_key in source and type_key in source
     }
     return dd_types
+
+
+def get_mapping_field_types_by_field_name(client: OpenSearch, index_name: str) -> Dict[str, str]:
+    return {
+        k: v["type"] for k, v in client.indices.get_mapping(index_name)[index_name]["mappings"]["properties"].items()
+    }
 
 
 def accumulate_missing_mappings(
@@ -147,7 +156,8 @@ def accumulate_missing_mappings(
 
     if problem_docs_count > 0:
         log.warning(
-            f"RESULT: Problems were detected with docs having harvest timestamps between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"  # type: ignore
+            f"RESULT: Problems were detected with docs having harvest timestamps between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"
+            # type: ignore
         )
         log.warning(
             f"RESULT: Problems were detected with docs having harvest versions {sorted(problematic_harvest_versions)}"
@@ -171,10 +181,20 @@ def accumulate_missing_mappings(
     return missing_mapping_updates
 
 
-def generate_updates(timestamp: datetime, docs: Iterable[Dict]) -> Iterable[Update]:
+def generate_updates(
+    timestamp: datetime, extant_mapping_keys: Collection[str], docs: Iterable[Dict]
+) -> Iterable[Update]:
     for document in docs:
         id = document["_id"]
-        yield Update(id=id, content={REINDEXER_FLAG_METADATA_KEY: timestamp.isoformat()})
+        extant_mapping_keys = set(extant_mapping_keys)
+        document_field_names = set(document["_source"].keys())
+        document_fields_missing_from_mappings = document_field_names.difference(extant_mapping_keys)
+        if len(document_fields_missing_from_mappings) == 0:
+            yield Update(id=id, content={REINDEXER_FLAG_METADATA_KEY: timestamp.isoformat()})
+        else:
+            logging.debug(
+                f"Missing mappings {document_fields_missing_from_mappings} detected when attempting to create Update for doc with id {id} - skipping"
+            )
 
 
 def run(
@@ -189,37 +209,63 @@ def run(
     ensure_index_mapping(client, products_index_name, REINDEXER_FLAG_METADATA_KEY, "date")
 
     dd_field_types_by_field_name = fetch_dd_field_types(client)
-    mapping_field_types_by_field_name = {
-        k: v["type"]
-        for k, v in client.indices.get_mapping(products_index_name)[products_index_name]["mappings"][
-            "properties"
-        ].items()
-    }
-    missing_mappings = accumulate_missing_mappings(
-        dd_field_types_by_field_name,
-        mapping_field_types_by_field_name,
-        query_registry_db_with_search_after(
-            client, products_index_name, _source={}, query=get_docs_query(sweeper_start_timestamp)
-        ),
-    )
-    for property, mapping_typename in missing_mappings.items():
-        log.info(f"Updating index {products_index_name} with missing mapping ({property}, {mapping_typename})")
-        ensure_index_mapping(client, products_index_name, property, mapping_typename)
 
-    updates = generate_updates(
-        sweeper_start_timestamp,
-        query_registry_db_with_search_after_until_zero_hits(
-            client, products_index_name, _source={}, query=get_docs_query(sweeper_start_timestamp)
-        ),
-    )
-    log.info(
-        f"Updating newly-processed documents with {REINDEXER_FLAG_METADATA_KEY}={sweeper_start_timestamp.isoformat()}..."
-    )
-    write_updated_docs(
-        client,
-        updates,
-        index_name=products_index_name,
-    )
+    # AOSS was becoming overloaded during iteration while accumulating missing mappings on populous nodes, so it is
+    # necessary to impose a limit for how many products are iterated over before a batch of updates are created and
+    # written.  This allows incremental progress to be made and limits the amount of work discarded in the event of an
+    # overload condition.
+    # Using the harvest timestamp as a sort field acts as a soft guarantee of consistency of query results between the
+    # searches performed during accumulate_missing_mappings() and generate_updates(), and then a final check is applied
+    # within generate_updates() to ensure that the second stage (update generation) hasn't picked up any products which
+    # weren't processed in the first stage (missing mapping accumulation)
+    batch_size_limit = 100000
+    sort_fields = ["ops:Harvest_Info.ops:harvest_date_time"]
+    with tqdm(
+        total=get_query_hits_count(client, products_index_name, get_docs_query(sweeper_start_timestamp)),
+        desc=f"Reindexer sweeper progress",
+    ) as pbar:
+        while get_query_hits_count(client, products_index_name, get_docs_query(sweeper_start_timestamp)) > 0:
+            mapping_field_types_by_field_name = get_mapping_field_types_by_field_name(client, products_index_name)
+
+            missing_mappings = accumulate_missing_mappings(
+                dd_field_types_by_field_name,
+                mapping_field_types_by_field_name,
+                query_registry_db_with_search_after(
+                    client,
+                    products_index_name,
+                    _source={},
+                    query=get_docs_query(sweeper_start_timestamp),
+                    limit=batch_size_limit,
+                    sort_fields=sort_fields,
+                ),
+            )
+            for property, mapping_typename in missing_mappings.items():
+                log.info(f"Updating index {products_index_name} with missing mapping ({property}, {mapping_typename})")
+                ensure_index_mapping(client, products_index_name, property, mapping_typename)
+
+            updated_mapping_keys = get_mapping_field_types_by_field_name(client, products_index_name).keys()
+            updates = generate_updates(
+                sweeper_start_timestamp,
+                updated_mapping_keys,
+                query_registry_db_with_search_after(
+                    client,
+                    products_index_name,
+                    _source={},
+                    query=get_docs_query(sweeper_start_timestamp),
+                    limit=batch_size_limit,
+                    sort_fields=sort_fields,
+                ),
+            )
+            log.info(
+                f"Updating newly-processed documents with {REINDEXER_FLAG_METADATA_KEY}={sweeper_start_timestamp.isoformat()}..."
+            )
+            write_updated_docs(
+                client,
+                updates,
+                index_name=products_index_name,
+            )
+
+            pbar.update(batch_size_limit)
 
     log.info("Completed reindexer sweeper processing!")
 
