@@ -162,6 +162,11 @@ def query_registry_db_with_search_after(
 
     with tqdm(total=expected_hits, desc=f"Query {query_id}") as pbar:
         while more_data_exists:
+            # Manually set sort - this is required for subsequent calls, despite being passed in fetch_func's call to
+            # client.search as sort kwarg.
+            # It is unclear why this issue is only presenting now - edunn 20241023
+            query['sort'] = sort_fields
+
             if search_after_values is not None:
                 query["search_after"] = search_after_values
                 log.debug(
@@ -204,6 +209,19 @@ def query_registry_db_with_search_after(
 
                 # simpler to set the value after every hit than worry about OBO errors detecting the last hit in the page
                 search_after_values = [hit["_source"].get(field) for field in sort_fields]
+
+            # Flatten single-element search-after-values.  Attempting to sort/search-after on MCP AOSS by
+            # ops:Harvest_Info/ops:harvest_date_time is throwing
+            #     RequestError(400, 'parsing_exception', 'Expected [VALUE_STRING] or [VALUE_NUMBER] or
+            #     [VALUE_BOOLEAN] or [VALUE_NULL] but found [START_ARRAY] inside search_after.')
+            # It is unclear why this issue is only presenting now - edunn 20241023
+            for idx, value in enumerate(search_after_values):
+                if isinstance(value, list):
+                    if len(value) == 1:
+                        search_after_values[idx] = value[0]
+                    else:
+                        raise ValueError(f'Failed to flatten array-like search-after value {value} into single element')
+
 
             # This is a temporary, ad-hoc guard against empty/erroneous responses which do not return non-200 status codes.
             # Previously, this has cause infinite loops in production due to served_hits sticking and never reaching the
