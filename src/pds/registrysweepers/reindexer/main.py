@@ -78,9 +78,45 @@ def accumulate_missing_mappings(
     @param mapping_field_types_by_field_name: a mapping of document property names onto their types, derived from the existing index mappings
     @param docs: an iterable collection of product documents
     """
+
+    # TODO: map special-case property names onto their types, and incorporate them into the type resolution
+    #  NoneType indicates that the property is to be excluded
+    #  Anything with prefix 'ops:Provenance' should be excluded, as these properties are the responsibility of their
+    #  respective sweepers.
+    special_case_property_types_by_name = {
+        '@timestamp': None,
+        '@version': None,
+        '_package_id': None,
+        'description': 'text',
+        # 'lid':,
+        # 'lidvid',
+        'ops:Harvest_Info/ops:harvest_date_time': 'date',
+        'ops:Label_File_Info/ops:json_blob': None,
+        # 'ops:Provenance/ops:parent_bundle_identifier',
+        # 'ops:Provenance/ops:parent_collection_identifier',
+        # 'ops:Provenance/ops:registry_sweepers_ancestry_version',
+        # 'ops:Provenance/ops:registry_sweepers_provenance_version',
+        # 'ops:Provenance/ops:registry_sweepers_repairkit_version',
+        # 'ops:Provenance/ops:superseded_by',
+        # 'product_class',
+        # 'ref_lid_associate',
+        # 'ref_lid_collection',
+        # 'ref_lid_collection_secondary',
+        # 'ref_lid_data',
+        # 'ref_lid_document',
+        # 'ref_lid_facility',
+        # 'ref_lid_instrument',
+        # 'ref_lid_instrument_host',
+        # 'ref_lid_investigation',
+        # 'ref_lid_target',
+        # 'ref_lid_telescope',
+        'title': 'text',
+        # 'vid'
+    }
+
     missing_mapping_updates: Dict[str, str] = {}
 
-    dd_not_defines_type_property_names = set()  # used to prevent duplicate WARN logs
+    canonical_type_undefined_property_names = set()  # used to prevent duplicate WARN logs
     bad_mapping_property_names = set()  # used to log mappings requiring manual attention
 
     earliest_problem_doc_harvested_at = None
@@ -93,24 +129,25 @@ def accumulate_missing_mappings(
         total_docs_count += 1
 
         for property_name, value in doc["_source"].items():
-            canonical_type = dd_field_types_by_name.get(property_name)
+            # Resolve canonical type from data dictionary or - failing that - from the hardcoded types
+            canonical_type = dd_field_types_by_name.get(property_name) or special_case_property_types_by_name.get(property_name)
             current_mapping_type = mapping_field_types_by_field_name.get(property_name)
 
             mapping_missing = property_name not in mapping_field_types_by_field_name
-            dd_defines_type_for_property = property_name in dd_field_types_by_name
-            mapping_is_bad = all(
-                [canonical_type != current_mapping_type, canonical_type is not None, current_mapping_type is not None]
-            )
+            canonical_type_is_defined = canonical_type is not None
+            mapping_is_bad = canonical_type != current_mapping_type \
+                             and canonical_type is not None \
+                             and current_mapping_type is not None
 
-            if not dd_defines_type_for_property and property_name not in dd_not_defines_type_property_names:
+            if not canonical_type_is_defined and property_name not in canonical_type_undefined_property_names:
                 log.warning(
-                    f"Property {property_name} does not have an entry in the DD index - this may indicate a problem"
+                    f"Property {property_name} does not have an entry in the data dictionary index or hardcoded mappings - this may indicate a problem"
                 )
-                dd_not_defines_type_property_names.add(property_name)
+                canonical_type_undefined_property_names.add(property_name)
 
             if mapping_is_bad and property_name not in bad_mapping_property_names:
                 log.warning(
-                    f'Property {property_name} is defined in data dictionary as type "{canonical_type}" but exists in index mapping as type "{current_mapping_type}".)'
+                    f'Property {property_name} is defined in data dictionary index or hardcoded mappings as type "{canonical_type}" but exists in index mapping as type "{current_mapping_type}")'
                 )
                 bad_mapping_property_names.add(property_name)
 
@@ -138,11 +175,15 @@ def accumulate_missing_mappings(
                     log.warning(f'Unable to extract harvest version from document {doc["_id"]}: {err}')
 
             if mapping_missing and property_name not in missing_mapping_updates:
-                if dd_defines_type_for_property:
+                if canonical_type_is_defined:
                     log.info(
                         f'Property {property_name} will be updated to type "{canonical_type}" from data dictionary'
                     )
                     missing_mapping_updates[property_name] = canonical_type  # type: ignore
+                elif property_name.startswith('ops:Provenance'):  # TODO: extract this to a constant, used by all metadata key definitions
+                    # mappings for registry-sweepers are the responsibility of their respective sweepers and should not
+                    # be touched by the reindexer sweeper
+                    log.warning(f'Property {property_name} is missing from the index mapping, but is a sweepers metadata attribute and will not be fixed here. Please run the full set of sweepers on this index')
                 else:
                     default_type = "keyword"
                     log.warning(
@@ -168,9 +209,9 @@ def accumulate_missing_mappings(
             f"RESULT: Mappings will be added for the following properties: {sorted(missing_mapping_updates.keys())}"
         )
 
-    if len(dd_not_defines_type_property_names) > 0:
+    if len(canonical_type_undefined_property_names) > 0:
         log.info(
-            f"RESULT: Mappings were not found in the DD for the following properties, and a default type will be applied: {sorted(dd_not_defines_type_property_names)}"
+            f"RESULT: Mappings were not found in the DD for the following properties, and a default type will be applied: {sorted(canonical_type_undefined_property_names)}"
         )
 
     if len(bad_mapping_property_names) > 0:
