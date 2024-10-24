@@ -141,7 +141,9 @@ def accumulate_missing_mappings(
                              and canonical_type is not None \
                              and current_mapping_type is not None
 
-            if not canonical_type_is_defined and property_name not in canonical_type_undefined_property_names:
+            if not canonical_type_is_defined \
+                    and property_name not in special_case_property_types_by_name \
+                    and property_name not in canonical_type_undefined_property_names:
                 log.warning(
                     f"Property {property_name} does not have an entry in the data dictionary index or hardcoded mappings - this may indicate a problem"
                 )
