@@ -282,8 +282,8 @@ def run(
             hits_stall_tolerance = math.ceil(0.05 * batch_size_limit)
             stall_while_hits_exceed_count = expected_remaining_hits + hits_stall_tolerance
             while get_updated_hits_count() > stall_while_hits_exceed_count:
-                stall_period = timedelta(seconds=10)
-                logging.info(f'Many updates pending, waiting {stall_period.total_seconds()}s until hits count falls below {stall_while_hits_exceed_count} (expected {expected_remaining_hits}, got {get_updated_hits_count()})')
+                stall_period = timedelta(seconds=60)
+                logging.info(f'Many updates pending, waiting {int(stall_period.total_seconds())}s until hits count falls below {stall_while_hits_exceed_count} (expected {expected_remaining_hits}, got {get_updated_hits_count()})')
                 sleep(stall_period.total_seconds())
 
             mapping_field_types_by_field_name = get_mapping_field_types_by_field_name(client, products_index_name)
