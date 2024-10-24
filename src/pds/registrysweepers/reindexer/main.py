@@ -293,7 +293,7 @@ def run(
             # significant redundant load
             # N.B. the returned hits count may fluctuate - this is due to delay in propagation between shards
             expected_remaining_hits = total_outstanding_doc_count - pbar.n
-            hits_stall_tolerance = math.ceil(0.05 * batch_size_limit)
+            hits_stall_tolerance = math.ceil(0.10 * batch_size_limit)
             stall_while_hits_exceed_count = expected_remaining_hits + hits_stall_tolerance
             while get_updated_hits_count() > stall_while_hits_exceed_count:
                 stall_period = timedelta(seconds=60)
