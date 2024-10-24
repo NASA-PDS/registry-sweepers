@@ -1,11 +1,13 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import timezone
+from time import sleep
 from typing import Collection
 from typing import Dict
 from typing import Iterable
 from typing import Union
 
+import math
 from opensearchpy import OpenSearch
 from pds.registrysweepers.reindexer.constants import REINDEXER_FLAG_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
@@ -249,7 +251,11 @@ def run(
     products_index_name = resolve_multitenant_index_name("registry")
     ensure_index_mapping(client, products_index_name, REINDEXER_FLAG_METADATA_KEY, "date")
 
+
     dd_field_types_by_field_name = fetch_dd_field_types(client)
+
+    def get_updated_hits_count():
+        return get_query_hits_count(client, products_index_name, get_docs_query(sweeper_start_timestamp))
 
     # AOSS was becoming overloaded during iteration while accumulating missing mappings on populous nodes, so it is
     # necessary to impose a limit for how many products are iterated over before a batch of updates are created and
@@ -261,11 +267,23 @@ def run(
     # weren't processed in the first stage (missing mapping accumulation)
     batch_size_limit = 100000
     sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
+    total_outstanding_doc_count = get_updated_hits_count()
     with tqdm(
-        total=get_query_hits_count(client, products_index_name, get_docs_query(sweeper_start_timestamp)),
+        total=total_outstanding_doc_count,
         desc=f"Reindexer sweeper progress",
     ) as pbar:
-        while get_query_hits_count(client, products_index_name, get_docs_query(sweeper_start_timestamp)) > 0:
+        while get_updated_hits_count() > 0:
+            # Stall until previous bulk updates have mostly been reindexed and reflected in the hits count, to avoid
+            # significant redundant load
+            # N.B. the returned hits count may fluctuate - this is due to delay in propagation between shards
+            expected_remaining_hits = total_outstanding_doc_count - pbar.n
+            hits_stall_tolerance = math.ceil(0.05 * batch_size_limit)
+            stall_while_hits_exceed_count = expected_remaining_hits + hits_stall_tolerance
+            while get_updated_hits_count() > stall_while_hits_exceed_count:
+                stall_period = timedelta(seconds=10)
+                logging.info(f'Many updates pending, waiting {stall_period.total_seconds()}s until hits count falls below {stall_while_hits_exceed_count} (expected {expected_remaining_hits}, got {get_updated_hits_count()})')
+                sleep(stall_period.total_seconds())
+
             mapping_field_types_by_field_name = get_mapping_field_types_by_field_name(client, products_index_name)
 
             missing_mappings = accumulate_missing_mappings(
