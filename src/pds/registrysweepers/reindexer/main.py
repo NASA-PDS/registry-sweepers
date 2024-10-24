@@ -274,7 +274,7 @@ def run(
         return get_query_hits_count(client, products_index_name, get_docs_query(sweeper_start_timestamp))
 
     # AOSS was becoming overloaded during iteration while accumulating missing mappings on populous nodes, so it is
-    # necessary to impose a limit for how many products are iterated over before a batch of updates are created and
+    # necessary to impose a limit for how many products are iterated over before a batch of updates is created and
     # written.  This allows incremental progress to be made and limits the amount of work discarded in the event of an
     # overload condition.
     # Using the harvest timestamp as a sort field acts as a soft guarantee of consistency of query results between the
@@ -282,23 +282,40 @@ def run(
     # within generate_updates() to ensure that the second stage (update generation) hasn't picked up any products which
     # weren't processed in the first stage (missing mapping accumulation)
     batch_size_limit = 100000
+    pending_updates_stall_threshold = math.ceil(0.05 * batch_size_limit)
     sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
     total_outstanding_doc_count = get_updated_hits_count()
+    
+    # continuing when n% of a batch is still pending in db will result in an accumulating disparity between the number
+    # of updates submitted and the number of distinct updates submitted.  This variable accumulates an upper bound for
+    # that error, which is necessary to prevent an infinite loop when it exceeds the n% threshold
+    accumulated_error_from_duplicate_updates = 0
+
     with tqdm(
         total=total_outstanding_doc_count,
         desc=f"Reindexer sweeper progress",
     ) as pbar:
         while get_updated_hits_count() > 0:
+            def estimate_pending_updates() -> int:
+                """
+                Estimate how many updates are pending in db indexing, based on the number of outstanding docs and the
+                accumulated error (number of duplicated updates, which won't ever be reflected in the outstanding docs
+                query count)
+                """
+                # respect for scope is a social construct
+                expected_remaining_hits = total_outstanding_doc_count + accumulated_error_from_duplicate_updates - pbar.n
+                pending_updates = get_updated_hits_count() - expected_remaining_hits
+                return pending_updates
+
             # Stall until previous bulk updates have mostly been reindexed and reflected in the hits count, to avoid
-            # significant redundant load
-            # N.B. the returned hits count may fluctuate - this is due to delay in propagation between shards
-            expected_remaining_hits = total_outstanding_doc_count - pbar.n
-            hits_stall_tolerance = math.ceil(0.10 * batch_size_limit)
-            stall_while_hits_exceed_count = expected_remaining_hits + hits_stall_tolerance
-            while get_updated_hits_count() > stall_while_hits_exceed_count:
+            # overwhelming the db with redundant updates
+            # N.B. the pending updates estimate may fluctuate - this is due to delay in propagation between shards
+            while estimate_pending_updates() > pending_updates_stall_threshold:
                 stall_period = timedelta(seconds=60)
-                logging.info(f'Many updates pending, waiting {int(stall_period.total_seconds())}s until hits count falls below {format_hits_count(stall_while_hits_exceed_count)} (expected {format_hits_count(expected_remaining_hits)}, got {format_hits_count(get_updated_hits_count())})')
+                logging.info(f'~{format_hits_count(estimate_pending_updates())} updates pending, waiting until count falls below stall threshold of {format_hits_count(pending_updates_stall_threshold)} pending updates')
                 sleep(stall_period.total_seconds())
+            
+            accumulated_error_from_duplicate_updates += estimate_pending_updates()
 
             mapping_field_types_by_field_name = get_mapping_field_types_by_field_name(client, products_index_name)
 
