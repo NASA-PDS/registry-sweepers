@@ -174,7 +174,9 @@ def accumulate_missing_mappings(
                 try:
                     problematic_harvest_versions.update(doc["_source"]["ops:Harvest_Info/ops:harvest_version"])
                 except KeyError as err:
-                    log.warning(f'Unable to extract harvest version from document {doc["_id"]}: {err}')
+                    # Noisy log temporarily disabled but may be re-enabled at jpadams' discretion
+                    # log.warning(f'Unable to extract harvest version from document {doc["_id"]}: {err}')
+                    pass
 
             if mapping_missing and property_name not in missing_mapping_updates:
                 if canonical_type_is_defined:
