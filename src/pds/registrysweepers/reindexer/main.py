@@ -247,14 +247,18 @@ def generate_updates(
 
 def format_hits_count(count: int) -> str:
     """Format hits count in a more human-friendly manner for logs"""
-    if count < 10e4:
+    if count < 1e4:
         return str(count)
-    elif count < 10e6:
-        adjusted_count = count / 10e3
+    elif count < 1e5:
+        adjusted_count = count / 1e3
+        return '{:,.1f}K'.format(adjusted_count)
+    elif count < 1e6:
+        adjusted_count = count / 1e3
         return '{:,.0f}K'.format(adjusted_count)
     else:
-        adjusted_count = count / 10e6
+        adjusted_count = count / 1e6
         return '{:,.2f}M'.format(adjusted_count)
+
 
 def run(
     client: OpenSearch,
