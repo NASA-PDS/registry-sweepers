@@ -196,7 +196,7 @@ def accumulate_missing_mappings(
                     missing_mapping_updates[property_name] = default_type
 
     log.info(
-        f"RESULT: Detected {problem_docs_count} docs with {len(missing_mapping_updates)} missing mappings and {len(bad_mapping_property_names)} mappings conflicting with the DD, out of a total of {total_docs_count} docs"
+        f"RESULT: Detected {format_hits_count(problem_docs_count)} docs with {len(missing_mapping_updates)} missing mappings and {len(bad_mapping_property_names)} mappings conflicting with the DD, out of a total of {format_hits_count(total_docs_count)} docs"
     )
 
     if problem_docs_count > 0:
@@ -242,6 +242,17 @@ def generate_updates(
             )
 
 
+def format_hits_count(count: int) -> str:
+    """Format hits count in a more human-friendly manner for logs"""
+    if count < 10e4:
+        return str(count)
+    elif count < 10e6:
+        adjusted_count = count / 10e3
+        return '{:,.0f}K'.format(adjusted_count)
+    else:
+        adjusted_count = count / 10e6
+        return '{:,.2f}M'.format(adjusted_count)
+
 def run(
     client: OpenSearch,
     log_filepath: Union[str, None] = None,
@@ -283,7 +294,7 @@ def run(
             stall_while_hits_exceed_count = expected_remaining_hits + hits_stall_tolerance
             while get_updated_hits_count() > stall_while_hits_exceed_count:
                 stall_period = timedelta(seconds=60)
-                logging.info(f'Many updates pending, waiting {int(stall_period.total_seconds())}s until hits count falls below {stall_while_hits_exceed_count} (expected {expected_remaining_hits}, got {get_updated_hits_count()})')
+                logging.info(f'Many updates pending, waiting {int(stall_period.total_seconds())}s until hits count falls below {format_hits_count(stall_while_hits_exceed_count)} (expected {format_hits_count(expected_remaining_hits)}, got {format_hits_count(get_updated_hits_count())})')
                 sleep(stall_period.total_seconds())
 
             mapping_field_types_by_field_name = get_mapping_field_types_by_field_name(client, products_index_name)
