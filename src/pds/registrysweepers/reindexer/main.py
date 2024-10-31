@@ -286,7 +286,6 @@ def run(
     # within generate_updates() to ensure that the second stage (update generation) hasn't picked up any products which
     # weren't processed in the first stage (missing mapping accumulation)
     batch_size_limit = 100000
-    pending_updates_stall_threshold = math.ceil(0.05 * batch_size_limit)
     sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
     total_outstanding_doc_count = get_updated_hits_count()
     
@@ -300,26 +299,6 @@ def run(
         desc=f"Reindexer sweeper progress",
     ) as pbar:
         while get_updated_hits_count() > 0:
-            def estimate_pending_updates() -> int:
-                """
-                Estimate how many updates are pending in db indexing, based on the number of outstanding docs and the
-                accumulated error (number of duplicated updates, which won't ever be reflected in the outstanding docs
-                query count)
-                """
-                # respect for scope is a social construct
-                expected_remaining_hits = total_outstanding_doc_count + accumulated_error_from_duplicate_updates - pbar.n
-                pending_updates = get_updated_hits_count() - expected_remaining_hits
-                return pending_updates
-
-            # Stall until previous bulk updates have mostly been reindexed and reflected in the hits count, to avoid
-            # overwhelming the db with redundant updates
-            # N.B. the pending updates estimate may fluctuate - this is due to delay in propagation between shards
-            while estimate_pending_updates() > pending_updates_stall_threshold:
-                stall_period = timedelta(seconds=60)
-                logging.info(f'~{format_hits_count(estimate_pending_updates())} updates pending, waiting until count falls below stall threshold of {format_hits_count(pending_updates_stall_threshold)} pending updates')
-                sleep(stall_period.total_seconds())
-            
-            accumulated_error_from_duplicate_updates += estimate_pending_updates()
 
             mapping_field_types_by_field_name = get_mapping_field_types_by_field_name(client, products_index_name)
 
