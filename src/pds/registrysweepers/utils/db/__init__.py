@@ -324,7 +324,7 @@ def update_as_statements(update: Update) -> Iterable[str]:
 
 
 @retry(tries=6, delay=15, backoff=2, logger=log)
-def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: Iterable[str]):
+def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]):
     bulk_data = "\n".join(bulk_updates) + "\n"
 
     request_timeout = 180
