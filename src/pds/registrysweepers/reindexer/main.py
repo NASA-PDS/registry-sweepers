@@ -192,11 +192,8 @@ def accumulate_missing_mappings(
                     # be touched by the reindexer sweeper
                     log.warning(f'Property {property_name} is missing from the index mapping, but is a sweepers metadata attribute and will not be fixed here. Please run the full set of sweepers on this index')
                 else:
-                    default_type = "keyword"
-                    log.warning(
-                        f'Property {property_name} is missing from the index mappings and does not have an entry in the data dictionary index - defaulting to type "{default_type}"'
-                    )
-                    missing_mapping_updates[property_name] = default_type
+                    # if there is no canonical type and it is not a provenance metadata key, do nothing, per jpadams
+                    pass
 
     log.info(
         f"RESULT: Detected {format_hits_count(problem_docs_count)} docs with {len(missing_mapping_updates)} missing mappings and {len(bad_mapping_property_names)} mappings conflicting with the DD, out of a total of {format_hits_count(total_docs_count)} docs"
