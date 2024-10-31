@@ -333,6 +333,9 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
     if response_content.get("errors"):
         warn_types = {"document_missing_exception"}  # these types represent bad data, not bad sweepers behaviour
         items_with_problems = [item for item in response_content["items"] if "error" in item["update"]]
+        if any(item['update']['status'] == 429 and item['update']['error']['type'] == 'circuit_breaking_exception' for item in items_with_problems):
+            raise RuntimeWarning(f'Bulk updates response includes item with status HTTP429, circuit_breaking_exception/throttled - chunk will need to be resubmitted')
+
 
         def get_ids_list_str(ids: List[str]) -> str:
             max_display_ids = 50
