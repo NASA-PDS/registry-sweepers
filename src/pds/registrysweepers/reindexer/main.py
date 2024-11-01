@@ -234,12 +234,12 @@ def generate_updates(
         extant_mapping_keys = set(extant_mapping_keys)
         document_field_names = set(document["_source"].keys())
         document_fields_missing_from_mappings = document_field_names.difference(extant_mapping_keys)
-        if len(document_fields_missing_from_mappings) == 0:
-            yield Update(id=id, content={REINDEXER_FLAG_METADATA_KEY: timestamp.isoformat()})
-        else:
+        if len(document_fields_missing_from_mappings) > 0:
             logging.debug(
                 f"Missing mappings {document_fields_missing_from_mappings} detected when attempting to create Update for doc with id {id} - skipping"
             )
+
+        yield Update(id=id, content={REINDEXER_FLAG_METADATA_KEY: timestamp.isoformat()})
 
 
 def format_hits_count(count: int) -> str:
