@@ -165,7 +165,14 @@ def query_registry_db_with_search_after(
             # Manually set sort - this is required for subsequent calls, despite being passed in fetch_func's call to
             # client.search as sort kwarg.
             # It is unclear why this issue is only presenting now - edunn 20241023
-            query['sort'] = sort_fields
+            # It appears that OpenSearch.search() sort kwarg behaves inconsistently if the values contain certain
+            #  characters.  It is unclear which of /: is the issue but it is suggested that :-+^ may be problematic - edunn 20241105
+            #  Related: https://discuss.elastic.co/t/query-a-field-that-has-a-colon/323966
+            #           https://discuss.elastic.co/t/problem-with-colon-in-fieldname-where-can-i-find-naming-guidelines/5437/4
+            #           https://discuss.elastic.co/t/revisiting-colons-in-field-names/25005
+            # TODO: investigate and open ticket with opensearch-py if confirmed
+            special_characters = {'/', ':'}
+            query['sort'] = [f for f in sort_fields if any(c in f for c in special_characters)]
 
             if search_after_values is not None:
                 query["search_after"] = search_after_values
@@ -215,12 +222,13 @@ def query_registry_db_with_search_after(
             #     RequestError(400, 'parsing_exception', 'Expected [VALUE_STRING] or [VALUE_NUMBER] or
             #     [VALUE_BOOLEAN] or [VALUE_NULL] but found [START_ARRAY] inside search_after.')
             # It is unclear why this issue is only presenting now - edunn 20241023
-            for idx, value in enumerate(search_after_values):
-                if isinstance(value, list):
-                    if len(value) == 1:
-                        search_after_values[idx] = value[0]
-                    else:
-                        raise ValueError(f'Failed to flatten array-like search-after value {value} into single element')
+            if search_after_values is not None:
+                for idx, value in enumerate(search_after_values):
+                    if isinstance(value, list):
+                        if len(value) == 1:
+                            search_after_values[idx] = value[0]
+                        else:
+                            raise ValueError(f'Failed to flatten array-like search-after value {value} into single element')
 
 
             # This is a temporary, ad-hoc guard against empty/erroneous responses which do not return non-200 status codes.
