@@ -7,6 +7,7 @@ from typing import Dict
 from typing import Iterable
 from typing import Union
 
+import dateutil.parser
 import math
 from opensearchpy import OpenSearch
 from pds.registrysweepers.reindexer.constants import REINDEXER_FLAG_METADATA_KEY
@@ -159,19 +160,19 @@ def accumulate_missing_mappings(
             if (mapping_missing or mapping_is_bad) and not problem_detected_in_document_already:
                 problem_detected_in_document_already = True
                 problem_docs_count += 1
+                attr_value = doc["_source"].get("ops:Harvest_Info/ops:harvest_date_time", None)
                 try:
-                    doc_harvest_time = datetime.fromisoformat(
-                        doc["_source"]["ops:Harvest_Info/ops:harvest_date_time"][0].replace("Z", ""),
-                    )
+                    doc_harvest_time = dateutil.parser.isoparse(attr_value[0]).astimezone(timezone.utc)
+
                     earliest_problem_doc_harvested_at = min(
-                        doc_harvest_time, earliest_problem_doc_harvested_at or datetime.max
+                        doc_harvest_time, earliest_problem_doc_harvested_at or doc_harvest_time
                     )
                     latest_problem_doc_harvested_at = max(
-                        doc_harvest_time, latest_problem_doc_harvested_at or datetime.min
+                        doc_harvest_time, latest_problem_doc_harvested_at or doc_harvest_time
                     )
                 except (KeyError, ValueError) as err:
                     log.warning(
-                        f'Unable to parse "ops:Harvest_Info/ops:harvest_date_time" as zulu-formatted date from document {doc["_id"]}: {err}'
+                        f'Unable to parse first element of "ops:Harvest_Info/ops:harvest_date_time" as ISO-formatted date from document {doc["_id"]}: {attr_value} ({err})'
                     )
 
                 try:
