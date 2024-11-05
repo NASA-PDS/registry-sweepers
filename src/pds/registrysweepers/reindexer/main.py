@@ -216,7 +216,7 @@ def accumulate_missing_mappings(
 
     if len(canonical_type_undefined_property_names) > 0:
         log.info(
-            f"RESULT: Mappings were not found in the DD for the following properties, and a default type will be applied: {sorted(canonical_type_undefined_property_names)}"
+            f"RESULT: Mappings were not found in the DD or static types for the following properties: {sorted(canonical_type_undefined_property_names)}"
         )
 
     if len(bad_mapping_property_names) > 0:
