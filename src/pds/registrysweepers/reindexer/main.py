@@ -121,6 +121,7 @@ def accumulate_missing_mappings(
 
     canonical_type_undefined_property_names = set()  # used to prevent duplicate WARN logs
     bad_mapping_property_names = set()  # used to log mappings requiring manual attention
+    sweepers_missing_property_names = set()
 
     earliest_problem_doc_harvested_at = None
     latest_problem_doc_harvested_at = None
@@ -191,7 +192,9 @@ def accumulate_missing_mappings(
                 elif property_name.startswith('ops:Provenance'):  # TODO: extract this to a constant, used by all metadata key definitions
                     # mappings for registry-sweepers are the responsibility of their respective sweepers and should not
                     # be touched by the reindexer sweeper
-                    log.warning(f'Property {property_name} is missing from the index mapping, but is a sweepers metadata attribute and will not be fixed here. Please run the full set of sweepers on this index')
+                    if property_name not in sweepers_missing_property_names:
+                        log.warning(f'Property {property_name} is missing from the index mapping, but is a sweepers metadata attribute and will not be fixed here. Please run the full set of sweepers on this index')
+                        sweepers_missing_property_names.add(property_name)
                 else:
                     # if there is no canonical type and it is not a provenance metadata key, do nothing, per jpadams
                     pass
