@@ -82,39 +82,33 @@ def accumulate_missing_mappings(
     @param docs: an iterable collection of product documents
     """
 
-    # TODO: map special-case property names onto their types, and incorporate them into the type resolution
-    #  NoneType indicates that the property is to be excluded
-    #  Anything with prefix 'ops:Provenance' should be excluded, as these properties are the responsibility of their
+    # Static mappings for fields not defined in the data dictionaries
+    # NoneType indicates that the property is to be excluded.
+    # Anything with prefix 'ops:Provenance' is excluded, as these properties are the responsibility of their
     #  respective sweepers.
     special_case_property_types_by_name = {
         '@timestamp': None,
         '@version': None,
         '_package_id': None,
         'description': 'text',
-        # 'lid':,
-        # 'lidvid',
+        'lid': 'keyword',
+        'lidvid': 'keyword',
         'ops:Harvest_Info/ops:harvest_date_time': 'date',
         'ops:Label_File_Info/ops:json_blob': None,
-        # 'ops:Provenance/ops:parent_bundle_identifier',
-        # 'ops:Provenance/ops:parent_collection_identifier',
-        # 'ops:Provenance/ops:registry_sweepers_ancestry_version',
-        # 'ops:Provenance/ops:registry_sweepers_provenance_version',
-        # 'ops:Provenance/ops:registry_sweepers_repairkit_version',
-        # 'ops:Provenance/ops:superseded_by',
-        # 'product_class',
-        # 'ref_lid_associate',
-        # 'ref_lid_collection',
-        # 'ref_lid_collection_secondary',
-        # 'ref_lid_data',
-        # 'ref_lid_document',
-        # 'ref_lid_facility',
-        # 'ref_lid_instrument',
-        # 'ref_lid_instrument_host',
-        # 'ref_lid_investigation',
-        # 'ref_lid_target',
-        # 'ref_lid_telescope',
+        'product_class': 'keyword',
+        'ref_lid_associate': 'keyword',
+        'ref_lid_collection': 'keyword',
+        'ref_lid_collection_secondary': 'keyword',
+        'ref_lid_data': 'keyword',
+        'ref_lid_document': 'keyword',
+        'ref_lid_facility': 'keyword',
+        'ref_lid_instrument': 'keyword',
+        'ref_lid_instrument_host': 'keyword',
+        'ref_lid_investigation': 'keyword',
+        'ref_lid_target': 'keyword',
+        'ref_lid_telescope': 'keyword',
         'title': 'text',
-        # 'vid'
+        # 'vid'  # TODO: need to determine what this should be, as keyword lexical(?) sorting will be a problem
     }
 
     missing_mapping_updates: Dict[str, str] = {}
@@ -289,7 +283,7 @@ def run(
     batch_size_limit = 100000
     sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
     total_outstanding_doc_count = get_updated_hits_count()
-    
+
     with tqdm(
         total=total_outstanding_doc_count,
         desc=f"Reindexer sweeper progress",
