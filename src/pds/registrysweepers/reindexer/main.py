@@ -290,11 +290,6 @@ def run(
     sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
     total_outstanding_doc_count = get_updated_hits_count()
     
-    # continuing when n% of a batch is still pending in db will result in an accumulating disparity between the number
-    # of updates submitted and the number of distinct updates submitted.  This variable accumulates an upper bound for
-    # that error, which is necessary to prevent an infinite loop when it exceeds the n% threshold
-    accumulated_error_from_duplicate_updates = 0
-
     with tqdm(
         total=total_outstanding_doc_count,
         desc=f"Reindexer sweeper progress",
