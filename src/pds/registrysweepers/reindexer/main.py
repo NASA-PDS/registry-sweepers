@@ -288,7 +288,9 @@ def run(
         total=total_outstanding_doc_count,
         desc=f"Reindexer sweeper progress",
     ) as pbar:
-        while get_updated_hits_count() > 0:
+        current_batch_size = min(batch_size_limit, total_outstanding_doc_count)
+        final_batch_is_processed = False
+        while not final_batch_is_processed:
 
             mapping_field_types_by_field_name = get_mapping_field_types_by_field_name(client, products_index_name)
 
@@ -330,7 +332,13 @@ def run(
                 index_name=products_index_name,
             )
 
-            pbar.update(batch_size_limit)
+            # If the current batch isn't a full page, it must be the last page and all updates are pending.
+            # Terminate loop on this basis to avoid lots of redundant updates.
+            final_batch_is_processed = current_batch_size < batch_size_limit
+            pbar.update(current_batch_size)
+
+            # Update batch size for next page of hits
+            current_batch_size = min(batch_size_limit, get_updated_hits_count())
 
     log.info("Completed reindexer sweeper processing!")
 
