@@ -86,7 +86,8 @@ def run_factory(sweeper_f: Callable) -> Callable:
     return functools.partial(
         sweeper_f,
         client=get_opensearch_client_from_environment(verify_certs=True if not dev_mode else False),
-        log_filepath='registry-sweepers.log',
+        # enable for development if required - not necessary in production
+        # log_filepath='registry-sweepers.log',
         log_level=log_level
     )
 
