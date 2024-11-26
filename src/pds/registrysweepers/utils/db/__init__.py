@@ -162,6 +162,18 @@ def query_registry_db_with_search_after(
 
     with tqdm(total=expected_hits, desc=f"Query {query_id}") as pbar:
         while more_data_exists:
+            # Manually set sort - this is required for subsequent calls, despite being passed in fetch_func's call to
+            # client.search as sort kwarg.
+            # It is unclear why this issue is only presenting now - edunn 20241023
+            # It appears that OpenSearch.search() sort kwarg behaves inconsistently if the values contain certain
+            #  characters.  It is unclear which of /: is the issue but it is suggested that :-+^ may be problematic - edunn 20241105
+            #  Related: https://discuss.elastic.co/t/query-a-field-that-has-a-colon/323966
+            #           https://discuss.elastic.co/t/problem-with-colon-in-fieldname-where-can-i-find-naming-guidelines/5437/4
+            #           https://discuss.elastic.co/t/revisiting-colons-in-field-names/25005
+            # TODO: investigate and open ticket with opensearch-py if confirmed
+            special_characters = {"/", ":"}
+            query["sort"] = [f for f in sort_fields if any(c in f for c in special_characters)]
+
             if search_after_values is not None:
                 query["search_after"] = search_after_values
                 log.debug(
@@ -204,6 +216,21 @@ def query_registry_db_with_search_after(
 
                 # simpler to set the value after every hit than worry about OBO errors detecting the last hit in the page
                 search_after_values = [hit["_source"].get(field) for field in sort_fields]
+
+            # Flatten single-element search-after-values.  Attempting to sort/search-after on MCP AOSS by
+            # ops:Harvest_Info/ops:harvest_date_time is throwing
+            #     RequestError(400, 'parsing_exception', 'Expected [VALUE_STRING] or [VALUE_NUMBER] or
+            #     [VALUE_BOOLEAN] or [VALUE_NULL] but found [START_ARRAY] inside search_after.')
+            # It is unclear why this issue is only presenting now - edunn 20241023
+            if search_after_values is not None:
+                for idx, value in enumerate(search_after_values):
+                    if isinstance(value, list):
+                        if len(value) == 1:
+                            search_after_values[idx] = value[0]
+                        else:
+                            raise ValueError(
+                                f"Failed to flatten array-like search-after value {value} into single element"
+                            )
 
             # This is a temporary, ad-hoc guard against empty/erroneous responses which do not return non-200 status codes.
             # Previously, this has cause infinite loops in production due to served_hits sticking and never reaching the
@@ -306,7 +333,7 @@ def update_as_statements(update: Update) -> Iterable[str]:
 
 
 @retry(tries=6, delay=15, backoff=2, logger=log)
-def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: Iterable[str]):
+def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]):
     bulk_data = "\n".join(bulk_updates) + "\n"
 
     request_timeout = 180
@@ -315,6 +342,13 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
     if response_content.get("errors"):
         warn_types = {"document_missing_exception"}  # these types represent bad data, not bad sweepers behaviour
         items_with_problems = [item for item in response_content["items"] if "error" in item["update"]]
+        if any(
+            item["update"]["status"] == 429 and item["update"]["error"]["type"] == "circuit_breaking_exception"
+            for item in items_with_problems
+        ):
+            raise RuntimeWarning(
+                "Bulk updates response includes item with status HTTP429, circuit_breaking_exception/throttled - chunk will need to be resubmitted"
+            )
 
         def get_ids_list_str(ids: List[str]) -> str:
             max_display_ids = 50

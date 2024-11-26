@@ -64,6 +64,7 @@ from datetime import datetime
 from typing import Callable
 
 from pds.registrysweepers import provenance, ancestry, repairkit, legacy_registry_sync
+from pds.registrysweepers.reindexer import main as reindexer
 from pds.registrysweepers.utils import configure_logging, parse_log_level
 from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.misc import get_human_readable_elapsed_since
@@ -85,7 +86,8 @@ def run_factory(sweeper_f: Callable) -> Callable:
     return functools.partial(
         sweeper_f,
         client=get_opensearch_client_from_environment(verify_certs=True if not dev_mode else False),
-        log_filepath='registry-sweepers.log',
+        # enable for development if required - not necessary in production
+        # log_filepath='registry-sweepers.log',
         log_level=log_level
     )
 
@@ -107,7 +109,8 @@ args = parser.parse_args()
 sweepers = [
     repairkit.run,
     provenance.run,
-    ancestry.run
+    ancestry.run,
+    reindexer.run
 ]
 
 for option, sweeper in optional_sweepers.items():
