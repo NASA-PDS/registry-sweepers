@@ -171,8 +171,8 @@ def query_registry_db_with_search_after(
             #           https://discuss.elastic.co/t/problem-with-colon-in-fieldname-where-can-i-find-naming-guidelines/5437/4
             #           https://discuss.elastic.co/t/revisiting-colons-in-field-names/25005
             # TODO: investigate and open ticket with opensearch-py if confirmed
-            special_characters = {'/', ':'}
-            query['sort'] = [f for f in sort_fields if any(c in f for c in special_characters)]
+            special_characters = {"/", ":"}
+            query["sort"] = [f for f in sort_fields if any(c in f for c in special_characters)]
 
             if search_after_values is not None:
                 query["search_after"] = search_after_values
@@ -228,8 +228,9 @@ def query_registry_db_with_search_after(
                         if len(value) == 1:
                             search_after_values[idx] = value[0]
                         else:
-                            raise ValueError(f'Failed to flatten array-like search-after value {value} into single element')
-
+                            raise ValueError(
+                                f"Failed to flatten array-like search-after value {value} into single element"
+                            )
 
             # This is a temporary, ad-hoc guard against empty/erroneous responses which do not return non-200 status codes.
             # Previously, this has cause infinite loops in production due to served_hits sticking and never reaching the
@@ -341,9 +342,13 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
     if response_content.get("errors"):
         warn_types = {"document_missing_exception"}  # these types represent bad data, not bad sweepers behaviour
         items_with_problems = [item for item in response_content["items"] if "error" in item["update"]]
-        if any(item['update']['status'] == 429 and item['update']['error']['type'] == 'circuit_breaking_exception' for item in items_with_problems):
-            raise RuntimeWarning(f'Bulk updates response includes item with status HTTP429, circuit_breaking_exception/throttled - chunk will need to be resubmitted')
-
+        if any(
+            item["update"]["status"] == 429 and item["update"]["error"]["type"] == "circuit_breaking_exception"
+            for item in items_with_problems
+        ):
+            raise RuntimeWarning(
+                "Bulk updates response includes item with status HTTP429, circuit_breaking_exception/throttled - chunk will need to be resubmitted"
+            )
 
         def get_ids_list_str(ids: List[str]) -> str:
             max_display_ids = 50
