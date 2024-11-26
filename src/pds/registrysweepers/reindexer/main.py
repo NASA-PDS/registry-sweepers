@@ -30,6 +30,12 @@ def get_docs_query(filter_to_harvested_before: datetime):
     """
     Return a query to get all docs which haven't been reindexed by this sweeper and which haven't been harvested
     since this sweeper process instance started running
+
+    i.e.
+    - Query all documents
+    - Exclude anything which has already been processed, to avoid redundant reprocessing
+    - Exclude anything which was harvested in the middle of this sweeper running, since this can cause erroneous results
+      due to inconsistency in the document set across query calls which are expected to be identical.
     """
     # TODO: Remove this once query_registry_db_with_search_after is modified to remove mutation side-effects
     return {
