@@ -1,5 +1,13 @@
 # Changelog
 
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2024-11-26)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.3.0...«unknown»)
+
+**Defects:**
+
+- Unable to search for`cassini` LDD attributes in ISS datasets [\#148](https://github.com/NASA-PDS/registry-sweepers/issues/148) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
+
 ## [v1.3.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.3.0) (2024-10-14)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.1...v1.3.0)
@@ -31,11 +39,7 @@
 
 ## [v1.2.1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.2.1) (2024-01-24)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/release/1.2.1...v1.2.1)
-
-## [release/1.2.1](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.2.1) (2024-01-23)
-
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.0...release/1.2.1)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.0...v1.2.1)
 
 **Defects:**
 
