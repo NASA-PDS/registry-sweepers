@@ -279,6 +279,7 @@ def write_updated_docs(
     updates: Iterable[Update],
     index_name: str,
     bulk_chunk_max_update_count: Union[int, None] = None,
+    as_upsert: bool = False
 ):
     log.info("Writing document updates...")
     updated_doc_count = 0
@@ -305,7 +306,7 @@ def write_updated_docs(
             bulk_updates_buffer = []
             bulk_buffer_size_mb = 0.0
 
-        update_statement_strs = update_as_statements(update)
+        update_statement_strs = update_as_statements(update, as_upsert=as_upsert)
 
         for s in update_statement_strs:
             bulk_buffer_size_mb += sys.getsizeof(s) / 1024**2
@@ -320,13 +321,16 @@ def write_updated_docs(
     log.info(f"Updated documents for {updated_doc_count} products!")
 
 
-def update_as_statements(update: Update) -> Iterable[str]:
-    """Given an Update, convert it to an ElasticSearch-style set of request body content strings"""
+def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[str]:
+    """
+    Given an Update, convert it to an ElasticSearch-style set of request body content strings
+    Optionally, specify as upsert (index if does not already exist)
+    """
     metadata_statement: Dict[str, Any] = {"update": {"_id": update.id}}
     if update.has_versioning_information():
         metadata_statement["if_primary_term"] = update.primary_term
         metadata_statement["if_seq_no"] = update.seq_no
-    content_statement = {"doc": update.content}
+    content_statement = {"doc": update.content, "doc_as_upsert": as_upsert}
     update_objs = [metadata_statement, content_statement]
     updates_strs = [json.dumps(obj) for obj in update_objs]
     return updates_strs
