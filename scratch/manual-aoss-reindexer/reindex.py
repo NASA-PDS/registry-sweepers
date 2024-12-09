@@ -8,21 +8,10 @@ from pds.registrysweepers.utils.db.update import Update
 
 from pds.registrysweepers.driver import run as run_sweepers
 
-if __name__ == '__main__':
 
-    src_node_name = 'geo'
-    dest_pseudonode_name = f'edunn-{src_node_name}'  # TODO: change this from 'edunn' to 'temp'
-
-    # set node id env var to facilitate sweepers
-    os.environ["MULTITENANCY_NODE_ID"] = dest_pseudonode_name
-
-    # change these to use a resolution function later - need to decouple resolve_multitenant_index_name() from env var
-    src_index_name = f'{src_node_name}-registry'
-    dest_index_name = f'{dest_pseudonode_name}-registry'
-
+def ensure_valid_state(dest_index_name: str):
+    """Ensure that all necessary preconditions for safe/successful reindexing are met"""
     with get_opensearch_client_from_environment() as client:
-
-        # ensure that all necessary preconditions for safe/successful reindexing are met
         try:
             # ensure that the destination is a temporary index, to prevent inadvertently writing to a real index
             allowed_prefixes = {'temp', 'edunn'}
@@ -47,6 +36,10 @@ if __name__ == '__main__':
             logging.error(err)
             exit(1)
 
+
+def migrate_bulk_data(src_index_name: str, dest_index_name: str):
+    """Stream documents from source index to destination index, which may """
+    with get_opensearch_client_from_environment() as client:
         try:
             # ensure that sort field is in mapping to facilitate execution of reindexing sweeper
             necessary_mappings = {
@@ -67,11 +60,28 @@ if __name__ == '__main__':
             print(f'Reindex from {src_index_name} to {dest_index_name} failed: {err}')
             exit(1)
 
-        # TODO: Implement consistency check to ensure that all data was successfully migrated
 
-        # Run sweepers on the migrated data
-        try:
-            run_sweepers()
-        except Exception as err:
-            logging.error(f'Post-reindex sweeper execution failed with {err}')
-            exit(1)
+def run_sweepers():
+    """Run sweepers on the migrated data"""
+    try:
+        run_sweepers()
+    except Exception as err:
+        logging.error(f'Post-reindex sweeper execution failed with {err}')
+        exit(1)
+
+
+if __name__ == '__main__':
+    src_node_name = 'geo'
+    dest_pseudonode_name = f'edunn-{src_node_name}'  # TODO: change this from 'edunn' to 'temp'
+
+    # set node id env var to facilitate sweepers
+    os.environ["MULTITENANCY_NODE_ID"] = dest_pseudonode_name
+
+    # change these to use a resolution function later - need to decouple resolve_multitenant_index_name() from env var
+    src_index_name = f'{src_node_name}-registry'
+    dest_index_name = f'{dest_pseudonode_name}-registry'
+
+    ensure_valid_state(dest_index_name)
+    migrate_bulk_data(src_index_name, dest_index_name)
+    # TODO: Implement consistency check to ensure that all data was successfully migrated
+    run_sweepers()
