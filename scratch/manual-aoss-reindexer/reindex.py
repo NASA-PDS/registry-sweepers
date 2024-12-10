@@ -75,7 +75,8 @@ def ensure_doc_consistency(src_index_name: str, dest_index_name: str):
     opportunity for error.
     """
 
-    logging.info(f'Ensuring document consistency - {get_outstanding_document_count(src_index_name, dest_index_name)} documents remain to copy from {src_index_name} to {dest_index_name}')
+    logging.info(
+        f'Ensuring document consistency - {get_outstanding_document_count(src_index_name, dest_index_name)} documents remain to copy from {src_index_name} to {dest_index_name}')
 
     with get_opensearch_client_from_environment() as client:
         for doc_id in enumerate_outstanding_doc_ids(src_index_name, dest_index_name):
@@ -93,51 +94,28 @@ def ensure_doc_consistency(src_index_name: str, dest_index_name: str):
 
 def enumerate_outstanding_doc_ids(src_index_name: str, dest_index_name: str) -> Iterator[str]:
     with get_opensearch_client_from_environment() as client:
-        
+
         pseudoid_field = "lidvid"
 
         src_docs = iter(query_registry_db_with_search_after(client, src_index_name, {"query": {"match_all": {}}},
-                                                              {"includes": [pseudoid_field]},
-                                                              sort_fields=[pseudoid_field], request_timeout_seconds=20))
+                                                            {"includes": [pseudoid_field]},
+                                                            sort_fields=[pseudoid_field], request_timeout_seconds=20))
         dest_docs = iter(query_registry_db_with_search_after(client, dest_index_name, {"query": {"match_all": {}}},
-                                                               {"includes": [pseudoid_field]},
-                                                               sort_fields=[pseudoid_field], request_timeout_seconds=20))
+                                                             {"includes": [pseudoid_field]},
+                                                             sort_fields=[pseudoid_field], request_timeout_seconds=20))
 
         # yield any documents which are present in source but not in destination
-        try:
-            src_doc = next(src_docs)
-            dest_doc = next(dest_docs)
+        src_ids = {doc["_id"] for doc in src_docs}
+        dest_ids = {doc["_id"] for doc in dest_docs}
 
-            while True:
-                src_doc_pseudoid = src_doc["_source"][pseudoid_field]
-                src_doc_id = src_doc["_id"]
-                dest_doc_pseudoid = dest_doc["_source"][pseudoid_field]
-                dest_doc_id = dest_doc["_id"]
+        ids_missing_from_src = dest_ids.difference(src_ids)
+        if len(ids_missing_from_src) > 0:
+            logging.error(
+                f'{len(ids_missing_from_src)} ids are present in {dest_index_name} but not in {src_index_name} - this indicates a potential error: {sorted(ids_missing_from_src)}')
+            exit(1)
 
-
-                if src_doc_pseudoid < dest_doc_pseudoid:  # if id present in src but not dest
-                    yield src_doc_id
-                    src_doc = next(src_docs)
-                elif dest_doc_pseudoid < src_doc_pseudoid:  # if id present in dest but not src
-                    logging.warning(
-                        f'Document with id "{dest_doc_pseudoid}" is present in destination index {dest_index_name} file but not in source index {src_index_name}')
-                    dest_doc = next(dest_docs)
-                else:  # if id is present in both files
-                    src_doc = next(src_docs)
-                    dest_doc = next(dest_docs)
-        except StopIteration:
-            pass
-
-        # yield any remaining documents in source iterable
-        try:
-            src_doc = next(src_docs)
-            while True:
-                src_doc_pseudoid = src_doc["_source"][pseudoid_field]
-
-                yield src_doc_pseudoid
-                src_doc = next(src_docs)
-        except StopIteration:
-            pass
+        ids_missing_from_dest = src_ids.difference(dest_ids)
+        return iter(ids_missing_from_dest)
 
 
 def get_outstanding_document_count(src_index_name: str, dest_index_name: str, as_proportion: bool = False) -> int:
@@ -150,13 +128,13 @@ def get_outstanding_document_count(src_index_name: str, dest_index_name: str, as
     return (outstanding_docs_count / src_docs_count) if as_proportion else outstanding_docs_count
 
 
-def run_sweepers():
+def run_registry_sweepers():
     """Run sweepers on the migrated data"""
     try:
         run_sweepers()
     except Exception as err:
         logging.error(f'Post-reindex sweeper execution failed with {err}')
-        exit(1)
+        raise err
 
 
 if __name__ == '__main__':
@@ -175,4 +153,4 @@ if __name__ == '__main__':
     ensure_valid_state(dest_index_name)
     migrate_bulk_data(src_index_name, dest_index_name)
     ensure_doc_consistency(src_index_name, dest_index_name)
-    # run_sweepers()
+    run_registry_sweepers()
