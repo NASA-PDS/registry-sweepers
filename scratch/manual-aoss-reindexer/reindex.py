@@ -140,8 +140,8 @@ def run_registry_sweepers():
 if __name__ == '__main__':
     configure_logging(filepath=None, log_level=logging.INFO)
 
-    src_node_name = 'geo'
-    dest_pseudonode_name = f'edunn-{src_node_name}'  # TODO: change this from 'edunn' to 'temp'
+    src_node_name = 'atm'
+    dest_pseudonode_name = f'temp-{src_node_name}'
 
     # set node id env var to facilitate sweepers
     os.environ["MULTITENANCY_NODE_ID"] = dest_pseudonode_name
