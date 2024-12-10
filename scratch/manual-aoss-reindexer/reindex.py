@@ -1,7 +1,9 @@
 import logging
 import os
+from typing import Iterator
 
-from pds.registrysweepers.utils.db import query_registry_db_with_search_after, write_updated_docs
+from pds.registrysweepers.utils import configure_logging
+from pds.registrysweepers.utils.db import query_registry_db_with_search_after, write_updated_docs, get_query_hits_count
 from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.update import Update
@@ -39,6 +41,10 @@ def ensure_valid_state(dest_index_name: str):
 
 def migrate_bulk_data(src_index_name: str, dest_index_name: str):
     """Stream documents from source index to destination index, which may """
+    if get_outstanding_document_count(src_index_name, dest_index_name, as_proportion=True) < 0.1:
+        logging.warning(f'Less than 10% of documents outstanding - skipping bulk streaming migration stage')
+        return
+
     with get_opensearch_client_from_environment() as client:
         try:
             # ensure that sort field is in mapping to facilitate execution of reindexing sweeper
@@ -61,6 +67,89 @@ def migrate_bulk_data(src_index_name: str, dest_index_name: str):
             exit(1)
 
 
+def ensure_doc_consistency(src_index_name: str, dest_index_name: str):
+    """
+    Ensure that all documents present in the source index are also present in the destination index.
+    Discovers and fixes any quiet failures encountered during bulk document streaming.
+    Yes, this could be accomplished within the bulk streaming, but implementation is simpler this way and there is less
+    opportunity for error.
+    """
+
+    logging.info(f'Ensuring document consistency - {get_outstanding_document_count(src_index_name, dest_index_name)} documents remain to copy from {src_index_name} to {dest_index_name}')
+
+    with get_opensearch_client_from_environment() as client:
+        for doc_id in enumerate_outstanding_doc_ids(src_index_name, dest_index_name):
+            try:
+                src_doc = client.get(src_index_name, doc_id)
+                client.create(dest_index_name, doc_id, src_doc['_source'])
+                logging.info(f'Created missing doc with id {doc_id}')
+            except Exception as err:
+                logging.error(f'Failed to create doc with id "{doc_id}": {err}')
+
+    if not get_outstanding_document_count(src_index_name, dest_index_name) == 0:
+        raise RuntimeError(
+            f'Failed to ensure consistency - there is remaining disparity in document count between indices "{src_index_name}" and "{dest_index_name}"')
+
+
+def enumerate_outstanding_doc_ids(src_index_name: str, dest_index_name: str) -> Iterator[str]:
+    with get_opensearch_client_from_environment() as client:
+        
+        pseudoid_field = "lidvid"
+
+        src_docs = iter(query_registry_db_with_search_after(client, src_index_name, {"query": {"match_all": {}}},
+                                                              {"includes": [pseudoid_field]},
+                                                              sort_fields=[pseudoid_field], request_timeout_seconds=20))
+        dest_docs = iter(query_registry_db_with_search_after(client, dest_index_name, {"query": {"match_all": {}}},
+                                                               {"includes": [pseudoid_field]},
+                                                               sort_fields=[pseudoid_field], request_timeout_seconds=20))
+
+        # yield any documents which are present in source but not in destination
+        try:
+            src_doc = next(src_docs)
+            dest_doc = next(dest_docs)
+
+            while True:
+                src_doc_pseudoid = src_doc["_source"][pseudoid_field]
+                src_doc_id = src_doc["_id"]
+                dest_doc_pseudoid = dest_doc["_source"][pseudoid_field]
+                dest_doc_id = dest_doc["_id"]
+
+
+                if src_doc_pseudoid < dest_doc_pseudoid:  # if id present in src but not dest
+                    yield src_doc_id
+                    src_doc = next(src_docs)
+                elif dest_doc_pseudoid < src_doc_pseudoid:  # if id present in dest but not src
+                    logging.warning(
+                        f'Document with id "{dest_doc_pseudoid}" is present in destination index {dest_index_name} file but not in source index {src_index_name}')
+                    dest_doc = next(dest_docs)
+                else:  # if id is present in both files
+                    src_doc = next(src_docs)
+                    dest_doc = next(dest_docs)
+        except StopIteration:
+            pass
+
+        # yield any remaining documents in source iterable
+        try:
+            src_doc = next(src_docs)
+            while True:
+                src_doc_pseudoid = src_doc["_source"][pseudoid_field]
+
+                yield src_doc_pseudoid
+                src_doc = next(src_docs)
+        except StopIteration:
+            pass
+
+
+def get_outstanding_document_count(src_index_name: str, dest_index_name: str, as_proportion: bool = False) -> int:
+    """return count(src) - count(dest)"""
+    with get_opensearch_client_from_environment() as client:
+        src_docs_count = get_query_hits_count(client, src_index_name, {"query": {"match_all": {}}})
+        dest_docs_count = get_query_hits_count(client, dest_index_name, {"query": {"match_all": {}}})
+
+    outstanding_docs_count = src_docs_count - dest_docs_count
+    return (outstanding_docs_count / src_docs_count) if as_proportion else outstanding_docs_count
+
+
 def run_sweepers():
     """Run sweepers on the migrated data"""
     try:
@@ -71,6 +160,8 @@ def run_sweepers():
 
 
 if __name__ == '__main__':
+    configure_logging(filepath=None, log_level=logging.INFO)
+
     src_node_name = 'geo'
     dest_pseudonode_name = f'edunn-{src_node_name}'  # TODO: change this from 'edunn' to 'temp'
 
@@ -83,5 +174,5 @@ if __name__ == '__main__':
 
     ensure_valid_state(dest_index_name)
     migrate_bulk_data(src_index_name, dest_index_name)
-    # TODO: Implement consistency check to ensure that all data was successfully migrated
-    run_sweepers()
+    ensure_doc_consistency(src_index_name, dest_index_name)
+    # run_sweepers()
