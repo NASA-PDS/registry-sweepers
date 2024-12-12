@@ -1,5 +1,7 @@
 import logging
 import os
+import time
+from datetime import timedelta, datetime
 from typing import Iterator
 
 from pds.registrysweepers.utils import configure_logging
@@ -9,6 +11,12 @@ from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.update import Update
 
 from pds.registrysweepers.driver import run as run_sweepers
+from pds.registrysweepers.utils.misc import get_human_readable_elapsed_since
+
+# Baseline mappings which are required to facilitate successful execution before any data is copied
+necessary_mappings = {
+    'lidvid': 'keyword'
+}
 
 
 def ensure_valid_state(dest_index_name: str):
@@ -32,6 +40,10 @@ def ensure_valid_state(dest_index_name: str):
                 raise RuntimeError(
                     f'Index "{dest_index_name}" is not correctly configured - "dynamic" mapping setting is not set to "false - aborting"')
 
+            # ensure necessary mappings to facilitate execution of reindexing sweeper and other steps
+            for property_name, property_mapping_type in necessary_mappings.items():
+                ensure_index_mapping(client, dest_index_name, property_name, property_mapping_type)
+
             # other conditions may be populated later
 
         except Exception as err:
@@ -47,13 +59,6 @@ def migrate_bulk_data(src_index_name: str, dest_index_name: str):
 
     with get_opensearch_client_from_environment() as client:
         try:
-            # ensure that sort field is in mapping to facilitate execution of reindexing sweeper
-            necessary_mappings = {
-                'lidvid': 'keyword'
-            }
-            for property_name, property_mapping_type in necessary_mappings.items():
-                ensure_index_mapping(client, dest_index_name, property_name, property_mapping_type)
-
             sort_keys = sorted(necessary_mappings.keys())
 
             docs = query_registry_db_with_search_after(client, src_index_name, {"query": {"match_all": {}}}, {},
@@ -79,6 +84,8 @@ def ensure_doc_consistency(src_index_name: str, dest_index_name: str):
         f'Ensuring document consistency - {get_outstanding_document_count(src_index_name, dest_index_name)} documents remain to copy from {src_index_name} to {dest_index_name}')
 
     with get_opensearch_client_from_environment() as client:
+        # TODO instead of iteratively pulling/creating, use multi-search (maybe) and bulk write (definitely) to avoid
+        #  the request overhead
         for doc_id in enumerate_outstanding_doc_ids(src_index_name, dest_index_name):
             try:
                 src_doc = client.get(src_index_name, doc_id)
@@ -87,14 +94,11 @@ def ensure_doc_consistency(src_index_name: str, dest_index_name: str):
             except Exception as err:
                 logging.error(f'Failed to create doc with id "{doc_id}": {err}')
 
-    if not get_outstanding_document_count(src_index_name, dest_index_name) == 0:
-        raise RuntimeError(
-            f'Failed to ensure consistency - there is remaining disparity in document count between indices "{src_index_name}" and "{dest_index_name}"')
+    wait_until_indexed()
 
 
 def enumerate_outstanding_doc_ids(src_index_name: str, dest_index_name: str) -> Iterator[str]:
     with get_opensearch_client_from_environment() as client:
-
         pseudoid_field = "lidvid"
 
         src_docs = iter(query_registry_db_with_search_after(client, src_index_name, {"query": {"match_all": {}}},
@@ -123,9 +127,23 @@ def get_outstanding_document_count(src_index_name: str, dest_index_name: str, as
     with get_opensearch_client_from_environment() as client:
         src_docs_count = get_query_hits_count(client, src_index_name, {"query": {"match_all": {}}})
         dest_docs_count = get_query_hits_count(client, dest_index_name, {"query": {"match_all": {}}})
+        logging.info(f'index {src_index_name} contains {src_docs_count} docs')
+        logging.info(f'index {dest_index_name} contains {dest_docs_count} docs')
 
     outstanding_docs_count = src_docs_count - dest_docs_count
     return (outstanding_docs_count / src_docs_count) if as_proportion else outstanding_docs_count
+
+
+def wait_until_indexed(timeout: timedelta = timedelta(minutes=30)):
+    start = datetime.now()
+    expiry = start + timeout
+
+    while get_outstanding_document_count(src_index_name, dest_index_name) > 0:
+        if datetime.now() > expiry:
+            raise RuntimeError(
+                f'Failed to ensure consistency - there is remaining disparity in document count between indices "{src_index_name}" and "{dest_index_name}" after {get_human_readable_elapsed_since(start)}')
+        logging.info('Waiting for indexation to complete...')
+        time.sleep(15)
 
 
 def run_registry_sweepers():
