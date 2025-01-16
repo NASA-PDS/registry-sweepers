@@ -74,7 +74,7 @@ def fetch_dd_field_types(client: OpenSearch) -> Dict[str, str]:
 
 def get_mapping_field_types_by_field_name(client: OpenSearch, index_name: str) -> Dict[str, str]:
     return {
-        k: v["type"] for k, v in client.indices.get_mapping(index_name)[index_name]["mappings"]["properties"].items()
+        k: v["type"] for k, v in client.indices.get_mapping(index_name)[index_name]["mappings"]["properties"].items()  # type: ignore
     }
 
 
