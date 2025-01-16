@@ -5,9 +5,9 @@ from typing import Union
 
 import boto3  # type: ignore
 import requests
-from botocore.credentials import Credentials  # type: ignore
+from botocore.credentials import Credentials
 from opensearchpy import OpenSearch
-from opensearchpy import RequestsAWSV4SignerAuth  # type: ignore
+from opensearchpy import RequestsAWSV4SignerAuth
 from opensearchpy import RequestsHttpConnection
 from requests_aws4auth import AWS4Auth  # type: ignore
 
