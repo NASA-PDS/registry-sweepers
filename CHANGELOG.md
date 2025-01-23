@@ -1,8 +1,12 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2024-12-16)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-01-23)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.3.0...«unknown»)
+
+**Requirements:**
+
+- As a developer, I want legacy sync sweeper run to be shortened in dev mode [\#153](https://github.com/NASA-PDS/registry-sweepers/issues/153)
 
 **Defects:**
 
