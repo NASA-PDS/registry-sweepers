@@ -141,3 +141,7 @@ def bin_elements(elements: Iterable[V], key_f: Callable[[V], K]) -> Dict[K, List
         result[k].append(e)
 
     return result
+
+
+def is_dev_mode():
+    return str(os.environ.get("DEV_MODE")).lower() not in {"none", "", "0", "false"}

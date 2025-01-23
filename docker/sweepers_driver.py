@@ -68,11 +68,12 @@ from pds.registrysweepers.reindexer import main as reindexer
 from pds.registrysweepers.utils import configure_logging, parse_log_level
 from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.misc import get_human_readable_elapsed_since
+from pds.registrysweepers.utils.misc import is_dev_mode
 
 configure_logging(filepath=None, log_level=logging.INFO)
 log = logging.getLogger(__name__)
 
-dev_mode = str(os.environ.get("DEV_MODE")).lower() not in {'none', '', '0', 'false'}
+dev_mode = is_dev_mode()
 if dev_mode:
     log.warning('Operating in development mode - host verification disabled')
     import urllib3

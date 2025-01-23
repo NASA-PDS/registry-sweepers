@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Union
 
-import boto3
+import boto3  # type: ignore
 import requests
 from botocore.credentials import Credentials
 from opensearchpy import OpenSearch

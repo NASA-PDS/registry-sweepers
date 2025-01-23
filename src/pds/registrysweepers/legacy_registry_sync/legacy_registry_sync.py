@@ -9,6 +9,7 @@ from opensearchpy import OpenSearch
 from pds.registrysweepers.legacy_registry_sync.opensearch_loaded_product import get_already_loaded_lidvids
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
 from pds.registrysweepers.utils import configure_logging
+from pds.registrysweepers.utils.misc import is_dev_mode
 from solr_to_es.solrSource import SlowSolrDocs  # type: ignore
 
 log = logging.getLogger(__name__)
@@ -57,8 +58,12 @@ def run(
 
     tries = 0
     es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids)
+    dev_mode = is_dev_mode()
     for ok, item in opensearchpy.helpers.streaming_bulk(
         client, es_actions, chunk_size=50, max_chunk_bytes=50000000, max_retries=5, initial_backoff=10
     ):
         if not ok:
             log.error(item)
+
+        if dev_mode:
+            break
