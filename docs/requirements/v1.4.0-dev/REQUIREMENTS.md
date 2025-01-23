@@ -28,3 +28,7 @@ This requirement is not impacted by the current version
 
 
 This requirement is not impacted by the current version
+## As a developer, I want legacy sync sweeper run to be shortened in dev mode ([#153](https://github.com/NASA-PDS/registry-sweepers/issues/153)) 
+
+
+This requirement is not impacted by the current version
