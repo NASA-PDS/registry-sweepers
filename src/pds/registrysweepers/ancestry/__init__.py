@@ -71,18 +71,18 @@ def run(
             METADATA_PARENT_COLLECTION_KEY,
             SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
         ]:
-            ensure_index_mapping(client, resolve_multitenant_index_name("registry"), metadata_key, "keyword")
+            ensure_index_mapping(client, resolve_multitenant_index_name(client, "registry"), metadata_key, "keyword")
 
         for metadata_key in [
             SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
         ]:
-            ensure_index_mapping(client, resolve_multitenant_index_name("registry-refs"), metadata_key, "keyword")
+            ensure_index_mapping(client, resolve_multitenant_index_name(client, "registry-refs"), metadata_key, "keyword")
 
         log.info("Writing bulk updates to database...")
         write_updated_docs(
             client,
             updates,
-            index_name=resolve_multitenant_index_name("registry"),
+            index_name=resolve_multitenant_index_name(client, "registry"),
         )
         log.info("Generating updates from deferred records...")
         deferred_updates = generate_deferred_updates(client, deferred_records_file.name, registry_mock_query_f)
@@ -91,7 +91,7 @@ def run(
         write_updated_docs(
             client,
             deferred_updates,
-            index_name=resolve_multitenant_index_name("registry"),
+            index_name=resolve_multitenant_index_name(client, "registry"),
         )
     else:
         # consume generator to dump bulk updates to sink
@@ -99,7 +99,7 @@ def run(
             pass
 
     log.info("Checking indexes for orphaned documents")
-    index_names = [resolve_multitenant_index_name(index_label) for index_label in ["registry", "registry-refs"]]
+    index_names = [resolve_multitenant_index_name(client, index_label) for index_label in ["registry", "registry-refs"]]
     for index_name in index_names:
         if log.isEnabledFor(logging.DEBUG):
             orphaned_docs = get_orphaned_documents(client, registry_mock_query_f, index_name)

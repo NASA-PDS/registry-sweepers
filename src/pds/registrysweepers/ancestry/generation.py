@@ -425,7 +425,7 @@ def _get_nonaggregate_ancestry_records_with_chunking(
                 isinstance(err, KeyError)
                 and most_recent_attempted_collection_lidvid not in bundle_ancestry_by_collection_lidvid
             ):
-                probable_cause = f'[Probable Cause]: Collection primary document with id "{doc["_source"].get("collection_lidvid")}" not found in index {resolve_multitenant_index_name("registry")} for {resolve_multitenant_index_name("registry-refs")} doc with id "{doc.get("_id")}"'
+                probable_cause = f'[Probable Cause]: Collection primary document with id "{doc["_source"].get("collection_lidvid")}" not found in index {resolve_multitenant_index_name(client, "registry")} for {resolve_multitenant_index_name(client, "registry-refs")} doc with id "{doc.get("_id")}"'
             elif isinstance(err, ValueError):
                 probable_cause = f'[Probable Cause]: Failed to parse collection and/or product LIDVIDs from document with id "{doc.get("_id")}" in index "{doc.get("_index")}" due to {type(err).__name__}: {err}'
             else:
@@ -490,6 +490,6 @@ def update_refs_document_metadata(client: OpenSearch, docs: List[RefDocBookkeepi
         f"Updating {len(docs)} registry-refs docs with {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY}={SWEEPERS_ANCESTRY_VERSION}"
     )
     write_updated_docs(
-        client, updates, index_name=resolve_multitenant_index_name("registry-refs"), bulk_chunk_max_update_count=20000
+        client, updates, index_name=resolve_multitenant_index_name(client, "registry-refs"), bulk_chunk_max_update_count=20000
     )
     logging.info("registry-refs metadata update complete")

@@ -4,16 +4,16 @@ import os
 from opensearchpy import OpenSearch
 
 
-def resolve_multitenant_index_name(index_type: str):
+def resolve_multitenant_index_name(client, index_type: str):
     supported_index_types = {"registry", "registry-refs", "registry-dd"}
     node_id = os.environ.get("MULTITENANCY_NODE_ID", "").strip(" ")
 
     if node_id == "":
-        return index_type
+        return resolve_index_name_if_aliased(client, index_type)
     elif index_type not in supported_index_types:
         raise ValueError(f'index_type "{index_type}" not supported (expected one of {supported_index_types})')
     else:
-        return f"{node_id}-{index_type}"
+        return resolve_index_name_if_aliased(client, f"{node_id}-{index_type}")
 
 
 def index_exists(client: OpenSearch, index_or_alias_name: str) -> bool:
@@ -26,7 +26,7 @@ def resolve_index_name_if_aliased(client: OpenSearch, index_or_alias_name: str) 
     if index_exists(client, index_or_alias_name):
         return index_or_alias_name
     elif client.indices.exists_alias(index_or_alias_name):
-        index_name = next(iter(client.indices.get_alias('index_or_alias_name').keys()))
+        index_name = next(iter(client.indices.get(index_or_alias_name).keys()))
         logging.debug(f'Resolved alias {index_or_alias_name} to index {index_name}')
         return index_name
     else:

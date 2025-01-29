@@ -73,7 +73,7 @@ def get_records(client: OpenSearch) -> Iterable[ProvenanceRecord]:
     }
     _source = {"includes": ["lidvid", METADATA_SUCCESSOR_KEY, SWEEPERS_PROVENANCE_VERSION_METADATA_KEY]}
 
-    docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name("registry"), query, _source)
+    docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query, _source)
 
     for doc in docs:
         try:
@@ -141,7 +141,7 @@ def run(
     write_updated_docs(
         client,
         updates,
-        index_name=resolve_multitenant_index_name("registry"),
+        index_name=resolve_multitenant_index_name(client, "registry"),
     )
 
     log.info("Completed provenance sweeper processing!")
