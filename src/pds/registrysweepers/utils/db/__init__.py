@@ -123,7 +123,7 @@ def query_registry_db_with_search_after(
     index_name: str,
     query: Dict,
     _source: Dict,
-    page_size: int = 10000,
+    page_size: int = 5000,
     limit: Union[int, None] = None,
     sort_fields: Union[List[str], None] = None,
     request_timeout_seconds: int = 20,
