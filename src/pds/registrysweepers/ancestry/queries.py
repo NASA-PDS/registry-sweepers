@@ -42,7 +42,7 @@ def get_bundle_ancestry_records_query(client: OpenSearch, db_mock: DbMockTypeDef
     query = product_class_query_factory(ProductClass.BUNDLE)
     _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
     query_f = query_registry_db_or_mock(db_mock, "get_bundle_ancestry_records", use_search_after=True)
-    docs = query_f(client, resolve_multitenant_index_name("registry"), query, _source)
+    docs = query_f(client, resolve_multitenant_index_name(client, "registry"), query, _source)
 
     return docs
 
@@ -51,7 +51,7 @@ def get_collection_ancestry_records_bundles_query(client: OpenSearch, db_mock: D
     query = product_class_query_factory(ProductClass.BUNDLE)
     _source = {"includes": ["lidvid", "ref_lid_collection"]}
     query_f = query_registry_db_or_mock(db_mock, "get_collection_ancestry_records_bundles", use_search_after=True)
-    docs = query_f(client, resolve_multitenant_index_name("registry"), query, _source)
+    docs = query_f(client, resolve_multitenant_index_name(client, "registry"), query, _source)
 
     return docs
 
@@ -63,7 +63,7 @@ def get_collection_ancestry_records_collections_query(
     query = product_class_query_factory(ProductClass.COLLECTION)
     _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
     query_f = query_registry_db_or_mock(db_mock, "get_collection_ancestry_records_collections", use_search_after=True)
-    docs = query_f(client, resolve_multitenant_index_name("registry"), query, _source)
+    docs = query_f(client, resolve_multitenant_index_name(client, "registry"), query, _source)
 
     return docs
 
@@ -84,7 +84,7 @@ def get_nonaggregate_ancestry_records_query(client: OpenSearch, registry_db_mock
     # each document will have many product lidvids, so a smaller page size is warranted here
     docs = query_f(
         client,
-        resolve_multitenant_index_name("registry-refs"),
+        resolve_multitenant_index_name(client, "registry-refs"),
         query,
         _source,
         page_size=AncestryRuntimeConstants.nonaggregate_ancestry_records_query_page_size,
@@ -118,7 +118,7 @@ def get_nonaggregate_ancestry_records_for_collection_lid_query(
     # each document will have many product lidvids, so a smaller page size is warranted here
     docs = query_f(
         client,
-        resolve_multitenant_index_name("registry-refs"),
+        resolve_multitenant_index_name(client, "registry-refs"),
         query,
         _source,
         page_size=AncestryRuntimeConstants.nonaggregate_ancestry_records_query_page_size,
@@ -185,7 +185,7 @@ def get_existing_ancestry_for_product(
 
     docs = query_f(
         client,
-        resolve_multitenant_index_name("registry"),
+        resolve_multitenant_index_name(client, "registry"),
         query,
         _source,
     )

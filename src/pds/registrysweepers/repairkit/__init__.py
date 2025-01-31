@@ -100,7 +100,7 @@ def run(
 
     # page_size and bulk_chunk_max_update_count constraints are necessary to avoid choking nodes with very-large docs
     # i.e. ATM and GEO
-    index_name = resolve_multitenant_index_name("registry")
+    index_name = resolve_multitenant_index_name(client, "registry")
     update_max_chunk_size = 20000
     while get_query_hits_count(client, index_name, get_unprocessed_docs_query()) > 0:
         all_docs = query_registry_db_with_search_after(
@@ -114,12 +114,15 @@ def run(
         )
         updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
         ensure_index_mapping(
-            client, resolve_multitenant_index_name("registry"), SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, "integer"
+            client,
+            resolve_multitenant_index_name(client, "registry"),
+            SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY,
+            "integer",
         )
         write_updated_docs(
             client,
             updates,
-            index_name=resolve_multitenant_index_name("registry"),
+            index_name=resolve_multitenant_index_name(client, "registry"),
             bulk_chunk_max_update_count=update_max_chunk_size,
         )
 

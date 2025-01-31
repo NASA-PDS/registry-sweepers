@@ -55,7 +55,7 @@ def get_docs_query(filter_to_harvested_before: datetime):
 
 
 def fetch_dd_field_types(client: OpenSearch) -> Dict[str, str]:
-    dd_index_name = resolve_multitenant_index_name("registry-dd")
+    dd_index_name = resolve_multitenant_index_name(client, "registry-dd")
     name_key = "es_field_name"
     type_key = "es_data_type"
     dd_docs = query_registry_db_with_search_after(
@@ -279,7 +279,7 @@ def run(
     configure_logging(filepath=log_filepath, log_level=log_level)
 
     sweeper_start_timestamp = datetime.now()
-    products_index_name = resolve_multitenant_index_name("registry")
+    products_index_name = resolve_multitenant_index_name(client, "registry")
     ensure_index_mapping(client, products_index_name, REINDEXER_FLAG_METADATA_KEY, "date")
 
     dd_field_types_by_field_name = fetch_dd_field_types(client)
