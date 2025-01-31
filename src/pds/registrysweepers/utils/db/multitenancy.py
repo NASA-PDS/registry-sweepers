@@ -8,6 +8,9 @@ def resolve_multitenant_index_name(client, index_type: str):
     supported_index_types = {"registry", "registry-refs", "registry-dd"}
     node_id = os.environ.get("MULTITENANCY_NODE_ID", "").strip(" ")
 
+    if client is None:
+        return index_type
+
     if node_id == "":
         return resolve_index_name_if_aliased(client, index_type)
     elif index_type not in supported_index_types:
