@@ -279,7 +279,7 @@ def write_updated_docs(
     updates: Iterable[Update],
     index_name: str,
     bulk_chunk_max_update_count: Union[int, None] = None,
-    as_upsert: bool = False
+    as_upsert: bool = False,
 ):
     log.info("Writing document updates...")
     updated_doc_count = 0

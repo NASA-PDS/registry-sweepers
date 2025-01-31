@@ -114,7 +114,10 @@ def run(
         )
         updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
         ensure_index_mapping(
-            client, resolve_multitenant_index_name(client, "registry"), SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, "integer"
+            client,
+            resolve_multitenant_index_name(client, "registry"),
+            SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY,
+            "integer",
         )
         write_updated_docs(
             client,

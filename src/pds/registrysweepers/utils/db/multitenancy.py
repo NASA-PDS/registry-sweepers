@@ -27,7 +27,7 @@ def resolve_index_name_if_aliased(client: OpenSearch, index_or_alias_name: str) 
         return index_or_alias_name
     elif client.indices.exists_alias(index_or_alias_name):
         index_name = next(iter(client.indices.get(index_or_alias_name).keys()))
-        logging.debug(f'Resolved alias {index_or_alias_name} to index {index_name}')
+        logging.debug(f"Resolved alias {index_or_alias_name} to index {index_name}")
         return index_name
     else:
         raise ValueError(f'Could not resolve index for index_or_alias_name "{index_or_alias_name}"')

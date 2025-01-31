@@ -76,7 +76,9 @@ def run(
         for metadata_key in [
             SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
         ]:
-            ensure_index_mapping(client, resolve_multitenant_index_name(client, "registry-refs"), metadata_key, "keyword")
+            ensure_index_mapping(
+                client, resolve_multitenant_index_name(client, "registry-refs"), metadata_key, "keyword"
+            )
 
         log.info("Writing bulk updates to database...")
         write_updated_docs(

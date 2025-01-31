@@ -52,23 +52,25 @@
 #   executable.
 #
 #
-
+import argparse
 import functools
 import inspect
-import argparse
 import json
 import logging
 import os
 from datetime import datetime
 from typing import Callable
 
-from pds.registrysweepers import provenance, ancestry, repairkit, legacy_registry_sync
+from pds.registrysweepers import ancestry
+from pds.registrysweepers import legacy_registry_sync
+from pds.registrysweepers import provenance
+from pds.registrysweepers import repairkit
 from pds.registrysweepers.reindexer import main as reindexer
-from pds.registrysweepers.utils import configure_logging, parse_log_level
+from pds.registrysweepers.utils import configure_logging
+from pds.registrysweepers.utils import parse_log_level
 from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.misc import get_human_readable_elapsed_since
-
-from src.pds.registrysweepers.utils.misc import is_dev_mode
+from pds.registrysweepers.utils.misc import is_dev_mode
 
 
 def run():
@@ -77,13 +79,12 @@ def run():
 
     dev_mode = is_dev_mode()
     if dev_mode:
-        log.warning('Operating in development mode - host verification disabled')
+        log.warning("Operating in development mode - host verification disabled")
         import urllib3
 
         urllib3.disable_warnings()
 
-    log_level = parse_log_level(os.environ.get('LOGLEVEL', 'INFO'))
-
+    log_level = parse_log_level(os.environ.get("LOGLEVEL", "INFO"))
 
     def run_factory(sweeper_f: Callable) -> Callable:
         return functools.partial(
@@ -91,37 +92,29 @@ def run():
             client=get_opensearch_client_from_environment(verify_certs=True if not dev_mode else False),
             # enable for development if required - not necessary in production
             # log_filepath='registry-sweepers.log',
-            log_level=log_level
+            log_level=log_level,
         )
 
-
     parser = argparse.ArgumentParser(
-        prog='registry-sweepers',
-        description='sweeps the PDS registry with different routines meant to run regularly on the database'
+        prog="registry-sweepers",
+        description="sweeps the PDS registry with different routines meant to run regularly on the database",
     )
 
     # define optional sweepers
-    parser.add_argument('--legacy-sync', action='store_true')
-    optional_sweepers = {
-        'legacy_sync': legacy_registry_sync.run
-    }
+    parser.add_argument("--legacy-sync", action="store_true")
+    optional_sweepers = {"legacy_sync": legacy_registry_sync.run}
 
     args = parser.parse_args()
 
     # Define default sweepers to be run here, in order of execution
-    sweepers = [
-        repairkit.run,
-        provenance.run,
-        ancestry.run,
-        reindexer.run
-    ]
+    sweepers = [repairkit.run, provenance.run, ancestry.run, reindexer.run]
 
     for option, sweeper in optional_sweepers.items():
         if getattr(args, option):
             sweepers.append(sweeper)
 
     sweeper_descriptions = [inspect.getmodule(f).__name__ for f in sweepers]
-    log.info(f'Running sweepers: {sweeper_descriptions}')
+    log.info(f"Running sweepers: {sweeper_descriptions}")
 
     total_execution_begin = datetime.now()
 
@@ -134,7 +127,11 @@ def run():
         run_sweeper_f()
 
         sweeper_name = inspect.getmodule(sweeper).__name__
-        sweeper_execution_duration_strs.append(f'{sweeper_name}: {get_human_readable_elapsed_since(sweeper_execution_begin)}')
+        sweeper_execution_duration_strs.append(
+            f"{sweeper_name}: {get_human_readable_elapsed_since(sweeper_execution_begin)}"
+        )
 
-    log.info(f'Sweepers successfully executed in {get_human_readable_elapsed_since(total_execution_begin)}\n   '
-             + '\n   '.join(sweeper_execution_duration_strs))
+    log.info(
+        f"Sweepers successfully executed in {get_human_readable_elapsed_since(total_execution_begin)}\n   "
+        + "\n   ".join(sweeper_execution_duration_strs)
+    )

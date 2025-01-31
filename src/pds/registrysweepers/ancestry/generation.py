@@ -490,6 +490,9 @@ def update_refs_document_metadata(client: OpenSearch, docs: List[RefDocBookkeepi
         f"Updating {len(docs)} registry-refs docs with {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY}={SWEEPERS_ANCESTRY_VERSION}"
     )
     write_updated_docs(
-        client, updates, index_name=resolve_multitenant_index_name(client, "registry-refs"), bulk_chunk_max_update_count=20000
+        client,
+        updates,
+        index_name=resolve_multitenant_index_name(client, "registry-refs"),
+        bulk_chunk_max_update_count=20000,
     )
     logging.info("registry-refs metadata update complete")
