@@ -94,7 +94,6 @@ var/
 bin/
 .*.swp
 typescript
-/terraform/
 
 # OS-specific artifacts
 .DS_Store
@@ -107,3 +106,18 @@ typescript
 !.gitignore
 !.gitkeep
 /.run/
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+*.yml
+*.yaml
+*.json
+
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+*.tfvars
