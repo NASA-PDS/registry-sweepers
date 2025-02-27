@@ -1,0 +1,118 @@
+clusters:
+  # - cluster_name: "pds-api-cluster"
+  - cluster_name: "pds-test-sweeper-cluster"
+
+task_definitions:
+  # - task_family: "pds-api-task"
+  #   container_definitions:
+  #     - name: "test-pds-api-container"
+  #       image: "ecr:latest"
+  #       cpu: 256
+  #       memory: 512
+  #       portMappings:
+  #         - containerPort: 80
+  #           hostPort: 80
+  #       logConfiguration:
+  #         logDriver: "awslogs"
+  #         options:
+  #           awslogs-region: "${var.aws_region}"
+  #           awslogs-group: "/log/api-log-group"
+  #           awslogs-stream-prefix: "pds"
+  #       healthCheck:
+  #         retries: 3
+  #         command:
+  #           - "CMD-SHELL"
+  #           - "data || exit 1"
+  #         timeout: 5
+  #         interval: 60
+  #         startPeriod: 300
+  #       secrets:
+  #         - name: "SERVER_PORT"
+  #           value: "80"
+  #         - name: "SPRING_BOOT_APP_ARGS"
+  #           value: ""
+  #   requires_compatibilities:
+  #     - "FARGATE"
+  #   network_mode: "awsvpc"
+  #   cpu: 256
+  #   memory: 512
+  #   execution_role_arn: "arn:aws:iam::441083951559:role/pds-mcp-dev-pds-registry-api-ecs-task-execution-role"
+  #   task_role_arn: "arn:aws:iam::441083951559:role/pds-mcp-dev-pds-registry-ecs-task-role"
+
+  - task_family: "pds-test-sweeper-task"
+    container_definitions:
+      - name: "test-pds-sweeper-container"
+        image: "441083951559.dkr.ecr.us-west-2.amazonaws.com/pds-registry-sweepers:latest"
+        # cpu: 1024
+        # memory: 2048
+        # portMappings:
+        #   - containerPort: 8080
+        #     hostPort: 8080
+        logConfiguration:
+          logDriver: "awslogs"
+          options:
+            awslogs-region: "us-west-2"
+            awslogs-group: "/ecs/test-pds-sweeper-container"
+            awslogs-create-group: "true"
+            awslogs-stream-prefix: "ecs"
+        healthCheck:
+          retries: 3
+          command:
+            - "CMD-SHELL"
+            - "data || exit 1"
+          timeout: 5
+          interval: 60
+          startPeriod: 300
+        environment:
+          - name: "MULTITENANCY_NODE_ID"
+            value: "en"
+        secrets:
+          - name: "PROV_ENDPOINT" # This is the OpenSearch Serverless Collection Endpoint
+            valueFrom: "/pds/mcp/dev/registry/endpoint"
+    requires_compatibilities:
+      - "FARGATE"
+    network_mode: "awsvpc"
+    runtimePlatform:
+      operatingSystemFamily: "LINUX"
+      cpuArchitecture: "X86_64"
+    cpu: 1024
+    memory: 2048
+    execution_role_arn: "arn:aws:iam::441083951559:role/pds-mcp-dev-pds-registry-sweepers-ecs-task-execution-role"
+    task_role_arn: "arn:aws:iam::441083951559:role/pds-mcp-dev-pds-registry-ecs-task-role"
+
+# services:
+#   - service_name: "pds-api-service"
+#     cluster_name: "pds-api-cluster"
+#     task_family: "pds-api-task"
+#     desired_count: 1
+#     launch_type: "FARGATE"
+#     load_balancer:
+#       target_group_arn: "arn:aws:elasticloadbalancing:us-west-2:441083951559:targetgroup/pds-dev-registry-tgt/73ad4c0654759ebf"
+#       container_name: "test-pds-api-container"
+#       container_port: 80
+#     network_configuration:
+#       subnets:
+#         - "subnet-06f9e015c018c9b38"
+#       security_groups:
+#         - "sg-04f7b224b5809fc78"
+#         - "sg-0eff14527c8519106"
+#       assign_public_ip: false
+#     deployment_controller_type: "ECS"
+
+#   - service_name: "pds-sweeper-service"
+#     cluster_name: "pds-sweeper-cluster"
+#     task_family: "pds-sweeper-task"
+#     desired_count: 1
+#     launch_type: "FARGATE"
+#     load_balancer:
+#       target_group_arn: "arn:aws:elasticloadbalancing:us-west-2:441083951559:targetgroup/pds-dev-registry-tgt/73ad4c0654759ebf"
+#       container_name: "test-pds-sweeper-container"
+#       container_port: 80
+#     network_configuration:
+#       subnets:
+#         - "subnet-06f9e015c018c9b38"
+#       security_groups:
+#         - "sg-04f7b224b5809fc78"
+#         - "sg-0eff14527c8519106"
+#       assign_public_ip: false
+#     deployment_controller_type: "ECS"
