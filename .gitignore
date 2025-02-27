@@ -117,7 +117,7 @@ terraform.rc
 # Local .terraform directories
 **/.terraform/*
 
-# .tfstate files
+# .tfstate and vars files
 *.tfstate
 *.tfstate.*
 *.tfvars
