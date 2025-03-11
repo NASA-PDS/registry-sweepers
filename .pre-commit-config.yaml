@@ -58,6 +58,8 @@ repos:
     hooks:
       - id: detect-secrets
         args:
+          - '--disable-plugin'
+          - 'AbsolutePathDetectorExperimental'
           - '--baseline'
           - '.secrets.baseline'
           - --exclude-files '\.secrets..*'
