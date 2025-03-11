@@ -90,15 +90,16 @@ terraform {
 To store environment-specific variables locally:
 
 #### Create a local `.tfvars` File
-**Note:** The code for this file is provided on the internal registry-sweepers deployment wiki, since it cannot be uploaded to GitHub.
+The code for this file is provided on the internal registry-sweepers deployment wiki, since it cannot be uploaded to GitHub.
 
 **Note:**
 1. Since ECS service creation is optional, the `create_service` variable is a bool. It can be toggled between `true` or `false`. If it's `fasle` the ECS service will not be created.
 2. Ensure the path to the `<env_config-filename>.yml` is accurate.
 
 #### Create a `.yml` Configuration File
+The code for this file is provided on the internal registry-sweepers deployment wiki, since it cannot be uploaded to GitHub.
+
 Modify `terraform\service\ecs\task-definitions\<env_config-filename>.yml` with your settings and exact enviornment values. This is why it cannot be uploaded to GitHub.
-**Note:** The code for this file is provided on the internal registry-sweepers deployment wiki, since it cannot be uploaded to GitHub.
 
 ## Export your AWS Profile locally
 Before running below Terraform commands, ensure you're logged into the correct AWS environment locally.
