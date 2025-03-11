@@ -3,7 +3,7 @@
 ## Setting Up SSH Authentication for a Private Terraform Module Repository
 Since **pds-tf-module** is a private repo, pulling the ECS module code will require SSH Access. To access a private Terraform module repository, you need to generate an SSH key and add it to your GitHub/GitLab account.
 
-**Note:** If you already have an existing SSH key for GitHub access, you can simply.
+**Note:** If you already have an existing SSH key for GitHub access, you can simply re-use it.
 
 ### Generate an SSH Key
 [Link to steps on GitHub for SSH Key Generation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
@@ -99,7 +99,7 @@ The code for this file is provided on the internal registry-sweepers deployment 
 #### Create a `.yml` Configuration File
 The code for this file is provided on the internal registry-sweepers deployment wiki, since it cannot be uploaded to GitHub.
 
-Modify `terraform\service\ecs\task-definitions\<env_config-filename>.yml` with your settings and exact enviornment values. This is why it cannot be uploaded to GitHub.
+Modify `terraform/service/ecs/task-definitions/<env_config-filename>.yml` with your settings and exact enviornment values. This is why it cannot be uploaded to GitHub.
 
 ## Export your AWS Profile locally
 Before running below Terraform commands, ensure you're logged into the correct AWS environment locally.
