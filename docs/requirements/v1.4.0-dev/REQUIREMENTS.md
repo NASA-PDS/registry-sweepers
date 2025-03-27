@@ -32,3 +32,7 @@ This requirement is not impacted by the current version
 
 
 This requirement is not impacted by the current version
+## As a registry developer, I want to the keywords of related products to be available as secondary keyword in the primary product ([#158](https://github.com/NASA-PDS/registry-sweepers/issues/158)) 
+
+
+This requirement is not impacted by the current version
