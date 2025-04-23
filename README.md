@@ -38,11 +38,7 @@ DEV_MODE=1  // disables host verification
 PYDEVD_USE_CYTHON=NO // disables Cython speedup extension
 ```
 
-With `--legacy-sync` option, you also need the list of the cross-cluster-search node configured to access all the node's OpensSearch domains:
-
-```
-CCS_CONN=naif-prod-ccs,rms-prod,sbnumd-prod-ccs,geo-prod-ccs,atm-prod-ccs,sbnpsi-prod-ccs,ppi-prod-ccs,img-prod-ccs
-```
+With `--legacy-sync` option, the "registry" alias mapping all the discipline nodes indexes is required.
 
 Use the connection aliases found in the 'Connections' tab of the Engineering Node OpenSearch Domain on AWS.
 

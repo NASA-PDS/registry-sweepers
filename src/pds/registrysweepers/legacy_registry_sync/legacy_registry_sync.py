@@ -65,5 +65,5 @@ def run(
         if not ok:
             log.error(item)
 
-        if dev_mode:
-            break
+        # if dev_mode:
+        #    break
