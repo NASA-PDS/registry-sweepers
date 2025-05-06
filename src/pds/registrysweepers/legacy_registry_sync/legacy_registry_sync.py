@@ -56,14 +56,13 @@ def run(
         product_classes=["Product_Context", "Product_Collection", "Product_Bundle"], es_conn=client
     )
 
-    tries = 0
     es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids)
     dev_mode = is_dev_mode()
-    for ok, item in opensearchpy.helpers.streaming_bulk(
+    for operation_successful, operation_info in opensearchpy.helpers.streaming_bulk(
         client, es_actions, chunk_size=50, max_chunk_bytes=50000000, max_retries=5, initial_backoff=10
     ):
-        if not ok:
-            log.error(item)
+        if not operation_successful:
+            log.error(operation_info)
 
         if dev_mode:
             break
