@@ -15,7 +15,7 @@ To build and run  (assuming registry local-dev defaults for host/credentials)
 
     cd path/to/registry-sweepers/
     docker image build --tag nasapds/registry-sweepers --file ./docker/Dockerfile .
-    docker run --env PROV_ENDPOINT='https://localhost:9200/' --env PROV_CREDENTIALS='{"admin": "admin"}' nasa-pds/registry-sweepers
+    docker run --env PROV_ENDPOINT='https://localhost:9200/' --env PROV_CREDENTIALS='{"admin": "admin"}' nasapds/registry-sweepers
 
 ### Release of new versions
 
