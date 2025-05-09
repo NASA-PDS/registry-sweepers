@@ -1,6 +1,6 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-04-01)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-05-09)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.3.0...«unknown»)
 
@@ -14,6 +14,7 @@
 
 **Defects:**
 
+- ATM Registry-Sweeper ECS task is failing [\#164](https://github.com/NASA-PDS/registry-sweepers/issues/164) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
 - Unable to search for`cassini` LDD attributes in ISS datasets [\#148](https://github.com/NASA-PDS/registry-sweepers/issues/148) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
 - sweepers not run\(ning\) against geo-prod [\#124](https://github.com/NASA-PDS/registry-sweepers/issues/124) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
 
