@@ -30,10 +30,8 @@ def pds4_id_field_fun(doc):
     @param doc: document from the legacy registry
     @return: lidvid
     """
-    if "version_id" in doc:
-        return doc["identifier"] + "::" + doc["version_id"][-1]
-    elif "identifier" in doc:
-        return doc["identifier"]
+    if "lidvid" in doc:
+        return doc["lidvid"]
     else:
         raise MissingIdentifierError()
 

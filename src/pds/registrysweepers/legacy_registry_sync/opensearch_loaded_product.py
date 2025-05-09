@@ -7,24 +7,6 @@ import opensearchpy  # type: ignore
 CCS_CONN = "CCS_CONN"
 
 
-def get_cross_cluster_indices():
-    """
-
-    Get the aliases for the Cross Cluster Search from an environment variable
-    @return: the aliases in a list including the main index.
-    """
-
-    indices = ["registry"]
-
-    if CCS_CONN in os.environ:
-        ccs_conn = os.environ[CCS_CONN]
-        if ccs_conn:
-            clusters = os.environ[CCS_CONN].split(",")
-            indices.extend([f"{c}:registry" for c in clusters])
-
-    return indices
-
-
 def get_already_loaded_lidvids(product_classes=None, es_conn=None):
     """
     Get the lidvids of the PDS4 products already loaded in the (new) registry.
@@ -45,5 +27,5 @@ def get_already_loaded_lidvids(product_classes=None, es_conn=None):
             dict(match_phrase={prod_class_prop: prod_class}) for prod_class in product_classes
         ]
 
-    prod_id_resp = opensearchpy.helpers.scan(es_conn, index=get_cross_cluster_indices(), query=query, scroll="3m")
+    prod_id_resp = opensearchpy.helpers.scan(es_conn, index=["registry"], query=query, scroll="3m")
     return [p["_id"] for p in prod_id_resp]
