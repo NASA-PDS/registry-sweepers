@@ -86,8 +86,78 @@ def get_records(client: OpenSearch) -> Iterable[ProvenanceRecord]:
             )
 
 
+def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) -> Iterable[
+    PdsLid]:  # TODO: remove version stub value
+
+    def fetch_lids_chunk():
+        query = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "terms": {
+                                "ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]
+                            }
+                        },
+                        {
+                            "bool": {
+                                "should": [
+                                    {
+                                        "bool": {
+                                            "must_not": {
+                                                "exists": {
+                                                    "field": METADATA_SUCCESSOR_KEY}}}
+                                    },
+                                    {
+                                        "range": {
+                                            "someVersionKey": {
+                                                "lt": current_provenance_version
+                                            }
+                                        }
+                                    }
+                                ],
+                                "minimum_should_match": 1}}]}},
+            "aggs": {
+                "unique_lids": {
+                    "terms": {
+                        "field": "lid",
+                        "size": 10000
+                    }
+                }
+            },
+            "size": 0
+        }
+
+        return client.search(
+            index=resolve_multitenant_index_name(client, "registry"),
+            body=query,
+            # request_timeout=request_timeout_seconds,
+            size=0,
+            _source_includes=[],
+            track_total_hits=True,
+        )
+
+    # LIDs from the previous chunk are stored to avoid deplication in the event that  indexing lag causes LIDs to
+    # persist in results
+    previous_chunk_lids = set()
+    response = fetch_lids_chunk()
+    lids = [bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]]
+
+    while len(lids) > 0:
+        for lid in lids:
+            if lid not in previous_chunk_lids:
+                yield lid
+
+        logging.info(f"Fetched {len(lids)} LIDs from registry")
+        previous_chunk_lids = set(lids)
+        response = fetch_lids_chunk()
+        lids = [bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]]
+
+    logging.info('No docs remain to process')
+
+
 def create_record_chains(
-    records: Iterable[ProvenanceRecord], drop_singletons: bool = True
+        records: Iterable[ProvenanceRecord], drop_singletons: bool = True
 ) -> Iterable[List[ProvenanceRecord]]:
     """
     Create an iterable of unsorted collections of records which share LIDs.
@@ -125,26 +195,28 @@ def link_records_in_chain(record_chain: List[ProvenanceRecord]):
 
 
 def run(
-    client: OpenSearch,
-    log_filepath: Union[str, None] = None,
-    log_level: int = logging.INFO,
+        client: OpenSearch,
+        log_filepath: Union[str, None] = None,
+        log_level: int = logging.INFO,
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
 
     log.info(f"Starting provenance v{SWEEPERS_PROVENANCE_VERSION} sweeper processing...")
 
-    records = get_records(client)
-    record_chains = create_record_chains(records)
-    for record_chain in record_chains:
-        link_records_in_chain(record_chain)
+    target_lids = fetch_target_lids(client)
 
-    updates = generate_updates(itertools.chain(*record_chains))
-
-    write_updated_docs(
-        client,
-        updates,
-        index_name=resolve_multitenant_index_name(client, "registry"),
-    )
+    # records = get_records(client)
+    # record_chains = create_record_chains(records)
+    # for record_chain in record_chains:
+    #     link_records_in_chain(record_chain)
+    #
+    # updates = generate_updates(itertools.chain(*record_chains))
+    #
+    # write_updated_docs(
+    #     client,
+    #     updates,
+    #     index_name=resolve_multitenant_index_name(client, "registry"),
+    # )
 
     log.info("Completed provenance sweeper processing!")
 
