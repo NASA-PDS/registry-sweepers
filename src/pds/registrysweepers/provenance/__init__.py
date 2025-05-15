@@ -42,6 +42,7 @@
 import functools
 import itertools
 import logging
+from time import sleep
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -99,9 +100,13 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
     # This page size determines how many LIDs are fetched at a time.  This value should be set high enough that the
     # updates produced from a single page are safely sufficient to trigger a buffer flush in
     # pds.registrysweepers.utils.db.write_updated_docs()
+    #
     # If it is not, this will not impede correct operation, but will result in the sweeper terminating early and
     # requiring many runs to fully complete instead of completing with a single run.
-    agg_page_size = 20000
+    #
+    # It must also allow for sufficient back-pressure to build such that it does not re-query before any updates have an
+    # opportunity to start indexing (i.e. affecting the query results)
+    agg_page_size = 25000
 
     def fetch_lids_chunk():
         query = {
@@ -185,8 +190,10 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
                     f'insufficient to trigger a write buffer flush - ending iteration early.')
                 return
             elif lids == previous_chunk_lids:
-                logging.warning(f'Fetched chunk contains identical LIDs to previous chunk - no progress possible')
                 consecutive_chunk_repetitions += 1
+                sleep_time_seconds = 5**consecutive_chunk_repetitions
+                logging.warning(f'Fetched chunk contains identical LIDs to previous chunk - sleeping {sleep_time_seconds} seconds')
+                sleep(sleep_time_seconds)
             else:
                 consecutive_chunk_repetitions = 0
 
@@ -242,6 +249,7 @@ def run(
         client,
         updates,
         index_name=resolve_multitenant_index_name(client, "registry"),
+        bulk_chunk_max_update_count=25000
     )
 
     log.info("Completed provenance sweeper processing!")
