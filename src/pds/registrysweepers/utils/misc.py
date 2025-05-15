@@ -1,6 +1,7 @@
 import itertools
 import os
 import random
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 from typing import Callable
@@ -155,3 +156,10 @@ def chunked(iterable, n):
         if not chunk:
             break
         yield chunk
+
+def group_by_key(iterable: Iterable[V], key_func: Callable[[V], K]) -> Dict[K, List[V]]:
+    """ Given an iterable, bucket the elements by some key function"""
+    result = defaultdict(list)
+    for item in iterable:
+        result[key_func(item)].append(item)
+    return dict(result)
