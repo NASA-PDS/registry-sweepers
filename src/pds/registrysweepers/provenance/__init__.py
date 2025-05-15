@@ -93,6 +93,13 @@ def get_records_for_lid(client: OpenSearch, lid) -> Iterable[ProvenanceRecord]:
 def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) -> Iterable[
     PdsLid]:  # TODO: remove version stub value
 
+    # This page size determines how many LIDs are fetched at a time.  This value should be set high enough that the
+    # updates produced from a single page are safely sufficient to trigger a buffer flush in
+    # pds.registrysweepers.utils.db.write_updated_docs()
+    # If it is not, this will not impede correct operation, but will result in the sweeper terminating early and
+    # requiring many runs to fully complete instead of completing with a single run.
+    agg_page_size = 10
+
     def fetch_lids_chunk():
         query = {
             "query": {
@@ -125,7 +132,7 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
                 "unique_lids": {
                     "terms": {
                         "field": "lid",
-                        "size": 10
+                        "size": agg_page_size
                     }
                 }
             },
@@ -143,18 +150,40 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
     # LIDs from the previous chunk are stored to avoid deplication in the event that  indexing lag causes LIDs to
     # persist in results
     previous_chunk_lids = set()
+    consecutive_chunk_repetition_stall_threshold = 3
+    consecutive_chunk_repetitions = 0
+
     response = fetch_lids_chunk()
-    lids = [bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]]
+    lids = {bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
 
     while len(lids) > 0:
+
         for lid in lids:
             if lid not in previous_chunk_lids:
                 yield lid
 
         logging.info(f"Fetched {len(lids)} LIDs from registry")
+
+        is_last_page = len(lids) < agg_page_size
+        if is_last_page:
+            break
+
+        # Handle consecutive result chunk repetitions
+        if consecutive_chunk_repetitions > consecutive_chunk_repetition_stall_threshold:
+            logging.error(
+                f'Fetched LIDs have not changed in {consecutive_chunk_repetition_stall_threshold} consecutive '
+                f'attempts - OpenSearch indexing has stalled or aggregation page size {agg_page_size} is '
+                f'insufficient to trigger a write buffer flush - ending iteration early.')
+            return
+        elif lids == previous_chunk_lids:
+            logging.warning(f'Fetched chunk contains identical LIDs to previous chunk - no progress possible')
+            consecutive_chunk_repetitions += 1
+        else:
+            consecutive_chunk_repetitions = 0
+
         previous_chunk_lids = set(lids)
         response = fetch_lids_chunk()
-        lids = [bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]]
+        lids = {bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
 
     logging.info('No docs remain to process')
 
