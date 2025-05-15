@@ -63,17 +63,19 @@ from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from tqdm import tqdm
 
+from src.pds.registrysweepers.utils.misc import chunked, group_by_key
+
 log = logging.getLogger(__name__)
 
 
-def get_records_for_lid(client: OpenSearch, lid) -> Iterable[ProvenanceRecord]:
-    log.info(f"Fetching docs and generating records for LID {lid}...")
+def get_records_for_lids(client: OpenSearch, lids: Iterable[PdsLid]) -> Iterable[ProvenanceRecord]:
+    log.info(f"Fetching docs and generating records for LIDs {lids}...")
 
     query = {
         "query": {"bool": {
             "must": [
                 {"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}},
-                {"term": {"lid": lid}}
+                {"terms": {"lid": lids}}
             ]}}
     }
     _source = {"includes": ["lidvid", METADATA_SUCCESSOR_KEY, SWEEPERS_PROVENANCE_VERSION_METADATA_KEY]}
@@ -195,16 +197,17 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
     logging.info('No docs remain to process')
 
 
-def generate_record_chains(client: OpenSearch, lids: Iterable[PdsLid]) -> Iterable[List[ProvenanceRecord]]:
+def generate_record_chains(client: OpenSearch, lids: Iterable[PdsLid], lid_batch_size = 5000) -> Iterable[List[ProvenanceRecord]]:
     """
     Create an iterable of unsorted collections of records which share LIDs.
     :param client:
     """
-
-    for lid in lids:
-        record_chain = list(get_records_for_lid(client, lid))
-        link_records_in_chain(record_chain)
-        yield record_chain
+    for lid_batch in chunked(lids, lid_batch_size):
+        unbucketed_records = get_records_for_lids(client, lid_batch)
+        record_chains_by_lid = group_by_key(unbucketed_records, lambda r: r.lidvid.lid)
+        for record_chain in record_chains_by_lid.values():
+            link_records_in_chain(record_chain)
+            yield record_chain
 
 
 def link_records_in_chain(record_chain: List[ProvenanceRecord]):
