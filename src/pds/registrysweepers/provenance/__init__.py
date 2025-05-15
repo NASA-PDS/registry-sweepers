@@ -122,13 +122,13 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
                                                 "exists": {
                                                     "field": METADATA_SUCCESSOR_KEY}}}
                                     },
-                                    {
-                                        "range": {
-                                            "someVersionKey": {
-                                                "lt": current_provenance_version
-                                            }
-                                        }
-                                    }
+                                    # {
+                                    #     "range": {
+                                    #         "someVersionKey": {  # TODO: need to set this up
+                                    #             "lt": current_provenance_version
+                                    #         }
+                                    #     }
+                                    # }
                                 ],
                                 "minimum_should_match": 1}}]}},
             "aggs": {
