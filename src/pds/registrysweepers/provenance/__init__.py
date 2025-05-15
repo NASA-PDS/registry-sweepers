@@ -98,7 +98,7 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
     # pds.registrysweepers.utils.db.write_updated_docs()
     # If it is not, this will not impede correct operation, but will result in the sweeper terminating early and
     # requiring many runs to fully complete instead of completing with a single run.
-    agg_page_size = 10
+    agg_page_size = 20000
 
     def fetch_lids_chunk():
         query = {
