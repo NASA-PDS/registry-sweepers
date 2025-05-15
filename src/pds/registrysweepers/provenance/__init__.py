@@ -61,6 +61,7 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
+from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
@@ -136,7 +137,8 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
                     }
                 }
             },
-            "size": 0
+            "size": 0,
+            "track_total_hits": True
         }
 
         return client.search(
@@ -154,36 +156,41 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
     consecutive_chunk_repetitions = 0
 
     response = fetch_lids_chunk()
+
     lids = {bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
 
-    while len(lids) > 0:
+    with tqdm(desc='Provenance sweeper progress (approximate)', total=response["hits"]["total"]["value"]) as pbar:
+        while len(lids) > 0:
 
-        for lid in lids:
-            if lid not in previous_chunk_lids:
-                yield lid
+            for bucket in response["aggregations"]["unique_lids"]["buckets"]:
+                lid = bucket["key"]
+                doc_count = bucket["doc_count"]
+                if lid not in previous_chunk_lids:
+                    pbar.update(doc_count)
+                    yield lid
 
-        logging.info(f"Fetched {len(lids)} LIDs from registry")
+            logging.info(f"Fetched {len(lids)} LIDs from registry")
 
-        is_last_page = len(lids) < agg_page_size
-        if is_last_page:
-            break
+            is_last_page = len(lids) < agg_page_size
+            if is_last_page:
+                break
 
-        # Handle consecutive result chunk repetitions
-        if consecutive_chunk_repetitions > consecutive_chunk_repetition_stall_threshold:
-            logging.error(
-                f'Fetched LIDs have not changed in {consecutive_chunk_repetition_stall_threshold} consecutive '
-                f'attempts - OpenSearch indexing has stalled or aggregation page size {agg_page_size} is '
-                f'insufficient to trigger a write buffer flush - ending iteration early.')
-            return
-        elif lids == previous_chunk_lids:
-            logging.warning(f'Fetched chunk contains identical LIDs to previous chunk - no progress possible')
-            consecutive_chunk_repetitions += 1
-        else:
-            consecutive_chunk_repetitions = 0
+            # Handle consecutive result chunk repetitions
+            if consecutive_chunk_repetitions > consecutive_chunk_repetition_stall_threshold:
+                logging.error(
+                    f'Fetched LIDs have not changed in {consecutive_chunk_repetition_stall_threshold} consecutive '
+                    f'attempts - OpenSearch indexing has stalled or aggregation page size {agg_page_size} is '
+                    f'insufficient to trigger a write buffer flush - ending iteration early.')
+                return
+            elif lids == previous_chunk_lids:
+                logging.warning(f'Fetched chunk contains identical LIDs to previous chunk - no progress possible')
+                consecutive_chunk_repetitions += 1
+            else:
+                consecutive_chunk_repetitions = 0
 
-        previous_chunk_lids = set(lids)
-        response = fetch_lids_chunk()
-        lids = {bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
+            previous_chunk_lids = set(lids)
+            response = fetch_lids_chunk()
+            lids = {bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
 
     logging.info('No docs remain to process')
 
