@@ -65,11 +65,15 @@ from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 log = logging.getLogger(__name__)
 
 
-def get_records(client: OpenSearch) -> Iterable[ProvenanceRecord]:
-    log.info("Fetching docs and generating records...")
+def get_records_for_lid(client: OpenSearch, lid) -> Iterable[ProvenanceRecord]:
+    log.info(f"Fetching docs and generating records for LID {lid}...")
 
     query = {
-        "query": {"bool": {"must": [{"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}}]}}
+        "query": {"bool": {
+            "must": [
+                {"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}},
+                {"term": {"lid": lid}}
+            ]}}
     }
     _source = {"includes": ["lidvid", METADATA_SUCCESSOR_KEY, SWEEPERS_PROVENANCE_VERSION_METADATA_KEY]}
 
@@ -121,7 +125,7 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
                 "unique_lids": {
                     "terms": {
                         "field": "lid",
-                        "size": 10000
+                        "size": 10
                     }
                 }
             },
@@ -131,7 +135,6 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
         return client.search(
             index=resolve_multitenant_index_name(client, "registry"),
             body=query,
-            # request_timeout=request_timeout_seconds,
             size=0,
             _source_includes=[],
             track_total_hits=True,
@@ -156,27 +159,16 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
     logging.info('No docs remain to process')
 
 
-def create_record_chains(
-        records: Iterable[ProvenanceRecord], drop_singletons: bool = True
-) -> Iterable[List[ProvenanceRecord]]:
+def generate_record_chains(client: OpenSearch, lids: Iterable[PdsLid]) -> Iterable[List[ProvenanceRecord]]:
     """
     Create an iterable of unsorted collections of records which share LIDs.
-    If drop_singletons is True, single-element collections will be removed for efficiency as they have no links
+    :param client:
     """
 
-    # bin chains by LID
-    record_chains: Dict[PdsLid, List[ProvenanceRecord]] = {}
-    for record in records:
-        if record.lidvid.lid not in record_chains:
-            record_chains[record.lidvid.lid] = []
-        record_chains[record.lidvid.lid].append(record)
-
-    if drop_singletons:
-        for lid, record_chain in list(record_chains.items()):
-            if not len(record_chain) > 1:
-                record_chains.pop(lid)
-
-    return record_chains.values()
+    for lid in lids:
+        record_chain = list(get_records_for_lid(client, lid))
+        link_records_in_chain(record_chain)
+        yield record_chain
 
 
 def link_records_in_chain(record_chain: List[ProvenanceRecord]):
@@ -204,19 +196,14 @@ def run(
     log.info(f"Starting provenance v{SWEEPERS_PROVENANCE_VERSION} sweeper processing...")
 
     target_lids = fetch_target_lids(client)
+    record_chains = generate_record_chains(client, target_lids)
+    updates = generate_updates(itertools.chain.from_iterable(record_chains))
 
-    # records = get_records(client)
-    # record_chains = create_record_chains(records)
-    # for record_chain in record_chains:
-    #     link_records_in_chain(record_chain)
-    #
-    # updates = generate_updates(itertools.chain(*record_chains))
-    #
-    # write_updated_docs(
-    #     client,
-    #     updates,
-    #     index_name=resolve_multitenant_index_name(client, "registry"),
-    # )
+    write_updated_docs(
+        client,
+        updates,
+        index_name=resolve_multitenant_index_name(client, "registry"),
+    )
 
     log.info("Completed provenance sweeper processing!")
 
