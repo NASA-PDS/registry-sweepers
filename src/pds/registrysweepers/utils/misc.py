@@ -1,3 +1,4 @@
+import itertools
 import os
 import random
 from datetime import datetime
@@ -145,3 +146,12 @@ def bin_elements(elements: Iterable[V], key_f: Callable[[V], K]) -> Dict[K, List
 
 def is_dev_mode():
     return str(os.environ.get("DEV_MODE")).lower() not in {"none", "", "0", "false"}
+
+def chunked(iterable, n):
+    """Lazily yield successive n-sized chunks from an iterable."""
+    iterator = iter(iterable)
+    while True:
+        chunk = list(itertools.islice(iterator, n))
+        if not chunk:
+            break
+        yield chunk
