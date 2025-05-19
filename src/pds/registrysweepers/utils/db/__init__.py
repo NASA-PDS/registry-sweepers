@@ -285,6 +285,7 @@ def write_updated_docs(
 ):
     log.info("Writing document updates...")
     updated_doc_count = 0
+    total_writes_skipped = 0
 
     bulk_buffer_max_size_mb = 30.0
     bulk_buffer_size_mb = 0.0
@@ -292,6 +293,7 @@ def write_updated_docs(
     writes_skipped_since_flush = 0
     for update in updates:
         if update.skip_write is True:
+            total_writes_skipped += 1
             writes_skipped_since_flush += 1
             continue
 
@@ -327,7 +329,7 @@ def write_updated_docs(
         log.debug(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
 
-    log.info(f"Updated documents for {updated_doc_count} products!")
+    log.info(f"Wrote document updates for {updated_doc_count} products and skipped {total_writes_skipped} doc updates")
 
 
 def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[str]:
