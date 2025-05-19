@@ -126,7 +126,7 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
                                         "bool": {
                                             "must_not": {
                                                 "exists": {
-                                                    "field": METADATA_SUCCESSOR_KEY}}}
+                                                    "field": SWEEPERS_PROVENANCE_VERSION_METADATA_KEY}}}
                                     },
                                     {
                                         "range": {
