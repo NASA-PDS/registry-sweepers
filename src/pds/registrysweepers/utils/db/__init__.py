@@ -371,7 +371,7 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                 for error_reason, ids in reason_aggregate.items():
                     ids_str = get_ids_list_str(ids)
                     log.warning(
-                        f"Attempt to update the following documents failed due to {error_type} ({error_reason}): {ids_str}"
+                        f"Attempt to update the following {len(ids)} documents failed due to {error_type} ({error_reason}): {ids_str}"
                     )
 
         if log.isEnabledFor(logging.ERROR):
@@ -383,7 +383,7 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                 for error_reason, ids in reason_aggregate.items():
                     ids_str = get_ids_list_str(ids)
                     log.error(
-                        f"Attempt to update the following documents failed unexpectedly due to {error_type} ({error_reason}): {ids_str}"
+                        f"Attempt to update the following {len(ids)} documents failed unexpectedly due to {error_type} ({error_reason}): {ids_str}"
                     )
     else:
         log.debug("Successfully wrote bulk update chunk")
