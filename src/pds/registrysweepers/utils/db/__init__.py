@@ -340,6 +340,9 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
 
 @retry(tries=6, delay=15, backoff=2, logger=log)
 def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]):
+    if len(bulk_updates) == 0:
+        log.debug("_write_bulk_updates_chunk received empty arg bulk_updates - skipping")
+
     bulk_data = "\n".join(bulk_updates) + "\n"
 
     request_timeout = 180
