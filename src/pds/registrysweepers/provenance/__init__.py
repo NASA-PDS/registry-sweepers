@@ -170,15 +170,16 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
 
     with tqdm(desc='Provenance sweeper progress (approximate)', total=response["hits"]["total"]["value"]) as pbar:
         while len(lids) > 0:
-
+            new_lids_count = 0
             for bucket in response["aggregations"]["unique_lids"]["buckets"]:
                 lid = bucket["key"]
                 doc_count = bucket["doc_count"]
                 if lid not in previous_chunk_lids:
+                    new_lids_count += 1
                     pbar.update(doc_count)
                     yield lid
 
-            logging.info(f"Fetched {len(lids)} LIDs from registry")
+            logging.info(f"Fetched {new_lids_count} new LIDs from registry (of {len(lids)} total LIDs)")
 
             is_last_page = len(lids) < agg_page_size
             if is_last_page:
