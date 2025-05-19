@@ -258,7 +258,7 @@ def run(
 
 def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
     update_count = 0
-    skipped_count = 0
+    skippable_count = 0
     for record in records:
         update_content = {
             METADATA_SUCCESSOR_KEY: str(record.successor) if record.successor else None,
@@ -266,13 +266,13 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
         }
 
         if record.skip_write:
-            logging.critical('Skipping write')
-            skipped_count += 1
-        else:
-            update_count += 1
-            yield Update(id=str(record.lidvid), content=update_content)
+            skippable_count += 1
 
-    log.info(f"Generated provenance updates for {update_count} products, skipping {skipped_count} up-to-date products")
+        update_count += 1
+
+        yield Update(id=str(record.lidvid), content=update_content, skip_write=record.skip_write)
+
+    log.info(f"Generated provenance updates for {update_count} products, ({skippable_count} up-to-date products will be skipped)")
 
 
 if __name__ == "__main__":
