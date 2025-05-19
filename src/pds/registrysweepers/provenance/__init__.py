@@ -60,6 +60,7 @@ from pds.registrysweepers.utils import parse_args
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
+from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
@@ -241,6 +242,13 @@ def run(
     configure_logging(filepath=log_filepath, log_level=log_level)
 
     log.info(f"Starting provenance v{SWEEPERS_PROVENANCE_VERSION} sweeper processing...")
+
+    ensure_index_mapping(
+        client,
+        resolve_multitenant_index_name(client, "registry"),
+        SWEEPERS_PROVENANCE_VERSION_METADATA_KEY,
+        "integer",
+    )
 
     target_lids = fetch_target_lids(client)
     record_chains = generate_record_chains(client, target_lids)
