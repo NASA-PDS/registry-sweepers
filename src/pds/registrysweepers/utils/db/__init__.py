@@ -381,7 +381,7 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
         log.debug("Successfully wrote bulk update chunk")
 
 
-def get_ids_list_str(ids: List[str], default_id_display_limit: int = 50, debug_id_display_limit: Union[int, None] = None) -> str:
+def get_ids_list_str(ids: List[str], default_id_display_limit: int = 5, debug_id_display_limit: Union[int, None] = None) -> str:
     ids_count = len(ids)
 
     if log.isEnabledFor(logging.DEBUG):
