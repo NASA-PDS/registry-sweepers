@@ -289,15 +289,21 @@ def write_updated_docs(
     bulk_buffer_max_size_mb = 30.0
     bulk_buffer_size_mb = 0.0
     bulk_updates_buffer: List[str] = []
+    writes_skipped_since_flush = 0
     for update in updates:
+        if update.skip_write is True:
+            writes_skipped_since_flush += 1
+            continue
+
         buffered_updates_count = len(bulk_updates_buffer) // 2
+        updates_processed_since_flush = buffered_updates_count + writes_skipped_since_flush
         buffer_at_size_threshold = bulk_buffer_size_mb >= bulk_buffer_max_size_mb
         buffer_at_update_count_threshold = (
-            bulk_chunk_max_update_count is not None and buffered_updates_count >= bulk_chunk_max_update_count
+            bulk_chunk_max_update_count is not None and updates_processed_since_flush >= bulk_chunk_max_update_count
         )
         flush_threshold_reached = buffer_at_size_threshold or buffer_at_update_count_threshold
         threshold_log_str = (
-            f"{bulk_buffer_max_size_mb}MB" if buffer_at_size_threshold else f"{bulk_chunk_max_update_count}docs"
+            f"{bulk_buffer_max_size_mb}MB" if buffer_at_size_threshold else f"{bulk_chunk_max_update_count}docs (including {writes_skipped_since_flush} which will be skipped)"
         )
 
         if flush_threshold_reached:
@@ -307,6 +313,7 @@ def write_updated_docs(
             _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
             bulk_updates_buffer = []
             bulk_buffer_size_mb = 0.0
+            writes_skipped_since_flush = 0
 
         update_statement_strs = update_as_statements(update, as_upsert=as_upsert)
 

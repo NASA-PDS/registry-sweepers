@@ -12,6 +12,11 @@ class Update:
     id: str
     content: Dict
 
+    # used when it is necessary to instantiate these updates for flow-control purposes
+    # for example, the provenance sweeper needs to trigger bulk write buffer flushes as it iterates, even if only a
+    # small fraction of records has to be updated
+    skip_write: bool = False
+
     # These are used for version conflict detection in ES/OpenSearch
     # see: https://www.elastic.co/guide/en/elasticsearch/reference/7.17/optimistic-concurrency-control.html
     primary_term: Union[int, None] = None
