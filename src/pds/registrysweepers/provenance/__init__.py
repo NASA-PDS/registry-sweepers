@@ -42,6 +42,7 @@
 import functools
 import itertools
 import logging
+from collections.abc import Collection
 from time import sleep
 from typing import Dict
 from typing import Iterable
@@ -64,13 +65,15 @@ from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from tqdm import tqdm
 
+from src.pds.registrysweepers.utils.db import get_ids_list_str
 from src.pds.registrysweepers.utils.misc import chunked, group_by_key
 
 log = logging.getLogger(__name__)
 
 
-def get_records_for_lids(client: OpenSearch, lids: Iterable[PdsLid]) -> Iterable[ProvenanceRecord]:
-    log.info(f"Fetching docs and generating records for LIDs {lids}...")
+def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterable[ProvenanceRecord]:
+    ids_str = get_ids_list_str(lids, 3) # type: ignore
+    log.info(f"Fetching docs and generating records for {len(lids)} LIDs: {ids_str}")
 
     query = {
         "query": {"bool": {
@@ -94,8 +97,7 @@ def get_records_for_lids(client: OpenSearch, lids: Iterable[PdsLid]) -> Iterable
             )
 
 
-def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) -> Iterable[
-    PdsLid]:  # TODO: remove version stub value
+def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
 
     # This page size determines how many LIDs are fetched at a time.  This value should be set high enough that the
     # updates produced from a single page are safely sufficient to trigger a buffer flush in
@@ -127,13 +129,13 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
                                                 "exists": {
                                                     "field": METADATA_SUCCESSOR_KEY}}}
                                     },
-                                    # {
-                                    #     "range": {
-                                    #         "someVersionKey": {  # TODO: need to set this up
-                                    #             "lt": current_provenance_version
-                                    #         }
-                                    #     }
-                                    # }
+                                    {
+                                        "range": {
+                                            SWEEPERS_PROVENANCE_VERSION_METADATA_KEY: {
+                                                "lt": SWEEPERS_PROVENANCE_VERSION
+                                            }
+                                        }
+                                    }
                                 ],
                                 "minimum_should_match": 1}}]}},
             "aggs": {
@@ -159,7 +161,7 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
     # LIDs from the previous chunk are stored to avoid deplication in the event that  indexing lag causes LIDs to
     # persist in results
     previous_chunk_lids = set()
-    consecutive_chunk_repetition_stall_threshold = 3
+    consecutive_chunk_repetition_stall_threshold = 2
     consecutive_chunk_repetitions = 0
 
     response = fetch_lids_chunk()
@@ -185,7 +187,7 @@ def fetch_target_lids(client: OpenSearch, current_provenance_version: int = 99) 
             # Handle consecutive result chunk repetitions
             if consecutive_chunk_repetitions > consecutive_chunk_repetition_stall_threshold:
                 logging.error(
-                    f'Fetched LIDs have not changed in {consecutive_chunk_repetition_stall_threshold} consecutive '
+                    f'Fetched LIDs have not changed in {consecutive_chunk_repetition_stall_threshold + 1} consecutive '
                     f'attempts - OpenSearch indexing has stalled or aggregation page size {agg_page_size} is '
                     f'insufficient to trigger a write buffer flush - ending iteration early.')
                 return
@@ -249,7 +251,7 @@ def run(
         client,
         updates,
         index_name=resolve_multitenant_index_name(client, "registry"),
-        bulk_chunk_max_update_count=25000
+        bulk_chunk_max_update_count=5000
     )
 
     log.info("Completed provenance sweeper processing!")
@@ -265,6 +267,7 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
         }
 
         if record.skip_write:
+            logging.critical('Skipping write')
             skipped_count += 1
         else:
             update_count += 1
