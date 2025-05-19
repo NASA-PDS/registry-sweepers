@@ -65,8 +65,7 @@ from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from tqdm import tqdm
 
-from src.pds.registrysweepers.utils.db import get_ids_list_str
-from src.pds.registrysweepers.utils.misc import chunked, group_by_key
+from src.pds.registrysweepers.utils.misc import chunked, group_by_key, get_ids_list_str
 
 log = logging.getLogger(__name__)
 

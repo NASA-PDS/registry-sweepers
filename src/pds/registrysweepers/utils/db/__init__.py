@@ -2,7 +2,6 @@ import json
 import logging
 import math
 import sys
-from collections.abc import Collection
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -19,7 +18,7 @@ from retry import retry
 from retry.api import retry_call
 from tqdm import tqdm
 
-from src.pds.registrysweepers.utils.productidentifiers.pdsproductidentifier import PdsProductIdentifier
+from src.pds.registrysweepers.utils.misc import get_ids_list_str
 
 log = logging.getLogger(__name__)
 
@@ -382,23 +381,6 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                     )
     else:
         log.debug("Successfully wrote bulk update chunk")
-
-
-def get_ids_list_str(ids: Collection[Union[PdsProductIdentifier, str]], default_id_display_limit: int = 5, debug_id_display_limit: Union[int, None] = None) -> str:
-    ids_count = len(ids)
-
-    if log.isEnabledFor(logging.DEBUG):
-        display_ids = ids[:debug_id_display_limit]
-    else:
-        display_ids = ids[:default_id_display_limit]
-
-    display_ids_count = len(display_ids)
-    display_id_str = str([str(id) for id in display_ids])
-
-    if ids_count <= display_ids_count:
-        return display_id_str
-    else:
-        return f"{display_id_str} <list of {ids_count} ids truncated - enable DEBUG logging or increase display limit in code to see more>"
 
 
 def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str, List[str]]]:
