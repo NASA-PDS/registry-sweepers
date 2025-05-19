@@ -34,6 +34,9 @@ class ProvenanceRecord:
             successor = PdsLidVid.from_string(_source[METADATA_SUCCESSOR_KEY])
         else:
             successor = None
+        # It is assumed prima facie that any document processed with an up-to-date version of the sweeper is up-to-date
+        # and does not require its record to be written.  If the value of successor is changed, this assumption is
+        # invalidated in the setter.
         skip_write = _source.get(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
         return ProvenanceRecord(
             lidvid=PdsLidVid.from_string(_source["lidvid"]), successor=successor, skip_write=skip_write
