@@ -354,14 +354,6 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                 "Bulk updates response includes item with status HTTP429, circuit_breaking_exception/throttled - chunk will need to be resubmitted"
             )
 
-        def get_ids_list_str(ids: List[str]) -> str:
-            max_display_ids = 50
-            ids_count = len(ids)
-            if ids_count <= max_display_ids or log.isEnabledFor(logging.DEBUG):
-                return str(ids)
-            else:
-                return f"{str(ids[:max_display_ids])} <list of {ids_count} ids truncated - enable DEBUG logging for full list>"
-
         if log.isEnabledFor(logging.WARNING):
             items_with_warnings = [
                 item for item in items_with_problems if item["update"]["error"]["type"] in warn_types
@@ -387,6 +379,22 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                     )
     else:
         log.debug("Successfully wrote bulk update chunk")
+
+
+def get_ids_list_str(ids: List[str], default_id_display_limit: int = 50, debug_id_display_limit: Union[int, None] = None) -> str:
+    ids_count = len(ids)
+
+    if log.isEnabledFor(logging.DEBUG):
+        display_ids = ids[:debug_id_display_limit]
+    else:
+        display_ids = ids[:default_id_display_limit]
+
+    display_ids_count = len(display_ids)
+
+    if ids_count <= display_ids_count:
+        return str(ids)
+    else:
+        return f"{str(display_ids)} <list of {ids_count} ids truncated - enable DEBUG logging or increase display limit in code to see more>"
 
 
 def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str, List[str]]]:
