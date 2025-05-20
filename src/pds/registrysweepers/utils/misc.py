@@ -12,7 +12,7 @@ from typing import List
 from typing import TypeVar
 from typing import Union
 
-from src.pds.registrysweepers.utils.productidentifiers.pdsproductidentifier import PdsProductIdentifier
+from pds.registrysweepers.utils.productidentifiers.pdsproductidentifier import PdsProductIdentifier
 
 log = logging.getLogger(__name__)
 
