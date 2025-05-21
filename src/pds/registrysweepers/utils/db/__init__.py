@@ -284,6 +284,7 @@ def write_updated_docs(
     as_upsert: bool = False,
 ):
     log.info("Writing document updates...")
+    buffered_updates_count = 0
     updated_doc_count = 0
     total_writes_skipped = 0
 
