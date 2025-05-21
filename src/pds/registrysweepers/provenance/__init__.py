@@ -162,7 +162,7 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
     # LIDs from the previous chunk are stored to avoid duplication in the event that  indexing lag causes LIDs to
     # persist in results
     previous_chunk_lids = set()
-    consecutive_chunk_repetition_stall_threshold = 2
+    consecutive_chunk_repetition_stall_threshold = 3
     consecutive_chunk_repetitions = 0
 
     response = fetch_lids_chunk()
