@@ -37,7 +37,10 @@ class ProvenanceRecord:
         # If the value of successor is changed, this assumption is invalidated in the setter.
         # The check that a (null or non-null) successor value is explicitly defined in the doc is probably redundant,
         # but can stay for the moment
-        skip_write = successor_exists_in_doc and _source.get(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
+        skip_write = (
+            successor_exists_in_doc
+            and _source.get(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
+        )
 
         return ProvenanceRecord(
             lidvid=PdsLidVid.from_string(_source["lidvid"]), successor=successor, skip_write=skip_write

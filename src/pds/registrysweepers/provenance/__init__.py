@@ -43,6 +43,7 @@ import functools
 import itertools
 import logging
 from collections.abc import Collection
+from collections.abc import Set
 from time import sleep
 from typing import Dict
 from typing import Iterable
@@ -63,24 +64,28 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import chunked
+from pds.registrysweepers.utils.misc import get_ids_list_str
+from pds.registrysweepers.utils.misc import group_by_key
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from tqdm import tqdm
-
-from pds.registrysweepers.utils.misc import chunked, group_by_key, get_ids_list_str
 
 log = logging.getLogger(__name__)
 
 
 def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterable[ProvenanceRecord]:
-    ids_str = get_ids_list_str(lids, 3) # type: ignore
+    ids_str = get_ids_list_str(lids, 3)  # type: ignore
     log.info(f"Fetching docs and generating records for {len(lids)} LIDs: {ids_str}")
 
     query = {
-        "query": {"bool": {
-            "must": [
-                {"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}},
-                {"terms": {"lid": lids}}
-            ]}}
+        "query": {
+            "bool": {
+                "must": [
+                    {"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}},
+                    {"terms": {"lid": lids}},
+                ]
+            }
+        }
     }
     _source = {"includes": ["lidvid", METADATA_SUCCESSOR_KEY, SWEEPERS_PROVENANCE_VERSION_METADATA_KEY]}
 
@@ -98,7 +103,6 @@ def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterab
 
 
 def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
-
     # This page size determines how many LIDs are fetched at a time.  This value should be set high enough that the
     # updates produced from a single page are safely sufficient to trigger a buffer flush in
     # pds.registrysweepers.utils.db.write_updated_docs()
@@ -115,19 +119,14 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
             "query": {
                 "bool": {
                     "must": [
-                        {
-                            "terms": {
-                                "ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]
-                            }
-                        },
+                        {"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}},
                         {
                             "bool": {
                                 "should": [
                                     {
                                         "bool": {
-                                            "must_not": {
-                                                "exists": {
-                                                    "field": SWEEPERS_PROVENANCE_VERSION_METADATA_KEY}}}
+                                            "must_not": {"exists": {"field": SWEEPERS_PROVENANCE_VERSION_METADATA_KEY}}
+                                        }
                                     },
                                     {
                                         "range": {
@@ -135,19 +134,17 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
                                                 "lt": SWEEPERS_PROVENANCE_VERSION
                                             }
                                         }
-                                    }
+                                    },
                                 ],
-                                "minimum_should_match": 1}}]}},
-            "aggs": {
-                "unique_lids": {
-                    "terms": {
-                        "field": "lid",
-                        "size": agg_page_size
-                    }
+                                "minimum_should_match": 1,
+                            }
+                        },
+                    ]
                 }
             },
+            "aggs": {"unique_lids": {"terms": {"field": "lid", "size": agg_page_size}}},
             "size": 0,
-            "track_total_hits": True
+            "track_total_hits": True,
         }
 
         return client.search(
@@ -161,15 +158,15 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
 
     # LIDs from the previous chunk are stored to avoid duplication in the event that  indexing lag causes LIDs to
     # persist in results
-    previous_chunk_lids = set()
+    previous_chunk_lids: Set[str] = set()
     consecutive_chunk_repetition_stall_threshold = 3
     consecutive_chunk_repetitions = 0
 
     response = fetch_lids_chunk()
 
-    lids = {bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
+    lids = {bucket["key"] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
 
-    with tqdm(desc='Provenance sweeper progress (approximate)', total=response["hits"]["total"]["value"]) as pbar:
+    with tqdm(desc="Provenance sweeper progress (approximate)", total=response["hits"]["total"]["value"]) as pbar:
         while len(lids) > 0:
             new_lids_count = 0
             for bucket in response["aggregations"]["unique_lids"]["buckets"]:
@@ -189,26 +186,31 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
             # Handle consecutive result chunk repetitions
             if consecutive_chunk_repetitions > consecutive_chunk_repetition_stall_threshold:
                 logging.error(
-                    f'Fetched LIDs have not changed in {consecutive_chunk_repetition_stall_threshold + 1} consecutive '
-                    f'attempts - OpenSearch indexing has stalled or aggregation page size {agg_page_size} is '
-                    f'insufficient to trigger a write buffer flush - ending iteration early.')
+                    f"Fetched LIDs have not changed in {consecutive_chunk_repetition_stall_threshold + 1} consecutive "
+                    f"attempts - OpenSearch indexing has stalled or aggregation page size {agg_page_size} is "
+                    f"insufficient to trigger a write buffer flush - ending iteration early."
+                )
                 return
             elif lids == previous_chunk_lids:
                 consecutive_chunk_repetitions += 1
                 sleep_time_seconds = 5**consecutive_chunk_repetitions
-                logging.warning(f'Fetched chunk contains identical LIDs to previous chunk - sleeping {sleep_time_seconds} seconds')
+                logging.warning(
+                    f"Fetched chunk contains identical LIDs to previous chunk - sleeping {sleep_time_seconds} seconds"
+                )
                 sleep(sleep_time_seconds)
             else:
                 consecutive_chunk_repetitions = 0
 
             previous_chunk_lids = set(lids)
             response = fetch_lids_chunk()
-            lids = {bucket['key'] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
+            lids = {bucket["key"] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
 
-    logging.info('No docs remain to process')
+    logging.info("No docs remain to process")
 
 
-def generate_record_chains(client: OpenSearch, lids: Iterable[PdsLid], lid_batch_size = 5000) -> Iterable[List[ProvenanceRecord]]:
+def generate_record_chains(
+    client: OpenSearch, lids: Iterable[PdsLid], lid_batch_size=5000
+) -> Iterable[List[ProvenanceRecord]]:
     """
     Create an iterable of unsorted collections of records which share LIDs.
     :param client:
@@ -237,9 +239,9 @@ def link_records_in_chain(record_chain: List[ProvenanceRecord]):
 
 
 def run(
-        client: OpenSearch,
-        log_filepath: Union[str, None] = None,
-        log_level: int = logging.INFO,
+    client: OpenSearch,
+    log_filepath: Union[str, None] = None,
+    log_level: int = logging.INFO,
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
 
@@ -257,10 +259,7 @@ def run(
     updates = generate_updates(itertools.chain.from_iterable(record_chains))
 
     write_updated_docs(
-        client,
-        updates,
-        index_name=resolve_multitenant_index_name(client, "registry"),
-        bulk_chunk_max_update_count=5000
+        client, updates, index_name=resolve_multitenant_index_name(client, "registry"), bulk_chunk_max_update_count=5000
     )
 
     log.info("Completed provenance sweeper processing!")
@@ -282,7 +281,9 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
 
         yield Update(id=str(record.lidvid), content=update_content, skip_write=record.skip_write)
 
-    log.info(f"Generated provenance updates for {update_count} products, ({skippable_count} up-to-date products will be skipped)")
+    log.info(
+        f"Generated provenance updates for {update_count} products, ({skippable_count} up-to-date products will be skipped)"
+    )
 
 
 if __name__ == "__main__":

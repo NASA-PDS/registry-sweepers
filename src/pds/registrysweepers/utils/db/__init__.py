@@ -13,12 +13,11 @@ from typing import Union
 
 from opensearchpy import OpenSearch
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import get_random_hex_id
 from retry import retry
 from retry.api import retry_call
 from tqdm import tqdm
-
-from pds.registrysweepers.utils.misc import get_ids_list_str
 
 log = logging.getLogger(__name__)
 
@@ -306,7 +305,9 @@ def write_updated_docs(
         )
         flush_threshold_reached = buffer_at_size_threshold or buffer_at_update_count_threshold
         threshold_log_str = (
-            f"{bulk_buffer_max_size_mb}MB" if buffer_at_size_threshold else f"{bulk_chunk_max_update_count}docs (including {writes_skipped_since_flush} which will be skipped)"
+            f"{bulk_buffer_max_size_mb}MB"
+            if buffer_at_size_threshold
+            else f"{bulk_chunk_max_update_count}docs (including {writes_skipped_since_flush} which will be skipped)"
         )
 
         if flush_threshold_reached:

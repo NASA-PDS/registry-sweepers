@@ -3,9 +3,11 @@ import logging
 import os
 import random
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, Collection, Union
+from typing import Any
 from typing import Callable
+from typing import Collection
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -154,6 +156,7 @@ def bin_elements(elements: Iterable[V], key_f: Callable[[V], K]) -> Dict[K, List
 def is_dev_mode():
     return str(os.environ.get("DEV_MODE")).lower() not in {"none", "", "0", "false"}
 
+
 def chunked(iterable, n):
     """Lazily yield successive n-sized chunks from an iterable."""
     iterator = iter(iterable)
@@ -163,15 +166,20 @@ def chunked(iterable, n):
             break
         yield chunk
 
+
 def group_by_key(iterable: Iterable[V], key_func: Callable[[V], K]) -> Dict[K, List[V]]:
-    """ Given an iterable, bucket the elements by some key function"""
+    """Given an iterable, bucket the elements by some key function"""
     result = defaultdict(list)
     for item in iterable:
         result[key_func(item)].append(item)
     return dict(result)
 
 
-def get_ids_list_str(ids: Collection[Union[PdsProductIdentifier, str]], default_id_display_limit: int = 5, debug_id_display_limit: Union[int, None] = None) -> str:
+def get_ids_list_str(
+    ids: Sequence[Union[PdsProductIdentifier, str]],
+    default_id_display_limit: int = 5,
+    debug_id_display_limit: Union[int, None] = None,
+) -> str:
     ids_count = len(ids)
 
     if log.isEnabledFor(logging.DEBUG):

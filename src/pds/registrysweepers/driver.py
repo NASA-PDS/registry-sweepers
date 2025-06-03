@@ -111,7 +111,7 @@ def run():
         repairkit.run,
         provenance.run,
         ancestry.run,
-        reindexer.run
+        reindexer.run,
     ]
 
     for option, sweeper in optional_sweepers.items():

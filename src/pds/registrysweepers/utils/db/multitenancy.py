@@ -4,7 +4,7 @@ import os
 from opensearchpy import OpenSearch
 
 
-def resolve_multitenant_index_name(client, index_type: str):
+def resolve_multitenant_index_name(client: OpenSearch | None, index_type: str) -> str:
     supported_index_types = {"registry", "registry-refs", "registry-dd"}
     node_id = os.environ.get("MULTITENANCY_NODE_ID", "").strip(" ")
 
