@@ -13,6 +13,7 @@ from typing import Union
 
 from opensearchpy import OpenSearch
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import get_random_hex_id
 from retry import retry
 from retry.api import retry_call
@@ -282,20 +283,31 @@ def write_updated_docs(
     as_upsert: bool = False,
 ):
     log.info("Writing document updates...")
+    buffered_updates_count = 0
     updated_doc_count = 0
+    total_writes_skipped = 0
 
     bulk_buffer_max_size_mb = 30.0
     bulk_buffer_size_mb = 0.0
     bulk_updates_buffer: List[str] = []
+    writes_skipped_since_flush = 0
     for update in updates:
+        if update.skip_write is True:
+            total_writes_skipped += 1
+            writes_skipped_since_flush += 1
+            continue
+
         buffered_updates_count = len(bulk_updates_buffer) // 2
+        updates_processed_since_flush = buffered_updates_count + writes_skipped_since_flush
         buffer_at_size_threshold = bulk_buffer_size_mb >= bulk_buffer_max_size_mb
         buffer_at_update_count_threshold = (
-            bulk_chunk_max_update_count is not None and buffered_updates_count >= bulk_chunk_max_update_count
+            bulk_chunk_max_update_count is not None and updates_processed_since_flush >= bulk_chunk_max_update_count
         )
         flush_threshold_reached = buffer_at_size_threshold or buffer_at_update_count_threshold
         threshold_log_str = (
-            f"{bulk_buffer_max_size_mb}MB" if buffer_at_size_threshold else f"{bulk_chunk_max_update_count}docs"
+            f"{bulk_buffer_max_size_mb}MB"
+            if buffer_at_size_threshold
+            else f"{bulk_chunk_max_update_count}docs (including {writes_skipped_since_flush} which will be skipped)"
         )
 
         if flush_threshold_reached:
@@ -305,6 +317,7 @@ def write_updated_docs(
             _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
             bulk_updates_buffer = []
             bulk_buffer_size_mb = 0.0
+            writes_skipped_since_flush = 0
 
         update_statement_strs = update_as_statements(update, as_upsert=as_upsert)
 
@@ -314,11 +327,11 @@ def write_updated_docs(
         bulk_updates_buffer.extend(update_statement_strs)
         updated_doc_count += 1
 
-    if len(bulk_updates_buffer) > 0:
+    if buffered_updates_count > 0:
         log.debug(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
 
-    log.info(f"Updated documents for {updated_doc_count} products!")
+    log.info(f"Wrote document updates for {updated_doc_count} products and skipped {total_writes_skipped} doc updates")
 
 
 def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[str]:
@@ -338,6 +351,9 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
 
 @retry(tries=6, delay=15, backoff=2, logger=log)
 def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]):
+    if len(bulk_updates) == 0:
+        log.debug("_write_bulk_updates_chunk received empty arg bulk_updates - skipping")
+
     bulk_data = "\n".join(bulk_updates) + "\n"
 
     request_timeout = 180
@@ -354,14 +370,6 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                 "Bulk updates response includes item with status HTTP429, circuit_breaking_exception/throttled - chunk will need to be resubmitted"
             )
 
-        def get_ids_list_str(ids: List[str]) -> str:
-            max_display_ids = 50
-            ids_count = len(ids)
-            if ids_count <= max_display_ids or log.isEnabledFor(logging.DEBUG):
-                return str(ids)
-            else:
-                return f"{str(ids[:max_display_ids])} <list of {ids_count} ids truncated - enable DEBUG logging for full list>"
-
         if log.isEnabledFor(logging.WARNING):
             items_with_warnings = [
                 item for item in items_with_problems if item["update"]["error"]["type"] in warn_types
@@ -371,7 +379,7 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                 for error_reason, ids in reason_aggregate.items():
                     ids_str = get_ids_list_str(ids)
                     log.warning(
-                        f"Attempt to update the following documents failed due to {error_type} ({error_reason}): {ids_str}"
+                        f"Attempt to update the following {len(ids)} documents failed due to {error_type} ({error_reason}): {ids_str}"
                     )
 
         if log.isEnabledFor(logging.ERROR):
@@ -383,7 +391,7 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                 for error_reason, ids in reason_aggregate.items():
                     ids_str = get_ids_list_str(ids)
                     log.error(
-                        f"Attempt to update the following documents failed unexpectedly due to {error_type} ({error_reason}): {ids_str}"
+                        f"Attempt to update the following {len(ids)} documents failed unexpectedly due to {error_type} ({error_reason}): {ids_str}"
                     )
     else:
         log.debug("Successfully wrote bulk update chunk")

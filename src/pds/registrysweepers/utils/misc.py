@@ -1,13 +1,23 @@
+import itertools
+import logging
 import os
 import random
+from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from typing import Callable
+from typing import Collection
 from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import TypeVar
 from typing import Union
+
+from pds.registrysweepers.utils.productidentifiers.pdsproductidentifier import PdsProductIdentifier
+
+log = logging.getLogger(__name__)
+
 
 T = TypeVar("T")
 K = TypeVar("K")
@@ -145,3 +155,42 @@ def bin_elements(elements: Iterable[V], key_f: Callable[[V], K]) -> Dict[K, List
 
 def is_dev_mode():
     return str(os.environ.get("DEV_MODE")).lower() not in {"none", "", "0", "false"}
+
+
+def chunked(iterable, n):
+    """Lazily yield successive n-sized chunks from an iterable."""
+    iterator = iter(iterable)
+    while True:
+        chunk = list(itertools.islice(iterator, n))
+        if not chunk:
+            break
+        yield chunk
+
+
+def group_by_key(iterable: Iterable[V], key_func: Callable[[V], K]) -> Dict[K, List[V]]:
+    """Given an iterable, bucket the elements by some key function"""
+    result = defaultdict(list)
+    for item in iterable:
+        result[key_func(item)].append(item)
+    return dict(result)
+
+
+def get_ids_list_str(
+    ids: Sequence[Union[PdsProductIdentifier, str]],
+    default_id_display_limit: int = 5,
+    debug_id_display_limit: Union[int, None] = None,
+) -> str:
+    ids_count = len(ids)
+
+    if log.isEnabledFor(logging.DEBUG):
+        display_ids = ids[:debug_id_display_limit]
+    else:
+        display_ids = ids[:default_id_display_limit]
+
+    display_ids_count = len(display_ids)
+    display_id_str = str([str(id) for id in display_ids])
+
+    if ids_count <= display_ids_count:
+        return display_id_str
+    else:
+        return f"{display_id_str} <list of {ids_count} ids truncated - enable DEBUG logging or increase display limit in code to see more>"

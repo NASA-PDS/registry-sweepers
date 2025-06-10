@@ -30,11 +30,18 @@ class ProvenanceRecord:
 
     @staticmethod
     def from_source(_source: Dict) -> ProvenanceRecord:
-        if METADATA_SUCCESSOR_KEY in _source and _source[METADATA_SUCCESSOR_KEY] is not None:
-            successor = PdsLidVid.from_string(_source[METADATA_SUCCESSOR_KEY])
-        else:
-            successor = None
-        skip_write = _source.get(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
+        successor_exists_in_doc = METADATA_SUCCESSOR_KEY in _source
+        successor = _source.get(METADATA_SUCCESSOR_KEY)
+
+        # It is assumed prima facie that any document processed with an up-to-date version of the sweeper is up-to-date.
+        # If the value of successor is changed, this assumption is invalidated in the setter.
+        # The check that a (null or non-null) successor value is explicitly defined in the doc is probably redundant,
+        # but can stay for the moment
+        skip_write = (
+            successor_exists_in_doc
+            and _source.get(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
+        )
+
         return ProvenanceRecord(
             lidvid=PdsLidVid.from_string(_source["lidvid"]), successor=successor, skip_write=skip_write
         )

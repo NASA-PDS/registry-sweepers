@@ -42,6 +42,9 @@
 import functools
 import itertools
 import logging
+from collections.abc import Collection
+from collections.abc import Set
+from time import sleep
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -58,18 +61,31 @@ from pds.registrysweepers.utils import parse_args
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
+from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import chunked
+from pds.registrysweepers.utils.misc import get_ids_list_str
+from pds.registrysweepers.utils.misc import group_by_key
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
+from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
 
-def get_records(client: OpenSearch) -> Iterable[ProvenanceRecord]:
-    log.info("Fetching docs and generating records...")
+def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterable[ProvenanceRecord]:
+    ids_str = get_ids_list_str(lids, 3)  # type: ignore
+    log.info(f"Fetching docs and generating records for {len(lids)} LIDs: {ids_str}")
 
     query = {
-        "query": {"bool": {"must": [{"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}}]}}
+        "query": {
+            "bool": {
+                "must": [
+                    {"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}},
+                    {"terms": {"lid": lids}},
+                ]
+            }
+        }
     }
     _source = {"includes": ["lidvid", METADATA_SUCCESSOR_KEY, SWEEPERS_PROVENANCE_VERSION_METADATA_KEY]}
 
@@ -86,27 +102,135 @@ def get_records(client: OpenSearch) -> Iterable[ProvenanceRecord]:
             )
 
 
-def create_record_chains(
-    records: Iterable[ProvenanceRecord], drop_singletons: bool = True
+def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
+    # This page size determines how many LIDs are fetched at a time.  This value should be set high enough that the
+    # updates produced from a single page are safely sufficient to trigger a buffer flush in
+    # pds.registrysweepers.utils.db.write_updated_docs()
+    #
+    # If it is not, this will not impede correct operation, but will result in the sweeper terminating early and
+    # requiring many runs to fully complete instead of completing with a single run.
+    #
+    # It must also allow for sufficient back-pressure to build such that it does not re-query before any updates have an
+    # opportunity to start indexing (i.e. affecting the query results)
+    agg_page_size = 25000
+
+    def fetch_lids_chunk():
+        query = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}},
+                        {
+                            "bool": {
+                                "should": [
+                                    {
+                                        "bool": {
+                                            "must_not": {"exists": {"field": SWEEPERS_PROVENANCE_VERSION_METADATA_KEY}}
+                                        }
+                                    },
+                                    {
+                                        "range": {
+                                            SWEEPERS_PROVENANCE_VERSION_METADATA_KEY: {
+                                                "lt": SWEEPERS_PROVENANCE_VERSION
+                                            }
+                                        }
+                                    },
+                                ],
+                                "minimum_should_match": 1,
+                            }
+                        },
+                    ]
+                }
+            },
+            "aggs": {"unique_lids": {"terms": {"field": "lid", "size": agg_page_size}}},
+            "size": 0,
+            "track_total_hits": True,
+        }
+
+        return client.search(
+            index=resolve_multitenant_index_name(client, "registry"),
+            body=query,
+            size=0,
+            _source_includes=[],
+            track_total_hits=True,
+            request_timeout=20,
+        )
+
+    # LIDs from the previous chunk are stored to avoid duplication in the event that  indexing lag causes LIDs to
+    # persist in results
+    previous_chunk_lids: Set[str] = set()
+    consecutive_chunk_repetition_stall_threshold = 3
+    consecutive_chunk_repetitions = 0
+
+    response = fetch_lids_chunk()
+
+    lids = {bucket["key"] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
+
+    with tqdm(desc="Provenance sweeper progress (approximate)", total=response["hits"]["total"]["value"]) as pbar:
+        while len(lids) > 0:
+            new_lids_count = 0
+            for bucket in response["aggregations"]["unique_lids"]["buckets"]:
+                lid = bucket["key"]
+                doc_count = bucket["doc_count"]
+                if lid not in previous_chunk_lids:
+                    new_lids_count += 1
+                    pbar.update(doc_count)
+                    yield lid
+
+            logging.info(f"Fetched {new_lids_count} new LIDs from registry (of {len(lids)} total LIDs)")
+
+            is_last_page = len(lids) < agg_page_size
+            if is_last_page:
+                break
+
+            # Handle consecutive result chunk repetitions
+            if consecutive_chunk_repetitions > consecutive_chunk_repetition_stall_threshold:
+                logging.error(
+                    f"Fetched LIDs have not changed in {consecutive_chunk_repetition_stall_threshold + 1} consecutive "
+                    f"attempts - OpenSearch indexing has stalled or aggregation page size {agg_page_size} is "
+                    f"insufficient to trigger a write buffer flush - ending iteration early."
+                )
+                return
+            elif lids == previous_chunk_lids:
+                consecutive_chunk_repetitions += 1
+                sleep_time_seconds = 5**consecutive_chunk_repetitions
+                logging.warning(
+                    f"Fetched chunk contains identical LIDs to previous chunk - sleeping {sleep_time_seconds} seconds"
+                )
+                sleep(sleep_time_seconds)
+            else:
+                consecutive_chunk_repetitions = 0
+
+            previous_chunk_lids = set(lids)
+            response = fetch_lids_chunk()
+            lids = {bucket["key"] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
+
+    logging.info("No docs remain to process")
+
+
+def generate_record_chains(
+    client: OpenSearch, lids: Iterable[PdsLid], lid_batch_size=5000
 ) -> Iterable[List[ProvenanceRecord]]:
     """
     Create an iterable of unsorted collections of records which share LIDs.
-    If drop_singletons is True, single-element collections will be removed for efficiency as they have no links
+    :param client:
+    """
+    for lid_batch in chunked(lids, lid_batch_size):
+        unbucketed_records = get_records_for_lids(client, lid_batch)
+        for record_chain in group_and_link_records_into_chains(unbucketed_records):
+            yield record_chain
+
+
+def group_and_link_records_into_chains(records: Iterable[ProvenanceRecord]) -> Iterable[List[ProvenanceRecord]]:
+    """
+    Given a collection of Provenance records, group them by LID and link the records within each group
+    Broken out from generate_record_chains() to allow for test stubbing without a client.
     """
 
-    # bin chains by LID
-    record_chains: Dict[PdsLid, List[ProvenanceRecord]] = {}
-    for record in records:
-        if record.lidvid.lid not in record_chains:
-            record_chains[record.lidvid.lid] = []
-        record_chains[record.lidvid.lid].append(record)
-
-    if drop_singletons:
-        for lid, record_chain in list(record_chains.items()):
-            if not len(record_chain) > 1:
-                record_chains.pop(lid)
-
-    return record_chains.values()
+    record_chains_by_lid = group_by_key(records, lambda r: r.lidvid.lid)
+    for record_chain in record_chains_by_lid.values():
+        link_records_in_chain(record_chain)
+        yield record_chain
 
 
 def link_records_in_chain(record_chain: List[ProvenanceRecord]):
@@ -133,17 +257,19 @@ def run(
 
     log.info(f"Starting provenance v{SWEEPERS_PROVENANCE_VERSION} sweeper processing...")
 
-    records = get_records(client)
-    record_chains = create_record_chains(records)
-    for record_chain in record_chains:
-        link_records_in_chain(record_chain)
+    ensure_index_mapping(
+        client,
+        resolve_multitenant_index_name(client, "registry"),
+        SWEEPERS_PROVENANCE_VERSION_METADATA_KEY,
+        "integer",
+    )
 
-    updates = generate_updates(itertools.chain(*record_chains))
+    target_lids = fetch_target_lids(client)
+    record_chains = generate_record_chains(client, target_lids)
+    updates = generate_updates(itertools.chain.from_iterable(record_chains))
 
     write_updated_docs(
-        client,
-        updates,
-        index_name=resolve_multitenant_index_name(client, "registry"),
+        client, updates, index_name=resolve_multitenant_index_name(client, "registry"), bulk_chunk_max_update_count=5000
     )
 
     log.info("Completed provenance sweeper processing!")
@@ -151,7 +277,7 @@ def run(
 
 def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
     update_count = 0
-    skipped_count = 0
+    skippable_count = 0
     for record in records:
         update_content = {
             METADATA_SUCCESSOR_KEY: str(record.successor) if record.successor else None,
@@ -159,12 +285,15 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
         }
 
         if record.skip_write:
-            skipped_count += 1
-        else:
-            update_count += 1
-            yield Update(id=str(record.lidvid), content=update_content)
+            skippable_count += 1
 
-    log.info(f"Generated provenance updates for {update_count} products, skipping {skipped_count} up-to-date products")
+        update_count += 1
+
+        yield Update(id=str(record.lidvid), content=update_content, skip_write=record.skip_write)
+
+    log.info(
+        f"Generated provenance updates for {update_count} products, ({skippable_count} up-to-date products will be skipped)"
+    )
 
 
 if __name__ == "__main__":

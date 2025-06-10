@@ -3,5 +3,5 @@
 # previously-processed data
 from pds.registrysweepers.utils.misc import get_sweeper_version_metadata_key
 
-SWEEPERS_PROVENANCE_VERSION = 1
+SWEEPERS_PROVENANCE_VERSION = 2
 SWEEPERS_PROVENANCE_VERSION_METADATA_KEY = get_sweeper_version_metadata_key("provenance")

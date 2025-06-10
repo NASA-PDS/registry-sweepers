@@ -44,9 +44,7 @@ class ProvenanceBasicFunctionalTestCase(unittest.TestCase):
             return json.dumps(d, sort_keys=True)
 
         records = [ProvenanceRecord.from_source({"lidvid": lidvid}) for lidvid in self.extant_lidvids]
-        record_chains = provenance.create_record_chains(records)
-        for record_chain in record_chains:
-            provenance.link_records_in_chain(record_chain)
+        record_chains = provenance.group_and_link_records_into_chains(records)
 
         updates = provenance.generate_updates(itertools.chain(*record_chains))
         expected_updates = [
