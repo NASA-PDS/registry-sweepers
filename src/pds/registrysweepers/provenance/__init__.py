@@ -217,10 +217,20 @@ def generate_record_chains(
     """
     for lid_batch in chunked(lids, lid_batch_size):
         unbucketed_records = get_records_for_lids(client, lid_batch)
-        record_chains_by_lid = group_by_key(unbucketed_records, lambda r: r.lidvid.lid)
-        for record_chain in record_chains_by_lid.values():
-            link_records_in_chain(record_chain)
+        for record_chain in group_and_link_records_into_chains(unbucketed_records):
             yield record_chain
+
+
+def group_and_link_records_into_chains(records: Iterable[ProvenanceRecord]) -> Iterable[List[ProvenanceRecord]]:
+    """
+    Given a collection of Provenance records, group them by LID and link the records within each group
+    Broken out from generate_record_chains() to allow for test stubbing without a client.
+    """
+
+    record_chains_by_lid = group_by_key(records, lambda r: r.lidvid.lid)
+    for record_chain in record_chains_by_lid.values():
+        link_records_in_chain(record_chain)
+        yield record_chain
 
 
 def link_records_in_chain(record_chain: List[ProvenanceRecord]):
