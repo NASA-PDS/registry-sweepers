@@ -15,7 +15,7 @@ from solr_to_es.solrSource import SlowSolrDocs  # type: ignore
 log = logging.getLogger(__name__)
 
 SOLR_URL = "https://pds.nasa.gov/services/search/search"
-OS_INDEX = "legacy_registry"
+OS_INDEX = "en-legacy-registry"
 MAX_RETRIES = 5
 
 
