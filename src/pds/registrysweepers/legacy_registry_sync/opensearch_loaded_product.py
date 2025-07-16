@@ -1,10 +1,14 @@
+import logging
 import os
 
 import opensearchpy  # type: ignore
+from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 
 # Optional Environment variable  used for the Cross Cluster Search
 # connections aliases. Each element is separated by a ","
 CCS_CONN = "CCS_CONN"
+
+log = logging.getLogger(__name__)
 
 
 def get_already_loaded_lidvids(product_classes=None, es_conn=None):
@@ -27,5 +31,10 @@ def get_already_loaded_lidvids(product_classes=None, es_conn=None):
             dict(match_phrase={prod_class_prop: prod_class}) for prod_class in product_classes
         ]
 
-    prod_id_resp = opensearchpy.helpers.scan(es_conn, index=["registry"], query=query, scroll="3m")
+    # prod_id_resp = opensearchpy.helpers.scan(es_conn, index=["registry"], query=query, scroll="3m")
+    log.info("Reading existing PDS4 lidvids")
+    prod_id_resp = query_registry_db_with_search_after(
+        es_conn, "registry", _source={"includes": ["_id"]}, query=query, sort_fields=["_id"]
+    )
+
     return [p["_id"] for p in prod_id_resp]
