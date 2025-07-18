@@ -20,7 +20,6 @@ from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_K
 from pds.registrysweepers.ancestry.generation import generate_nonaggregate_and_collection_records_iteratively
 from pds.registrysweepers.ancestry.generation import get_bundle_ancestry_records
 from pds.registrysweepers.ancestry.generation import get_collection_ancestry_records
-from pds.registrysweepers.ancestry.generation import get_nonaggregate_ancestry_records
 from pds.registrysweepers.ancestry.queries import get_existing_ancestry_for_product
 from pds.registrysweepers.ancestry.queries import get_orphaned_documents
 from pds.registrysweepers.ancestry.queries import get_orphaned_documents_count
