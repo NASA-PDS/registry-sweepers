@@ -197,10 +197,7 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
         f"Generating AncestryRecords for non-aggregate products of collections with LID {str(collection_lid)}, using non-chunked input/output..."
     )
 
-    # Generate lookup for the parent bundles of all collections - these will be applied to non-aggregate products too.
-    bundle_ancestry_by_collection_lidvid = {
-        record.lidvid: record.parent_bundle_lidvids for record in collection_ancestry_records
-    }
+    collection_records_by_lidvid = {r.lidvid: r for r in collection_ancestry_records}
 
     collection_refs_query_docs = get_nonaggregate_ancestry_records_for_collection_lid_query(
         client, collection_lid, registry_db_mock
@@ -224,9 +221,10 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
                     f'registry-refs document with id {doc["_id"]} references one or more aggregate products in its product_lidvid refs list: {[str(id) for id in erroneous_lidvids]}'
                 )
 
-        except IndexError as err:
+        except IndexError:
             doc_id = doc["_id"]
             log.warning(f'Encountered document with unexpected _id: "{doc_id}"')
+            continue
         except (ValueError, KeyError) as err:
             log.warning(
                 'Failed to parse collection and/or product LIDVIDs from document in index "%s" with id "%s" due to %s: %s',
@@ -238,7 +236,7 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
             continue
 
         try:
-            bundle_ancestry = bundle_ancestry_by_collection_lidvid[collection_lidvid]
+            collection_record = collection_records_by_lidvid[collection_lidvid]
         except KeyError:
             log.debug(
                 f'Failed to resolve history for page {doc.get("_id")} in index {doc.get("_index")} with collection_lidvid {collection_lidvid} - no such collection exists in registry.'
@@ -249,8 +247,7 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
             if lidvid not in nonaggregate_ancestry_records_by_lidvid:
                 nonaggregate_ancestry_records_by_lidvid[lidvid] = AncestryRecord(lidvid=lidvid)
 
-            record = nonaggregate_ancestry_records_by_lidvid[lidvid]
-            record.parent_bundle_lidvids.update(bundle_ancestry)
-            record.parent_collection_lidvids.add(collection_lidvid)
+            record: AncestryRecord = nonaggregate_ancestry_records_by_lidvid[lidvid]
+            record.attach_parent_record(collection_record)
 
     return nonaggregate_ancestry_records_by_lidvid.values()
