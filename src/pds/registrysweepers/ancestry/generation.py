@@ -159,6 +159,10 @@ def generate_nonaggregate_and_collection_records_iteratively(
     Iteratively generate nonaggregate records in chunks, each chunk sharing a common collection LID.  This
     prevents the need to simultaneously store data in memory for a large volume of nonaggregate records.
 
+    AncestryRecords for non-aggregate products which are present in collections which do not all share the same LID will
+    be incomplete, and must be merged separately prior to db write, with all collection-LID-specific AncestryRecords
+    generated prior to that merge/write.  This deferral is handled separately in generate_updates().
+
     After non-aggregate records are generated, the corresponding collections' records are updated, such that they are
     only processed and marked up-to-date if their non-aggregates have successfully been updated.
     """
