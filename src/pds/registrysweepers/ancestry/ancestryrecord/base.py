@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from dataclasses import field
-from typing import Callable
+from itertools import chain
+from typing import Callable, List
 from typing import Set
 
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
@@ -13,12 +14,26 @@ from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 @dataclass
 class AncestryRecord:
     lidvid: PdsLidVid
-    parent_collection_lidvids: Set[PdsLidVid] = field(default_factory=set)
-    parent_bundle_lidvids: Set[PdsLidVid] = field(default_factory=set)
+    # parent lidvid members are used to directly attach history elements
+    explicit_parent_collection_lidvids: Set[PdsLidVid] = field(default_factory=set)
+    explicit_parent_bundle_lidvids: Set[PdsLidVid] = field(default_factory=set)
+    # parent record members are used to attach collection AncestryRecords to those of descendant non-aggregate products
+    # this prevents an enormous amount of unnecessary duplication (i.e. memory use)
+    _parent_records: List[AncestryRecord] = field(default_factory=list)
 
     # flag to track records which are used during processing, but should not be written to db, for example if an
     # equivalent record is known to already exist due to up-to-date ancestry version flag in the source document
     skip_write: bool = False
+
+    @property
+    def parent_bundle_lidvids(self) -> Set[PdsLidVid]:
+        derived_parent_bundle_lidvids = chain(*[record.explicit_parent_bundle_lidvids for record in self._parent_records])
+        return self.explicit_parent_bundle_lidvids.union(derived_parent_bundle_lidvids)
+
+    @property
+    def parent_collection_lidvids(self) -> Set[PdsLidVid]:
+        derived_parent_collection_lidvids = chain(*[record.explicit_parent_collection_lidvids for record in self._parent_records])
+        return self.explicit_parent_collection_lidvids.union(derived_parent_collection_lidvids)
 
     def __post_init__(self):
         if not isinstance(self.lidvid, PdsLidVid):
@@ -55,7 +70,7 @@ class AncestryRecord:
                 f'Could not parse valid AncestryRecord from provided dict due to "{err.__class__.__name__}: {err}" (got {json.dumps(d)})'
             )
 
-    def update_with(self, other: AncestryRecord):
+    def merge(self, other: AncestryRecord):
         """
         Given another AncestryRecord object with the same lidvid, add its parent histories to those of this
         AncestryRecord.  Used to merge partial histories.
@@ -68,3 +83,12 @@ class AncestryRecord:
 
         self.parent_bundle_lidvids.update(other.parent_bundle_lidvids)
         self.parent_collection_lidvids.update(other.parent_collection_lidvids)
+        self._parent_records.extend(other._parent_records)
+
+    def attach_parent_record(self, record: AncestryRecord):
+        """
+        Attach a parent record to this AncestryRecord, whose parents will be inherited by this AncestryRecord.
+        :param record:
+        :return:
+        """
+        self._parent_records.append(record)
