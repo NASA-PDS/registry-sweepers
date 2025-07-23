@@ -106,3 +106,10 @@ class AncestryRecord:
         :return:
         """
         self._parent_records.append(record)
+
+        if record.lidvid.is_bundle():
+            self.explicit_parent_bundle_lidvids.add(record.lidvid)
+        elif record.lidvid.is_collection():
+            self.explicit_parent_collection_lidvids.add(record.lidvid)
+        else:
+            raise ValueError(f'Cannot attach a non-aggregate AncestryRecord as parent of another AncestryRecord (got {record.lidvid})')
