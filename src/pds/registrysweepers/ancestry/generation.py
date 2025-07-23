@@ -188,6 +188,7 @@ def generate_nonaggregate_and_collection_records_iteratively(
         for collection_record in collections_records_for_lid:
             yield collection_record
 
+
 def get_nonaggregate_ancestry_records_for_collection_lid(
     client: OpenSearch,
     collection_lid: PdsLid,

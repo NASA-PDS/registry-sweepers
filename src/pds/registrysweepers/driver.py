@@ -61,10 +61,10 @@ import os
 from datetime import datetime
 from typing import Callable
 
-from pds.registrysweepers.ancestry import main as ancestry
 from pds.registrysweepers import legacy_registry_sync
 from pds.registrysweepers import provenance
 from pds.registrysweepers import repairkit
+from pds.registrysweepers.ancestry import main as ancestry
 from pds.registrysweepers.reindexer import main as reindexer
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_log_level
