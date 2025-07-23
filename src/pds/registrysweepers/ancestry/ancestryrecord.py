@@ -4,7 +4,8 @@ import json
 from dataclasses import dataclass
 from dataclasses import field
 from itertools import chain
-from typing import Callable, List
+from typing import Callable
+from typing import List
 from typing import Set
 
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
@@ -27,12 +28,16 @@ class AncestryRecord:
 
     @property
     def parent_bundle_lidvids(self) -> Set[PdsLidVid]:
-        derived_parent_bundle_lidvids = chain(*[record.explicit_parent_bundle_lidvids for record in self._parent_records])
+        derived_parent_bundle_lidvids = chain(
+            *[record.explicit_parent_bundle_lidvids for record in self._parent_records]
+        )
         return self.explicit_parent_bundle_lidvids.union(derived_parent_bundle_lidvids)
 
     @property
     def parent_collection_lidvids(self) -> Set[PdsLidVid]:
-        derived_parent_collection_lidvids = chain(*[record.explicit_parent_collection_lidvids for record in self._parent_records])
+        derived_parent_collection_lidvids = chain(
+            *[record.explicit_parent_collection_lidvids for record in self._parent_records]
+        )
         return self.explicit_parent_collection_lidvids.union(derived_parent_collection_lidvids)
 
     def __post_init__(self):
