@@ -160,7 +160,7 @@ def generate_updates(
             if ancestry_records_accumulator is not None:
                 ancestry_records_accumulator.append(record)
 
-            if record.lidvid.is_collection() and len(record.parent_bundle_lidvids) == 0:
+            if record.lidvid.is_collection() and len(record.resolve_parent_bundle_lidvids()) == 0:
                 log.warning(f"Collection {record.lidvid} is not referenced by any bundle.")
 
             update = update_from_record(record)

@@ -120,7 +120,7 @@ def get_collection_ancestry_records(
         for identifier in referenced_collection_identifiers:
             if isinstance(identifier, PdsLidVid):
                 try:
-                    ancestry_by_collection_lidvid[identifier].parent_bundle_lidvids.add(bundle_lidvid)
+                    ancestry_by_collection_lidvid[identifier].resolve_parent_bundle_lidvids().add(bundle_lidvid)
                 except KeyError:
                     log.warning(
                         limit_log_length(
@@ -131,7 +131,7 @@ def get_collection_ancestry_records(
             elif isinstance(identifier, PdsLid):
                 try:
                     for record in ancestry_by_collection_lid[identifier.lid]:
-                        record.parent_bundle_lidvids.add(bundle_lidvid)
+                        record.resolve_parent_bundle_lidvids().add(bundle_lidvid)
                 except KeyError:
                     log.warning(
                         limit_log_length(
