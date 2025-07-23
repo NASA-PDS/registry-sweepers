@@ -57,7 +57,7 @@ class AncestryRecordTestCase(unittest.TestCase):
             explicit_parent_bundle_lidvids={PdsLidVid.from_string(id) for id in bundle_lidvid_strs},
         )
 
-        dest.merge(src)
+        dest.update_with(src)
         self.assertEqual(expected, dest, "update_with() works")
 
         bad_src = AncestryRecord(
@@ -71,7 +71,7 @@ class AncestryRecordTestCase(unittest.TestCase):
         )
 
         # test update_with() raises ValueError on mismatched lidvids
-        self.assertRaises(ValueError, lambda: dest.merge(bad_src))
+        self.assertRaises(ValueError, lambda: dest.update_with(bad_src))
 
 
 if __name__ == "__main__":

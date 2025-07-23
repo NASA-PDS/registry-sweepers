@@ -75,7 +75,7 @@ class AncestryRecord:
                 f'Could not parse valid AncestryRecord from provided dict due to "{err.__class__.__name__}: {err}" (got {json.dumps(d)})'
             )
 
-    def merge(self, other: AncestryRecord):
+    def update_with(self, other: AncestryRecord):
         """
         Given another AncestryRecord object with the same lidvid, add its parent histories to those of this
         AncestryRecord.  Used to merge partial histories.
