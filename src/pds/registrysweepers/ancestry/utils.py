@@ -149,8 +149,8 @@ def gb_mem_to_size(desired_mem_usage_gb) -> int:
 def update_from_record(record: AncestryRecord) -> Update:
     doc_id = str(record.lidvid)
     content = {
-        METADATA_PARENT_BUNDLE_KEY: [str(id) for id in record.parent_bundle_lidvids],
-        METADATA_PARENT_COLLECTION_KEY: [str(id) for id in record.parent_collection_lidvids],
+        METADATA_PARENT_BUNDLE_KEY: [str(id) for id in record.resolve_parent_bundle_lidvids()],
+        METADATA_PARENT_COLLECTION_KEY: [str(id) for id in record.resolve_parent_collection_lidvids()],
         SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: int(SWEEPERS_ANCESTRY_VERSION),
     }
     return Update(id=doc_id, content=content)

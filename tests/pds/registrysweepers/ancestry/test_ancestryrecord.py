@@ -12,8 +12,8 @@ class AncestryRecordTestCase(unittest.TestCase):
 
         record = AncestryRecord(
             lidvid=PdsLidVid.from_string(lidvid_str),
-            explicit_explicit_parent_collection_lidvids=set(PdsLidVid.from_string(id) for id in collection_lidvid_strs),
-            explicit_explicit_parent_bundle_lidvids=set(PdsLidVid.from_string(id) for id in bundle_lidvid_strs),
+            explicit_parent_collection_lidvids=set(PdsLidVid.from_string(id) for id in collection_lidvid_strs),
+            explicit_parent_bundle_lidvids=set(PdsLidVid.from_string(id) for id in bundle_lidvid_strs),
         )
 
         expected_dict_repr = {

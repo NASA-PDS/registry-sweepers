@@ -7,15 +7,14 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
-from pds.registrysweepers import ancestry
-from pds.registrysweepers.ancestry import generate_deferred_updates
-from pds.registrysweepers.ancestry import generate_updates
+from pds.registrysweepers.ancestry import main as ancestry
+from pds.registrysweepers.ancestry.main import generate_deferred_updates
+from pds.registrysweepers.ancestry.main import generate_updates
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
 from pds.registrysweepers.ancestry.generation import generate_nonaggregate_and_collection_records_iteratively
 from pds.registrysweepers.ancestry.generation import get_collection_ancestry_records
-from pds.registrysweepers.ancestry.generation import get_nonaggregate_ancestry_records
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
@@ -99,30 +98,30 @@ class AncestryBasicTestCase(unittest.TestCase):
 
     def test_bundles_have_no_ancestry(self):
         for record in self.bundle_records:
-            self.assertTrue(len(record.parent_bundle_lidvids) == 0)
-            self.assertTrue(len(record.parent_collection_lidvids) == 0)
+            self.assertTrue(len(record.resolve_parent_bundle_lidvids()) == 0)
+            self.assertTrue(len(record.resolve_parent_collection_lidvids()) == 0)
 
     def test_collections_have_no_collection_ancestry(self):
         for record in self.collection_records:
-            self.assertTrue(len(record.parent_collection_lidvids) == 0)
+            self.assertTrue(len(record.resolve_parent_collection_lidvids()) == 0)
 
     def test_collections_have_correct_bundle_ancestry(self):
         for record in self.collection_records:
             expected_bundle_ancestry = set(self.expected_bundle_ancestry_by_collection[str(record.lidvid)])
-            self.assertEqual(expected_bundle_ancestry, set(str(id) for id in record.parent_bundle_lidvids))
+            self.assertEqual(expected_bundle_ancestry, set(str(id) for id in record.resolve_parent_bundle_lidvids()))
 
     def test_nonaggregates_have_correct_collection_ancestry(self):
         for record in self.nonaggregate_records:
             expected_collection_ancestry = set(self.expected_collection_ancestry_by_nonaggregate[str(record.lidvid)])
-            self.assertEqual(expected_collection_ancestry, set(str(id) for id in record.parent_collection_lidvids))
+            self.assertEqual(expected_collection_ancestry, set(str(id) for id in record.resolve_parent_collection_lidvids()))
 
     def test_nonaggregates_have_correct_bundle_ancestry(self):
         print(
             "#### N.B. This test will always fail if test_nonaggregates_have_correct_collection_ancestry() fails! ####"
         )
         for record in self.nonaggregate_records:
-            parent_collection_id_strs = set(str(id) for id in record.parent_collection_lidvids)
-            parent_bundle_id_strs = set(str(id) for id in record.parent_bundle_lidvids)
+            parent_collection_id_strs = set(str(id) for id in record.resolve_parent_collection_lidvids())
+            parent_bundle_id_strs = set(str(id) for id in record.resolve_parent_bundle_lidvids())
             expected_bundle_id_strs = set(
                 itertools.chain(*[self.expected_bundle_ancestry_by_collection[id] for id in parent_collection_id_strs])
             )
@@ -132,11 +131,11 @@ class AncestryBasicTestCase(unittest.TestCase):
         for record in self.ancestry_records:
             update = self.updates_by_lidvid_str[str(record.lidvid)]
             self.assertEqual(
-                set(str(lidvid) for lidvid in record.parent_bundle_lidvids),
+                set(str(lidvid) for lidvid in record.resolve_parent_bundle_lidvids()),
                 set(update["ops:Provenance/ops:parent_bundle_identifier"]),
             )
             self.assertEqual(
-                set(str(lidvid) for lidvid in record.parent_collection_lidvids),
+                set(str(lidvid) for lidvid in record.resolve_parent_collection_lidvids()),
                 set(update["ops:Provenance/ops:parent_collection_identifier"]),
             )
 
@@ -146,11 +145,11 @@ class AncestryBasicTestCase(unittest.TestCase):
             record = self.records_by_lidvid_str[doc_id]
             self.assertEqual(
                 set(update["ops:Provenance/ops:parent_bundle_identifier"]),
-                set(str(lidvid) for lidvid in record.parent_bundle_lidvids),
+                set(str(lidvid) for lidvid in record.resolve_parent_bundle_lidvids()),
             )
             self.assertEqual(
                 set(update["ops:Provenance/ops:parent_collection_identifier"]),
-                set(str(lidvid) for lidvid in record.parent_collection_lidvids),
+                set(str(lidvid) for lidvid in record.resolve_parent_collection_lidvids()),
             )
 
             self.assertEqual(SWEEPERS_ANCESTRY_VERSION, update[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY])

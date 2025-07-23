@@ -26,15 +26,24 @@ class AncestryRecord:
     # equivalent record is known to already exist due to up-to-date ancestry version flag in the source document
     skip_write: bool = False
 
-    @property
-    def parent_bundle_lidvids(self) -> Set[PdsLidVid]:
+    def resolve_parent_bundle_lidvids(self) -> Set[PdsLidVid]:
+        """
+        Return a set of all bundle LIDVIDs this AncestryRecord references, either explicitly or via association with a
+        parent AncestryRecord.
+        :return:
+        """
         derived_parent_bundle_lidvids = chain(
             *[record.explicit_parent_bundle_lidvids for record in self._parent_records]
         )
         return self.explicit_parent_bundle_lidvids.union(derived_parent_bundle_lidvids)
 
-    @property
-    def parent_collection_lidvids(self) -> Set[PdsLidVid]:
+    def resolve_parent_collection_lidvids(self) -> Set[PdsLidVid]:
+        """
+                Return a set of all collection LIDVIDs this AncestryRecord references, either explicitly or via association with a
+                parent AncestryRecord.
+                :return:
+                """
+
         derived_parent_collection_lidvids = chain(
             *[record.explicit_parent_collection_lidvids for record in self._parent_records]
         )
@@ -45,7 +54,7 @@ class AncestryRecord:
             raise ValueError('Cannot initialise AncestryRecord with non-PdsLidVid value for "lidvid"')
 
     def __repr__(self):
-        return f"AncestryRecord(lidvid={self.lidvid}, parent_collection_lidvids={sorted([str(x) for x in self.parent_collection_lidvids])}, parent_bundle_lidvids={sorted([str(x) for x in self.parent_bundle_lidvids])})"
+        return f"AncestryRecord(lidvid={self.lidvid}, parent_collection_lidvids={sorted([str(x) for x in self.resolve_parent_collection_lidvids()])}, parent_bundle_lidvids={sorted([str(x) for x in self.resolve_parent_bundle_lidvids()])})"
 
     def __hash__(self):
         return hash(self.lidvid)
@@ -55,8 +64,8 @@ class AncestryRecord:
 
         return {
             "lidvid": str(self.lidvid),
-            "parent_collection_lidvids": list_f(str(lidvid) for lidvid in self.parent_collection_lidvids),
-            "parent_bundle_lidvids": list_f(str(lidvid) for lidvid in self.parent_bundle_lidvids),
+            "parent_collection_lidvids": list_f(str(lidvid) for lidvid in self.resolve_parent_collection_lidvids()),
+            "parent_bundle_lidvids": list_f(str(lidvid) for lidvid in self.resolve_parent_bundle_lidvids()),
         }
 
     @staticmethod
@@ -64,10 +73,10 @@ class AncestryRecord:
         try:
             return AncestryRecord(
                 lidvid=PdsLidVid.from_string(d["lidvid"]),  # type: ignore
-                parent_collection_lidvids=set(
+                explicit_parent_collection_lidvids=set(
                     PdsLidVid.from_string(lidvid) for lidvid in d["parent_collection_lidvids"]
                 ),
-                parent_bundle_lidvids=set(PdsLidVid.from_string(lidvid) for lidvid in d["parent_bundle_lidvids"]),
+                explicit_parent_bundle_lidvids=set(PdsLidVid.from_string(lidvid) for lidvid in d["parent_bundle_lidvids"]),
                 skip_write=skip_write,
             )
         except (KeyError, ValueError) as err:
@@ -86,8 +95,8 @@ class AncestryRecord:
                 f"lidvid mismatch in call to AncestryRecord.updateWith() (got {other.lidvid}, should be {self.lidvid})"
             )
 
-        self.parent_bundle_lidvids.update(other.parent_bundle_lidvids)
-        self.parent_collection_lidvids.update(other.parent_collection_lidvids)
+        self.explicit_parent_bundle_lidvids.update(other.resolve_parent_bundle_lidvids())
+        self.explicit_parent_collection_lidvids.update(other.resolve_parent_collection_lidvids())
         self._parent_records.extend(other._parent_records)
 
     def attach_parent_record(self, record: AncestryRecord):
