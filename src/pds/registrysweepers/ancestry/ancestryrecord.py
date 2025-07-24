@@ -33,7 +33,7 @@ class AncestryRecord:
         :return:
         """
         derived_parent_bundle_lidvids = chain(
-            *[record.explicit_parent_bundle_lidvids for record in self._parent_records]
+            *[record.resolve_parent_bundle_lidvids() for record in self._parent_records]
         )
         return self.explicit_parent_bundle_lidvids.union(derived_parent_bundle_lidvids)
 
@@ -45,7 +45,7 @@ class AncestryRecord:
                 """
 
         derived_parent_collection_lidvids = chain(
-            *[record.explicit_parent_collection_lidvids for record in self._parent_records]
+            *[record.resolve_parent_collection_lidvids() for record in self._parent_records]
         )
         return self.explicit_parent_collection_lidvids.union(derived_parent_collection_lidvids)
 
