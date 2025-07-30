@@ -54,6 +54,7 @@ from typing import Union
 from opensearchpy import OpenSearch
 from pds.registrysweepers.provenance.constants import METADATA_SUCCESSOR_KEY
 from pds.registrysweepers.provenance.provenancerecord import ProvenanceRecord
+from pds.registrysweepers.provenance.versioning import SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.provenance.versioning import SWEEPERS_PROVENANCE_VERSION
 from pds.registrysweepers.provenance.versioning import SWEEPERS_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
@@ -282,6 +283,7 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
         update_content = {
             METADATA_SUCCESSOR_KEY: str(record.successor) if record.successor else None,
             SWEEPERS_PROVENANCE_VERSION_METADATA_KEY: SWEEPERS_PROVENANCE_VERSION,
+            SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY: None,  # see comment in versioning.py for context - edunn
         }
 
         if record.skip_write:
