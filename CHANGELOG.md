@@ -1,8 +1,8 @@
 # Changelog
 
-## [release/1.4.0](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.4.0) (2025-06-12)
+## [v1.4.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.4.0) (2025-07-16)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.3.0...release/1.4.0)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.3.0...v1.4.0)
 
 **Requirements:**
 
