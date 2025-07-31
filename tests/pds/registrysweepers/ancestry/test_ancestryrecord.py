@@ -1,6 +1,6 @@
 import unittest
 
-from pds.registrysweepers.ancestry import AncestryRecord
+from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 
@@ -12,8 +12,8 @@ class AncestryRecordTestCase(unittest.TestCase):
 
         record = AncestryRecord(
             lidvid=PdsLidVid.from_string(lidvid_str),
-            parent_collection_lidvids=set(PdsLidVid.from_string(id) for id in collection_lidvid_strs),
-            parent_bundle_lidvids=set(PdsLidVid.from_string(id) for id in bundle_lidvid_strs),
+            explicit_explicit_parent_collection_lidvids=set(PdsLidVid.from_string(id) for id in collection_lidvid_strs),
+            explicit_explicit_parent_bundle_lidvids=set(PdsLidVid.from_string(id) for id in bundle_lidvid_strs),
         )
 
         expected_dict_repr = {
@@ -33,45 +33,45 @@ class AncestryRecordTestCase(unittest.TestCase):
 
         dest = AncestryRecord(
             lidvid=PdsLidVid.from_string(lidvid_str),
-            parent_collection_lidvids={
+            explicit_parent_collection_lidvids={
                 PdsLidVid.from_string(collection_lidvid_strs[0]),
             },
-            parent_bundle_lidvids={
+            explicit_parent_bundle_lidvids={
                 PdsLidVid.from_string(bundle_lidvid_strs[0]),
             },
         )
 
         src = AncestryRecord(
             lidvid=PdsLidVid.from_string(lidvid_str),
-            parent_collection_lidvids={
+            explicit_parent_collection_lidvids={
                 PdsLidVid.from_string(collection_lidvid_strs[1]),
             },
-            parent_bundle_lidvids={
+            explicit_parent_bundle_lidvids={
                 PdsLidVid.from_string(bundle_lidvid_strs[1]),
             },
         )
 
         expected = AncestryRecord(
             lidvid=PdsLidVid.from_string(lidvid_str),
-            parent_collection_lidvids={PdsLidVid.from_string(id) for id in collection_lidvid_strs},
-            parent_bundle_lidvids={PdsLidVid.from_string(id) for id in bundle_lidvid_strs},
+            explicit_parent_collection_lidvids={PdsLidVid.from_string(id) for id in collection_lidvid_strs},
+            explicit_parent_bundle_lidvids={PdsLidVid.from_string(id) for id in bundle_lidvid_strs},
         )
 
-        dest.update_with(src)
+        dest.merge(src)
         self.assertEqual(expected, dest, "update_with() works")
 
         bad_src = AncestryRecord(
             lidvid=PdsLidVid.from_string(mismatched_lidvid_str),
-            parent_collection_lidvids={
+            explicit_parent_collection_lidvids={
                 PdsLidVid.from_string(collection_lidvid_strs[1]),
             },
-            parent_bundle_lidvids={
+            explicit_parent_bundle_lidvids={
                 PdsLidVid.from_string(bundle_lidvid_strs[1]),
             },
         )
 
         # test update_with() raises ValueError on mismatched lidvids
-        self.assertRaises(ValueError, lambda: dest.update_with(bad_src))
+        self.assertRaises(ValueError, lambda: dest.merge(bad_src))
 
 
 if __name__ == "__main__":
