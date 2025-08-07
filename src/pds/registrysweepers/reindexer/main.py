@@ -23,7 +23,7 @@ from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index
 from pds.registrysweepers.utils.db.update import Update
 from tqdm import tqdm
 
-from src.pds.registrysweepers.utils.misc import limit_log_length
+from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
 

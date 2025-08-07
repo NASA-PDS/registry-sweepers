@@ -19,7 +19,7 @@ from retry import retry
 from retry.api import retry_call
 from tqdm import tqdm
 
-from src.pds.registrysweepers.utils.misc import limit_log_length
+from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
 

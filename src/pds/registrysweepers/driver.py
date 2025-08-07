@@ -72,7 +72,7 @@ from pds.registrysweepers.utils.db.client import get_opensearch_client_from_envi
 from pds.registrysweepers.utils.misc import get_human_readable_elapsed_since
 from pds.registrysweepers.utils.misc import is_dev_mode
 
-from src.pds.registrysweepers.utils.misc import limit_log_length
+from pds.registrysweepers.utils.misc import limit_log_length
 
 
 def run():

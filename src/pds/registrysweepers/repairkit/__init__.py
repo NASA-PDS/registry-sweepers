@@ -26,7 +26,7 @@ from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
 
-from src.pds.registrysweepers.utils.misc import limit_log_length
+from pds.registrysweepers.utils.misc import limit_log_length
 
 """
 dictionary repair tools is {field_name:[funcs]} where field_name can be:

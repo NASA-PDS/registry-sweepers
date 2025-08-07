@@ -40,7 +40,7 @@ from pds.registrysweepers.utils.productidentifiers.factory import PdsProductIden
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
-from src.pds.registrysweepers.utils.misc import limit_log_length
+from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
 

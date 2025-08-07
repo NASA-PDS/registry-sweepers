@@ -71,7 +71,7 @@ from pds.registrysweepers.utils.misc import group_by_key
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from tqdm import tqdm
 
-from src.pds.registrysweepers.utils.misc import limit_log_length
+from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
 

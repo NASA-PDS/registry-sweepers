@@ -12,7 +12,7 @@ from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils.misc import is_dev_mode
 from solr_to_es.solrSource import SlowSolrDocs  # type: ignore
 
-from src.pds.registrysweepers.utils.misc import limit_log_length
+from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
 
