@@ -3,6 +3,8 @@ import json
 import logging
 from typing import Dict
 
+from pds.registrysweepers.utils.misc import limit_log_length
+
 log = logging.getLogger(__name__)
 
 # exclude the following properties from array conversion even if targeted - they are expected to be string-typed
@@ -23,6 +25,10 @@ def repair(document: Dict, fieldname: str) -> Dict:
         return {}
 
     if isinstance(document[fieldname], str):
-        log.debug(f"found string in doc {document.get('_id')} for field {fieldname} where it should be an array")
+        log.debug(
+            limit_log_length(
+                f"found string in doc {document.get('_id')} for field {fieldname} where it should be an array"
+            )
+        )
         return {fieldname: [document[fieldname]]}
     return {}

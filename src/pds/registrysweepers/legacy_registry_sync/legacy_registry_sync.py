@@ -10,6 +10,7 @@ from pds.registrysweepers.legacy_registry_sync.opensearch_loaded_product import 
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils.misc import is_dev_mode
+from pds.registrysweepers.utils.misc import limit_log_length
 from solr_to_es.solrSource import SlowSolrDocs  # type: ignore
 
 log = logging.getLogger(__name__)
@@ -27,9 +28,9 @@ def create_legacy_registry_index(es_conn=None):
     @return:
     """
     if not es_conn.indices.exists(OS_INDEX):
-        log.info("create index %s", OS_INDEX)
+        log.info(limit_log_length("create index %s", OS_INDEX))
         es_conn.indices.create(index=OS_INDEX, body={})
-    log.info("index created %s", OS_INDEX)
+    log.info(limit_log_length("index created %s", OS_INDEX))
 
 
 def run(
@@ -62,7 +63,7 @@ def run(
         client, es_actions, chunk_size=50, max_chunk_bytes=50000000, max_retries=5, initial_backoff=10
     ):
         if not operation_successful:
-            log.error(operation_info)
+            log.error(limit_log_length(operation_info))
 
         if dev_mode:
             break

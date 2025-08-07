@@ -2,6 +2,8 @@ import logging
 import os
 from datetime import datetime
 
+from pds.registrysweepers.utils.misc import limit_log_length
+
 log = logging.getLogger(__name__)
 
 NODE_FOLDERS = {
@@ -96,13 +98,17 @@ class SolrOsWrapperIter:
                     v = [datetime.fromisoformat(v[0].replace("Z", ""))]
                     new_doc["_source"][k] = v
                 except ValueError:
-                    log.warning("Date %s for field %s is invalid, assign default datetime 01-01-1950 instead", v, k)
+                    log.warning(
+                        limit_log_length(
+                            f"Date {v} for field {k} is invalid, assign default datetime 01-01-1950 instead"
+                        )
+                    )
                     new_doc["_source"][k] = [datetime(1950, 1, 1, 0, 0, 0)]
             elif "year" in k:
                 if len(v[0]) > 0:
                     new_doc["_source"][k] = v
                 else:
-                    log.warning("Year %s for field %s is invalid", v, k)
+                    log.warning(limit_log_length(f"Year {v} for field {k} is invalid"))
             else:
                 new_doc["_source"][k] = v
 
@@ -123,4 +129,4 @@ class SolrOsWrapperIter:
                 doc = next(self.solr_itr)
                 return self.solr_doc_to_os_doc(doc)
             except MissingIdentifierError as e:
-                log.warning(str(e))
+                log.warning(limit_log_length(str(e)))

@@ -15,6 +15,7 @@ from opensearchpy import OpenSearch
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import get_random_hex_id
+from pds.registrysweepers.utils.misc import limit_log_length
 from retry import retry
 from retry.api import retry_call
 from tqdm import tqdm
@@ -40,12 +41,12 @@ def query_registry_db_with_scroll(
 
     scroll_keepalive = f"{scroll_keepalive_minutes}m"
     query_id = get_random_hex_id()  # This is just used to differentiate queries during logging
-    log.debug(f"Initiating query (id {query_id}) of index {index_name}: {json.dumps(query)}")
+    log.debug(limit_log_length(f"Initiating query (id {query_id}) of index {index_name}: {json.dumps(query)}"))
 
     served_hits = 0
 
     last_info_log_at_percentage = 0
-    log.debug(f"Query {query_id} progress: 0%")
+    log.debug(limit_log_length(f"Query {query_id} progress: 0%"))
 
     more_data_exists = True
     scroll_id = None
@@ -81,7 +82,7 @@ def query_registry_db_with_scroll(
 
         total_hits = results["hits"]["total"]["value"]
         if served_hits == 0:
-            log.debug(f"Query {query_id} returns {total_hits} total hits")
+            log.debug(limit_log_length(f"Query {query_id} returns {total_hits} total hits"))
 
         response_hits = results["hits"]["hits"]
         for hit in response_hits:
@@ -90,7 +91,7 @@ def query_registry_db_with_scroll(
             percentage_of_hits_served = int(served_hits / total_hits * 100)
             if last_info_log_at_percentage is None or percentage_of_hits_served >= (last_info_log_at_percentage + 5):
                 last_info_log_at_percentage = percentage_of_hits_served
-                log.debug(f"Query {query_id} progress: {percentage_of_hits_served}%")
+                log.debug(limit_log_length(f"Query {query_id} progress: {percentage_of_hits_served}%"))
 
             yield hit
 
@@ -101,7 +102,9 @@ def query_registry_db_with_scroll(
         hits_data_present_in_response = len(response_hits) > 0
         if not hits_data_present_in_response and served_hits < total_hits:
             log.error(
-                f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
+                limit_log_length(
+                    f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
+                )
             )
             break
 
@@ -116,7 +119,7 @@ def query_registry_db_with_scroll(
         logger=log,
     )
 
-    log.debug(f"Query {query_id} complete!")
+    log.debug(limit_log_length(f"Query {query_id} complete!"))
 
 
 def query_registry_db_with_search_after(
@@ -144,9 +147,11 @@ def query_registry_db_with_search_after(
     # TODO: stop accepted {'query': <content>} and start accepting just <content> itself, to prevent the need for this guard
     if "search_after" in query.keys():
         log.error(
-            f'Provided query object contains "search_after" content when none should exist - was a dict object reused?: got {query}.'
+            limit_log_length(
+                f'Provided query object contains "search_after" content when none should exist - was a dict object reused?: got {query}.'
+            )
         )
-        log.info("Discarding erroneous search_after values.")
+        log.info(limit_log_length("Discarding erroneous search_after values."))
         query.pop("search_after")
 
     query_id = get_random_hex_id()  # This is just used to differentiate queries during logging
@@ -159,7 +164,9 @@ def query_registry_db_with_search_after(
     total_hits = get_query_hits_count(client, index_name, query)
     expected_hits = limit if limit is not None else total_hits
     limit_log_msg_part = f" (limited to {expected_hits} hits)" if limit is not None else ""
-    log.debug(f"Query {query_id} returns {total_hits} total hits{limit_log_msg_part}: {json.dumps(query)}")
+    log.debug(
+        limit_log_length(f"Query {query_id} returns {total_hits} total hits{limit_log_msg_part}: {json.dumps(query)}")
+    )
 
     with tqdm(total=expected_hits, desc=f"Query {query_id}") as pbar:
         while more_data_exists:
@@ -178,7 +185,9 @@ def query_registry_db_with_search_after(
             if search_after_values is not None:
                 query["search_after"] = search_after_values
                 log.debug(
-                    f"Query {query_id} paging {page_size} hits (page {current_page} of {expected_pages}) with sort fields {sort_fields} and search-after values {search_after_values}"
+                    limit_log_length(
+                        f"Query {query_id} paging {page_size} hits (page {current_page} of {expected_pages}) with sort fields {sort_fields} and search-after values {search_after_values}"
+                    )
                 )
 
             def fetch_func():
@@ -212,7 +221,7 @@ def query_registry_db_with_search_after(
                 yield hit
 
                 if limit is not None and served_hits >= limit:
-                    log.debug(f"Query {query_id} complete! (limit of {expected_hits} hits reached)")
+                    log.debug(limit_log_length(f"Query {query_id} complete! (limit of {expected_hits} hits reached)"))
                     return
 
                 # simpler to set the value after every hit than worry about OBO errors detecting the last hit in the page
@@ -240,13 +249,15 @@ def query_registry_db_with_search_after(
             hits_data_present_in_response = len(response_hits) > 0
             if not hits_data_present_in_response and served_hits < total_hits:
                 log.error(
-                    f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
+                    limit_log_length(
+                        f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
+                    )
                 )
                 break
 
             more_data_exists = served_hits < results["hits"]["total"]["value"]
 
-    log.debug(f"Query {query_id} complete!")
+    log.debug(limit_log_length(f"Query {query_id} complete!"))
 
 
 def query_registry_db_or_mock(
@@ -282,7 +293,7 @@ def write_updated_docs(
     bulk_chunk_max_update_count: Union[int, None] = None,
     as_upsert: bool = False,
 ):
-    log.info("Writing document updates...")
+    log.info(limit_log_length("Writing document updates..."))
     buffered_updates_count = 0
     updated_doc_count = 0
     total_writes_skipped = 0
@@ -312,7 +323,9 @@ def write_updated_docs(
 
         if flush_threshold_reached:
             log.debug(
-                f"Bulk update buffer has reached {threshold_log_str} threshold - writing {buffered_updates_count} document updates to db..."
+                limit_log_length(
+                    f"Bulk update buffer has reached {threshold_log_str} threshold - writing {buffered_updates_count} document updates to db..."
+                )
             )
             _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
             bulk_updates_buffer = []
@@ -328,10 +341,16 @@ def write_updated_docs(
         updated_doc_count += 1
 
     if buffered_updates_count > 0:
-        log.debug(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
+        log.debug(
+            limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
+        )
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
 
-    log.info(f"Wrote document updates for {updated_doc_count} products and skipped {total_writes_skipped} doc updates")
+    log.info(
+        limit_log_length(
+            f"Wrote document updates for {updated_doc_count} products and skipped {total_writes_skipped} doc updates"
+        )
+    )
 
 
 def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[str]:
@@ -352,7 +371,7 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
 @retry(tries=6, delay=15, backoff=2, logger=log)
 def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]):
     if len(bulk_updates) == 0:
-        log.debug("_write_bulk_updates_chunk received empty arg bulk_updates - skipping")
+        log.debug(limit_log_length("_write_bulk_updates_chunk received empty arg bulk_updates - skipping"))
 
     bulk_data = "\n".join(bulk_updates) + "\n"
 
@@ -379,7 +398,9 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                 for error_reason, ids in reason_aggregate.items():
                     ids_str = get_ids_list_str(ids)
                     log.warning(
-                        f"Attempt to update the following {len(ids)} documents failed due to {error_type} ({error_reason}): {ids_str}"
+                        limit_log_length(
+                            f"Attempt to update the following {len(ids)} documents failed due to {error_type} ({error_reason}): {ids_str}"
+                        )
                     )
 
         if log.isEnabledFor(logging.ERROR):
@@ -391,10 +412,12 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                 for error_reason, ids in reason_aggregate.items():
                     ids_str = get_ids_list_str(ids)
                     log.error(
-                        f"Attempt to update the following {len(ids)} documents failed unexpectedly due to {error_type} ({error_reason}): {ids_str}"
+                        limit_log_length(
+                            f"Attempt to update the following {len(ids)} documents failed unexpectedly due to {error_type} ({error_reason}): {ids_str}"
+                        )
                     )
     else:
-        log.debug("Successfully wrote bulk update chunk")
+        log.debug(limit_log_length("Successfully wrote bulk update chunk"))
 
 
 def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str, List[str]]]:
