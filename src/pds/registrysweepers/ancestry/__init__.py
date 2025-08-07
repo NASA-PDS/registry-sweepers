@@ -37,6 +37,8 @@ from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
+from src.pds.registrysweepers.utils.misc import limit_log_length
+
 log = logging.getLogger(__name__)
 
 
@@ -50,7 +52,7 @@ def run(
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
 
-    log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing...")
+    log.info(limit_log_length(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing..."))
 
     bundle_records = list(get_bundle_ancestry_records(client, registry_mock_query_f))
     collection_and_nonaggregate_records = generate_nonaggregate_and_collection_records_iteratively(
@@ -65,7 +67,7 @@ def run(
     )
 
     if bulk_updates_sink is None:
-        log.info("Ensuring metadata keys are present in database index...")
+        log.info(limit_log_length("Ensuring metadata keys are present in database index..."))
         for metadata_key in [
             METADATA_PARENT_BUNDLE_KEY,
             METADATA_PARENT_COLLECTION_KEY,
@@ -80,16 +82,16 @@ def run(
                 client, resolve_multitenant_index_name(client, "registry-refs"), metadata_key, "keyword"
             )
 
-        log.info("Writing bulk updates to database...")
+        log.info(limit_log_length("Writing bulk updates to database..."))
         write_updated_docs(
             client,
             updates,
             index_name=resolve_multitenant_index_name(client, "registry"),
         )
-        log.info("Generating updates from deferred records...")
+        log.info(limit_log_length("Generating updates from deferred records..."))
         deferred_updates = generate_deferred_updates(client, deferred_records_file.name, registry_mock_query_f)
 
-        log.info("Writing deferred updates to database...")
+        log.info(limit_log_length("Writing deferred updates to database..."))
         write_updated_docs(
             client,
             deferred_updates,
@@ -100,7 +102,7 @@ def run(
         for _ in updates:
             pass
 
-    log.info("Checking indexes for orphaned documents")
+    log.info(limit_log_length("Checking indexes for orphaned documents"))
     index_names = [resolve_multitenant_index_name(client, index_label) for index_label in ["registry", "registry-refs"]]
     for index_name in index_names:
         if log.isEnabledFor(logging.DEBUG):
@@ -123,11 +125,11 @@ def run(
             orphaned_doc_count = orphan_counter_f(client, index_name)
 
         if orphaned_doc_count > 0:
-            log.warning(
+            log.warning(limit_log_length(
                 f'Detected {orphaned_doc_count} orphaned documents in index "{index_name} - please inform developers": {orphaned_doc_ids_str}'
-            )
+            ))
 
-    log.info("Ancestry sweeper processing complete!")
+    log.info(limit_log_length("Ancestry sweeper processing complete!"))
 
 
 def generate_updates(
@@ -151,7 +153,7 @@ def generate_updates(
     """
     updated_doc_ids: Set[str] = set()
 
-    log.info("Generating document bulk updates for AncestryRecords...")
+    log.info(limit_log_length("Generating document bulk updates for AncestryRecords..."))
 
     # stream/yield Updates for AncestryRecords, deferring processing of conflicting AncestryRecords and storing them in
     # a temporary file
@@ -162,7 +164,7 @@ def generate_updates(
                 ancestry_records_accumulator.append(record)
 
             if record.lidvid.is_collection() and len(record.parent_bundle_lidvids) == 0:
-                log.warning(f"Collection {record.lidvid} is not referenced by any bundle.")
+                log.warning(limit_log_length(f"Collection {record.lidvid} is not referenced by any bundle."))
 
             update = update_from_record(record)
 
@@ -171,10 +173,10 @@ def generate_updates(
                 bulk_updates_sink.append((update.id, update.content))
 
             if update.id in updated_doc_ids:
-                log.debug(
+                log.debug(limit_log_length(
                     f"Multiple updates detected for doc_id {update.id} - deferring subsequent parts"
                     " - storing in {deferred_updates_file.name}"
-                )
+                ))
                 deferred_records_file.write(json.dumps(record.to_dict(sort_lists=False)) + "\n")
                 deferred_records_file.flush()
                 continue
@@ -212,7 +214,7 @@ def generate_deferred_updates(
             update = update_from_record(record)
             yield update
         except (KeyError, ValueError) as err:
-            log.error(f'Failed to parse valid AncestryRecord from document with id "{doc["_id"]}: {err}"')
+            log.error(limit_log_length(f'Failed to parse valid AncestryRecord from document with id "{doc["_id"]}: {err}"'))
 
         # TODO: Check that ancestry version is equal to current, throw if not.
 

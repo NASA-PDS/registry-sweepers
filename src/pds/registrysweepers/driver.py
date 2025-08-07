@@ -72,6 +72,8 @@ from pds.registrysweepers.utils.db.client import get_opensearch_client_from_envi
 from pds.registrysweepers.utils.misc import get_human_readable_elapsed_since
 from pds.registrysweepers.utils.misc import is_dev_mode
 
+from src.pds.registrysweepers.utils.misc import limit_log_length
+
 
 def run():
     configure_logging(filepath=None, log_level=logging.INFO)
@@ -79,7 +81,7 @@ def run():
 
     dev_mode = is_dev_mode()
     if dev_mode:
-        log.warning("Operating in development mode - host verification disabled")
+        log.warning(limit_log_length("Operating in development mode - host verification disabled"))
         import urllib3
 
         urllib3.disable_warnings()
@@ -119,7 +121,7 @@ def run():
             sweepers.append(sweeper)
 
     sweeper_descriptions = [inspect.getmodule(f).__name__ for f in sweepers]
-    log.info(f"Running sweepers: {sweeper_descriptions}")
+    log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
 
     total_execution_begin = datetime.now()
 
@@ -136,7 +138,7 @@ def run():
             f"{sweeper_name}: {get_human_readable_elapsed_since(sweeper_execution_begin)}"
         )
 
-    log.info(
+    log.info(limit_log_length(
         f"Sweepers successfully executed in {get_human_readable_elapsed_since(total_execution_begin)}\n   "
         + "\n   ".join(sweeper_execution_duration_strs)
-    )
+    ))

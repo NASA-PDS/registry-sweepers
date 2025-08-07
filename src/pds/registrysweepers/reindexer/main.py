@@ -23,6 +23,8 @@ from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index
 from pds.registrysweepers.utils.db.update import Update
 from tqdm import tqdm
 
+from src.pds.registrysweepers.utils.misc import limit_log_length
+
 log = logging.getLogger(__name__)
 
 
@@ -154,15 +156,15 @@ def accumulate_missing_mappings(
                 and not property_name.startswith("ops:Provenance")
                 and property_name not in canonical_type_undefined_property_names
             ):
-                log.warning(
+                log.warning(limit_log_length(
                     f"Property {property_name} does not have an entry in the data dictionary index or hardcoded mappings - this may indicate a problem"
-                )
+                ))
                 canonical_type_undefined_property_names.add(property_name)
 
             if mapping_is_bad and property_name not in bad_mapping_property_names:
-                log.warning(
+                log.warning(limit_log_length(
                     f'Property {property_name} is defined in data dictionary index or hardcoded mappings as type "{canonical_type}" but exists in index mapping as type "{current_mapping_type}")'
-                )
+                ))
                 bad_mapping_property_names.add(property_name)
 
             if (mapping_missing or mapping_is_bad) and not problem_detected_in_document_already:
@@ -179,22 +181,22 @@ def accumulate_missing_mappings(
                         doc_harvest_time, latest_problem_doc_harvested_at or doc_harvest_time
                     )
                 except (KeyError, ValueError) as err:
-                    log.warning(
+                    log.warning(limit_log_length(
                         f'Unable to parse first element of "ops:Harvest_Info/ops:harvest_date_time" as ISO-formatted date from document {doc["_id"]}: {attr_value} ({err})'
-                    )
+                    ))
 
                 try:
                     problematic_harvest_versions.update(doc["_source"]["ops:Harvest_Info/ops:harvest_version"])
                 except KeyError as err:
                     # Noisy log temporarily disabled but may be re-enabled at jpadams' discretion
-                    # log.warning(f'Unable to extract harvest version from document {doc["_id"]}: {err}')
+                    # log.warning(limit_log_length(f'Unable to extract harvest version from document {doc["_id"]}: {err}'))
                     pass
 
             if mapping_missing and property_name not in missing_mapping_updates:
                 if canonical_type_is_defined:
-                    log.info(
+                    log.info(limit_log_length(
                         f'Property {property_name} will be updated to type "{canonical_type}" from data dictionary'
-                    )
+                    ))
                     missing_mapping_updates[property_name] = canonical_type  # type: ignore
                 elif property_name.startswith(
                     "ops:Provenance"
@@ -202,40 +204,40 @@ def accumulate_missing_mappings(
                     # mappings for registry-sweepers are the responsibility of their respective sweepers and should not
                     # be touched by the reindexer sweeper
                     if property_name not in sweepers_missing_property_names:
-                        log.warning(
+                        log.warning(limit_log_length(
                             f"Property {property_name} is missing from the index mapping, but is a sweepers metadata attribute and will not be fixed here. Please run the full set of sweepers on this index"
-                        )
+                        ))
                         sweepers_missing_property_names.add(property_name)
                 else:
                     # if there is no canonical type and it is not a provenance metadata key, do nothing, per jpadams
                     pass
 
-    log.info(
+    log.info(limit_log_length(
         f"RESULT: Detected {format_hits_count(problem_docs_count)} docs with {len(missing_mapping_updates)} missing mappings and {len(bad_mapping_property_names)} mappings conflicting with the DD, out of a total of {format_hits_count(total_docs_count)} docs"
-    )
+    ))
 
     if problem_docs_count > 0:
-        log.warning(
+        log.warning(limit_log_length(
             f"RESULT: Problems were detected with docs having harvest timestamps between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"  # type: ignore
-        )
-        log.warning(
+        ))
+        log.warning(limit_log_length(
             f"RESULT: Problems were detected with docs having harvest versions {sorted(problematic_harvest_versions)}"
-        )
+        ))
 
     if len(missing_mapping_updates) > 0:
-        log.info(
+        log.info(limit_log_length(
             f"RESULT: Mappings will be added for the following properties: {sorted(missing_mapping_updates.keys())}"
-        )
+        ))
 
     if len(canonical_type_undefined_property_names) > 0:
-        log.info(
+        log.info(limit_log_length(
             f"RESULT: Mappings were not found in the DD or static types for the following properties: {sorted(canonical_type_undefined_property_names)}"
-        )
+        ))
 
     if len(bad_mapping_property_names) > 0:
-        log.error(
+        log.error(limit_log_length(
             f"RESULT: The following mappings have a type which does not match the type described by the data dictionary: {bad_mapping_property_names} - in-place update is not possible, data will need to be manually reindexed with manual updates (or that functionality must be added to this sweeper"
-        )
+        ))
 
     return missing_mapping_updates
 
@@ -321,7 +323,7 @@ def run(
                 ),
             )
             for property, mapping_typename in missing_mappings.items():
-                log.info(f"Updating index {products_index_name} with missing mapping ({property}, {mapping_typename})")
+                log.info(limit_log_length(f"Updating index {products_index_name} with missing mapping ({property}, {mapping_typename})"))
                 ensure_index_mapping(client, products_index_name, property, mapping_typename)
 
             updated_mapping_keys = get_mapping_field_types_by_field_name(client, products_index_name).keys()
@@ -337,9 +339,9 @@ def run(
                     sort_fields=sort_fields,
                 ),
             )
-            log.info(
+            log.info(limit_log_length(
                 f"Updating newly-processed documents with {REINDEXER_FLAG_METADATA_KEY}={sweeper_start_timestamp.isoformat()}..."
-            )
+            ))
             write_updated_docs(
                 client,
                 updates,
@@ -354,7 +356,7 @@ def run(
             # Update batch size for next page of hits
             current_batch_size = min(batch_size_limit, get_updated_hits_count())
 
-    log.info("Completed reindexer sweeper processing!")
+    log.info(limit_log_length("Completed reindexer sweeper processing!"))
 
 
 if __name__ == "__main__":
