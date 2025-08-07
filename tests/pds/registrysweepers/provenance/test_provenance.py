@@ -3,13 +3,12 @@ import json
 import os.path
 import unittest
 
+from build.lib.pds.registrysweepers.provenance.versioning import SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers import provenance
 from pds.registrysweepers.provenance import ProvenanceRecord
 from pds.registrysweepers.provenance import SWEEPERS_PROVENANCE_VERSION
 from pds.registrysweepers.provenance import SWEEPERS_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import Update
-
-from build.lib.pds.registrysweepers.provenance.versioning import SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY
 
 
 class ProvenanceBasicFunctionalTestCase(unittest.TestCase):

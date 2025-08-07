@@ -15,11 +15,10 @@ from opensearchpy import OpenSearch
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import get_random_hex_id
+from pds.registrysweepers.utils.misc import limit_log_length
 from retry import retry
 from retry.api import retry_call
 from tqdm import tqdm
-
-from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
 
@@ -102,9 +101,11 @@ def query_registry_db_with_scroll(
         # TODO: Remove this upon implementation of https://github.com/NASA-PDS/registry-sweepers/issues/42
         hits_data_present_in_response = len(response_hits) > 0
         if not hits_data_present_in_response and served_hits < total_hits:
-            log.error(limit_log_length(
-                f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
-            ))
+            log.error(
+                limit_log_length(
+                    f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
+                )
+            )
             break
 
         more_data_exists = served_hits < results["hits"]["total"]["value"]
@@ -145,9 +146,11 @@ def query_registry_db_with_search_after(
 
     # TODO: stop accepted {'query': <content>} and start accepting just <content> itself, to prevent the need for this guard
     if "search_after" in query.keys():
-        log.error(limit_log_length(
-            f'Provided query object contains "search_after" content when none should exist - was a dict object reused?: got {query}.'
-        ))
+        log.error(
+            limit_log_length(
+                f'Provided query object contains "search_after" content when none should exist - was a dict object reused?: got {query}.'
+            )
+        )
         log.info(limit_log_length("Discarding erroneous search_after values."))
         query.pop("search_after")
 
@@ -161,7 +164,9 @@ def query_registry_db_with_search_after(
     total_hits = get_query_hits_count(client, index_name, query)
     expected_hits = limit if limit is not None else total_hits
     limit_log_msg_part = f" (limited to {expected_hits} hits)" if limit is not None else ""
-    log.debug(limit_log_length(f"Query {query_id} returns {total_hits} total hits{limit_log_msg_part}: {json.dumps(query)}"))
+    log.debug(
+        limit_log_length(f"Query {query_id} returns {total_hits} total hits{limit_log_msg_part}: {json.dumps(query)}")
+    )
 
     with tqdm(total=expected_hits, desc=f"Query {query_id}") as pbar:
         while more_data_exists:
@@ -179,9 +184,11 @@ def query_registry_db_with_search_after(
 
             if search_after_values is not None:
                 query["search_after"] = search_after_values
-                log.debug(limit_log_length(
-                    f"Query {query_id} paging {page_size} hits (page {current_page} of {expected_pages}) with sort fields {sort_fields} and search-after values {search_after_values}"
-                ))
+                log.debug(
+                    limit_log_length(
+                        f"Query {query_id} paging {page_size} hits (page {current_page} of {expected_pages}) with sort fields {sort_fields} and search-after values {search_after_values}"
+                    )
+                )
 
             def fetch_func():
                 return client.search(
@@ -241,9 +248,11 @@ def query_registry_db_with_search_after(
             # TODO: Remove this upon implementation of https://github.com/NASA-PDS/registry-sweepers/issues/42
             hits_data_present_in_response = len(response_hits) > 0
             if not hits_data_present_in_response and served_hits < total_hits:
-                log.error(limit_log_length(
-                    f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
-                ))
+                log.error(
+                    limit_log_length(
+                        f"Response for query {query_id} contained no hits when hits were expected.  Returned data is incomplete (got {served_hits} of {total_hits} total hits).  Response was: {results}"
+                    )
+                )
                 break
 
             more_data_exists = served_hits < results["hits"]["total"]["value"]
@@ -313,9 +322,11 @@ def write_updated_docs(
         )
 
         if flush_threshold_reached:
-            log.debug(limit_log_length(
-                f"Bulk update buffer has reached {threshold_log_str} threshold - writing {buffered_updates_count} document updates to db..."
-            ))
+            log.debug(
+                limit_log_length(
+                    f"Bulk update buffer has reached {threshold_log_str} threshold - writing {buffered_updates_count} document updates to db..."
+                )
+            )
             _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
             bulk_updates_buffer = []
             bulk_buffer_size_mb = 0.0
@@ -330,10 +341,16 @@ def write_updated_docs(
         updated_doc_count += 1
 
     if buffered_updates_count > 0:
-        log.debug(limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db..."))
+        log.debug(
+            limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
+        )
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
 
-    log.info(limit_log_length(f"Wrote document updates for {updated_doc_count} products and skipped {total_writes_skipped} doc updates"))
+    log.info(
+        limit_log_length(
+            f"Wrote document updates for {updated_doc_count} products and skipped {total_writes_skipped} doc updates"
+        )
+    )
 
 
 def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[str]:
@@ -380,9 +397,11 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
             for error_type, reason_aggregate in warning_aggregates.items():
                 for error_reason, ids in reason_aggregate.items():
                     ids_str = get_ids_list_str(ids)
-                    log.warning(limit_log_length(
-                        f"Attempt to update the following {len(ids)} documents failed due to {error_type} ({error_reason}): {ids_str}"
-                    ))
+                    log.warning(
+                        limit_log_length(
+                            f"Attempt to update the following {len(ids)} documents failed due to {error_type} ({error_reason}): {ids_str}"
+                        )
+                    )
 
         if log.isEnabledFor(logging.ERROR):
             items_with_errors = [
@@ -392,9 +411,11 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
             for error_type, reason_aggregate in error_aggregates.items():
                 for error_reason, ids in reason_aggregate.items():
                     ids_str = get_ids_list_str(ids)
-                    log.error(limit_log_length(
-                        f"Attempt to update the following {len(ids)} documents failed unexpectedly due to {error_type} ({error_reason}): {ids_str}"
-                    ))
+                    log.error(
+                        limit_log_length(
+                            f"Attempt to update the following {len(ids)} documents failed unexpectedly due to {error_type} ({error_reason}): {ids_str}"
+                        )
+                    )
     else:
         log.debug(limit_log_length("Successfully wrote bulk update chunk"))
 

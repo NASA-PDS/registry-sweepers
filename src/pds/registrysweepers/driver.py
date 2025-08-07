@@ -71,7 +71,6 @@ from pds.registrysweepers.utils import parse_log_level
 from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.misc import get_human_readable_elapsed_since
 from pds.registrysweepers.utils.misc import is_dev_mode
-
 from pds.registrysweepers.utils.misc import limit_log_length
 
 
@@ -138,7 +137,9 @@ def run():
             f"{sweeper_name}: {get_human_readable_elapsed_since(sweeper_execution_begin)}"
         )
 
-    log.info(limit_log_length(
-        f"Sweepers successfully executed in {get_human_readable_elapsed_since(total_execution_begin)}\n   "
-        + "\n   ".join(sweeper_execution_duration_strs)
-    ))
+    log.info(
+        limit_log_length(
+            f"Sweepers successfully executed in {get_human_readable_elapsed_since(total_execution_begin)}\n   "
+            + "\n   ".join(sweeper_execution_duration_strs)
+        )
+    )

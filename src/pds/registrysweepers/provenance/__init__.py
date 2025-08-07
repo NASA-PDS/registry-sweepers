@@ -68,10 +68,9 @@ from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import chunked
 from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import group_by_key
+from pds.registrysweepers.utils.misc import limit_log_length
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from tqdm import tqdm
-
-from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
 
@@ -100,9 +99,11 @@ def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterab
         try:
             yield ProvenanceRecord.from_doc(doc)
         except ValueError as err:
-            log.warning(limit_log_length(
-                f'Failed to parse ProvenanceRecord from doc with id {doc["_id"]} due to {err} - source was {doc["_source"]}'
-            ))
+            log.warning(
+                limit_log_length(
+                    f'Failed to parse ProvenanceRecord from doc with id {doc["_id"]} due to {err} - source was {doc["_source"]}'
+                )
+            )
 
 
 def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
@@ -295,9 +296,11 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
 
         yield Update(id=str(record.lidvid), content=update_content, skip_write=record.skip_write)
 
-    log.info(limit_log_length(
-        f"Generated provenance updates for {update_count} products, ({skippable_count} up-to-date products will be skipped)"
-    ))
+    log.info(
+        limit_log_length(
+            f"Generated provenance updates for {update_count} products, ({skippable_count} up-to-date products will be skipped)"
+        )
+    )
 
 
 if __name__ == "__main__":

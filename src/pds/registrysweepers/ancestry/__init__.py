@@ -35,9 +35,8 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
-from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
-
 from pds.registrysweepers.utils.misc import limit_log_length
+from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 log = logging.getLogger(__name__)
 
@@ -125,9 +124,11 @@ def run(
             orphaned_doc_count = orphan_counter_f(client, index_name)
 
         if orphaned_doc_count > 0:
-            log.warning(limit_log_length(
-                f'Detected {orphaned_doc_count} orphaned documents in index "{index_name} - please inform developers": {orphaned_doc_ids_str}'
-            ))
+            log.warning(
+                limit_log_length(
+                    f'Detected {orphaned_doc_count} orphaned documents in index "{index_name} - please inform developers": {orphaned_doc_ids_str}'
+                )
+            )
 
     log.info(limit_log_length("Ancestry sweeper processing complete!"))
 
@@ -173,10 +174,12 @@ def generate_updates(
                 bulk_updates_sink.append((update.id, update.content))
 
             if update.id in updated_doc_ids:
-                log.debug(limit_log_length(
-                    f"Multiple updates detected for doc_id {update.id} - deferring subsequent parts"
-                    " - storing in {deferred_updates_file.name}"
-                ))
+                log.debug(
+                    limit_log_length(
+                        f"Multiple updates detected for doc_id {update.id} - deferring subsequent parts"
+                        " - storing in {deferred_updates_file.name}"
+                    )
+                )
                 deferred_records_file.write(json.dumps(record.to_dict(sort_lists=False)) + "\n")
                 deferred_records_file.flush()
                 continue
@@ -214,7 +217,9 @@ def generate_deferred_updates(
             update = update_from_record(record)
             yield update
         except (KeyError, ValueError) as err:
-            log.error(limit_log_length(f'Failed to parse valid AncestryRecord from document with id "{doc["_id"]}: {err}"'))
+            log.error(
+                limit_log_length(f'Failed to parse valid AncestryRecord from document with id "{doc["_id"]}: {err}"')
+            )
 
         # TODO: Check that ancestry version is equal to current, throw if not.
 

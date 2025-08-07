@@ -25,6 +25,10 @@ def repair(document: Dict, fieldname: str) -> Dict:
         return {}
 
     if isinstance(document[fieldname], str):
-        log.debug(limit_log_length(f"found string in doc {document.get('_id')} for field {fieldname} where it should be an array"))
+        log.debug(
+            limit_log_length(
+                f"found string in doc {document.get('_id')} for field {fieldname} where it should be an array"
+            )
+        )
         return {fieldname: [document[fieldname]]}
     return {}

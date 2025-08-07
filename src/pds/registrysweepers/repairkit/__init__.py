@@ -25,7 +25,6 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
-
 from pds.registrysweepers.utils.misc import limit_log_length
 
 """
@@ -74,9 +73,11 @@ def generate_updates(
 
         document_needed_fixing = len(set(repairs).difference({repairkit_version_metadata_key})) > 0
         if document_needed_fixing and not repair_already_logged_to_error:
-            log.error(limit_log_length(
-                "repairkit sweeper detects documents in need of repair - please ~harass~ *request* node user to update their harvest version"
-            ))
+            log.error(
+                limit_log_length(
+                    "repairkit sweeper detects documents in need of repair - please ~harass~ *request* node user to update their harvest version"
+                )
+            )
             repair_already_logged_to_error = True
         yield Update(id=id, content=repairs)
 
