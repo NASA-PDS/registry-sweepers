@@ -197,6 +197,8 @@ def get_ids_list_str(
 
 
 def limit_log_length(log_msg: str, max_str_length: int = 5012) -> str:
+    log_msg = str(log_msg)
+
     if len(log_msg) > max_str_length:
         return log_msg[:max_str_length] + " ... <TRUNCATED>"
     else:
