@@ -8,7 +8,7 @@ class AncestryRuntimeConstants(ABC):
     # how many registry-refs documents (each collection has multiple docs for batches of member non-aggregates)
     # Decrease to reduce peak memory demand - increases runtime
     nonaggregate_ancestry_records_query_page_size: int = int(
-        os.environ.get("ANCESTRY_NONAGGREGATE_QUERY_PAGE_SIZE", 2000)
+        os.environ.get("ANCESTRY_NONAGGREGATE_QUERY_PAGE_SIZE", 500)
     )
 
     # non-aggregate history batches will be dumped to disk periodically as memory usage reaches this threshold
