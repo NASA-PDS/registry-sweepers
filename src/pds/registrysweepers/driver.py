@@ -61,10 +61,10 @@ import os
 from datetime import datetime
 from typing import Callable
 
-from pds.registrysweepers import ancestry
 from pds.registrysweepers import legacy_registry_sync
 from pds.registrysweepers import provenance
 from pds.registrysweepers import repairkit
+from pds.registrysweepers.ancestry import main as ancestry
 from pds.registrysweepers.reindexer import main as reindexer
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_log_level
@@ -109,10 +109,10 @@ def run():
 
     # Define default sweepers to be run here, in order of execution
     sweepers = [
-        repairkit.run,
-        provenance.run,
+        # repairkit.run,
+        # provenance.run,
         ancestry.run,
-        reindexer.run,
+        # reindexer.run,
     ]
 
     for option, sweeper in optional_sweepers.items():
