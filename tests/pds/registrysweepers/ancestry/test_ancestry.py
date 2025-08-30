@@ -8,13 +8,13 @@ from typing import List
 from typing import Tuple
 
 from pds.registrysweepers.ancestry import main as ancestry
-from pds.registrysweepers.ancestry.main import generate_deferred_updates
-from pds.registrysweepers.ancestry.main import generate_updates
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
 from pds.registrysweepers.ancestry.generation import generate_nonaggregate_and_collection_records_iteratively
 from pds.registrysweepers.ancestry.generation import get_collection_ancestry_records
+from pds.registrysweepers.ancestry.main import generate_deferred_updates
+from pds.registrysweepers.ancestry.main import generate_updates
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
@@ -113,7 +113,9 @@ class AncestryBasicTestCase(unittest.TestCase):
     def test_nonaggregates_have_correct_collection_ancestry(self):
         for record in self.nonaggregate_records:
             expected_collection_ancestry = set(self.expected_collection_ancestry_by_nonaggregate[str(record.lidvid)])
-            self.assertEqual(expected_collection_ancestry, set(str(id) for id in record.resolve_parent_collection_lidvids()))
+            self.assertEqual(
+                expected_collection_ancestry, set(str(id) for id in record.resolve_parent_collection_lidvids())
+            )
 
     def test_nonaggregates_have_correct_bundle_ancestry(self):
         print(
@@ -212,6 +214,7 @@ class AncestryLegacyTypesTestCase(unittest.TestCase):
             explicit_parent_bundle_lidvids={expected_parent_bundle_lidvid},
         )
         self.assertEqual(expected_record, collection_ancestry_records[0])
+
 
 # TODO: reimplement to reflect latest memory optimisations - edunn 20250723
 # class AncestryMemoryOptimizedTestCase(unittest.TestCase):
