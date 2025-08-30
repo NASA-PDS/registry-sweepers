@@ -109,10 +109,10 @@ def run():
 
     # Define default sweepers to be run here, in order of execution
     sweepers = [
-        # repairkit.run,
-        # provenance.run,
+        repairkit.run,
+        provenance.run,
         ancestry.run,
-        # reindexer.run,
+        reindexer.run,
     ]
 
     for option, sweeper in optional_sweepers.items():
