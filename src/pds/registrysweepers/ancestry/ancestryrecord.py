@@ -39,10 +39,10 @@ class AncestryRecord:
 
     def resolve_parent_collection_lidvids(self) -> Set[PdsLidVid]:
         """
-                Return a set of all collection LIDVIDs this AncestryRecord references, either explicitly or via association with a
-                parent AncestryRecord.
-                :return:
-                """
+        Return a set of all collection LIDVIDs this AncestryRecord references, either explicitly or via association with a
+        parent AncestryRecord.
+        :return:
+        """
 
         derived_parent_collection_lidvids = chain(
             *[record.resolve_parent_collection_lidvids() for record in self._parent_records]
@@ -76,7 +76,9 @@ class AncestryRecord:
                 explicit_parent_collection_lidvids=set(
                     PdsLidVid.from_string(lidvid) for lidvid in d["parent_collection_lidvids"]
                 ),
-                explicit_parent_bundle_lidvids=set(PdsLidVid.from_string(lidvid) for lidvid in d["parent_bundle_lidvids"]),
+                explicit_parent_bundle_lidvids=set(
+                    PdsLidVid.from_string(lidvid) for lidvid in d["parent_bundle_lidvids"]
+                ),
                 skip_write=skip_write,
             )
         except (KeyError, ValueError) as err:
@@ -112,4 +114,6 @@ class AncestryRecord:
         elif record.lidvid.is_collection():
             self.explicit_parent_collection_lidvids.add(record.lidvid)
         else:
-            raise ValueError(f'Cannot attach a non-aggregate AncestryRecord as parent of another AncestryRecord (got {record.lidvid})')
+            raise ValueError(
+                f"Cannot attach a non-aggregate AncestryRecord as parent of another AncestryRecord (got {record.lidvid})"
+            )

@@ -5,26 +5,36 @@ from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 
 class AncestryRecordTestCase(unittest.TestCase):
-
     def test_basic_functionality(self):
         nonagg_record = AncestryRecord(
-            PdsLidVid.from_string('a:b:c:d:e:nonagg::1.0'),
-            explicit_parent_bundle_lidvids={PdsLidVid.from_string('a:b:c:explicitbundle::1.0')},
-            explicit_parent_collection_lidvids={PdsLidVid.from_string('a:b:c:d:explicitcollection::1.0')},
+            PdsLidVid.from_string("a:b:c:d:e:nonagg::1.0"),
+            explicit_parent_bundle_lidvids={PdsLidVid.from_string("a:b:c:explicitbundle::1.0")},
+            explicit_parent_collection_lidvids={PdsLidVid.from_string("a:b:c:d:explicitcollection::1.0")},
         )
 
         parent_collection_record = AncestryRecord(
-            PdsLidVid.from_string('a:b:c:d:parentcollection::1.0'),
-            explicit_parent_bundle_lidvids={PdsLidVid.from_string('a:b:c:derivedbundle::1.0')},
+            PdsLidVid.from_string("a:b:c:d:parentcollection::1.0"),
+            explicit_parent_bundle_lidvids={PdsLidVid.from_string("a:b:c:derivedbundle::1.0")},
         )
 
         nonagg_record.attach_parent_record(parent_collection_record)
 
-        expected_bundle_ancestry = {PdsLidVid.from_string(s) for s in ['a:b:c:explicitbundle::1.0', 'a:b:c:derivedbundle::1.0']}
-        expected_collection_ancestry = {PdsLidVid.from_string(s) for s in ['a:b:c:d:explicitcollection::1.0', 'a:b:c:d:parentcollection::1.0']}
-        self.assertEqual(expected_bundle_ancestry, nonagg_record.resolve_parent_bundle_lidvids(), 'derived bundle ancestry is correct')
-        self.assertEqual(expected_collection_ancestry, nonagg_record.resolve_parent_collection_lidvids(), 'derived collection ancestry is correct')
-
+        expected_bundle_ancestry = {
+            PdsLidVid.from_string(s) for s in ["a:b:c:explicitbundle::1.0", "a:b:c:derivedbundle::1.0"]
+        }
+        expected_collection_ancestry = {
+            PdsLidVid.from_string(s) for s in ["a:b:c:d:explicitcollection::1.0", "a:b:c:d:parentcollection::1.0"]
+        }
+        self.assertEqual(
+            expected_bundle_ancestry,
+            nonagg_record.resolve_parent_bundle_lidvids(),
+            "derived bundle ancestry is correct",
+        )
+        self.assertEqual(
+            expected_collection_ancestry,
+            nonagg_record.resolve_parent_collection_lidvids(),
+            "derived collection ancestry is correct",
+        )
 
     def test_serialization(self):
         lidvid_str = "a:b:c:d:e:f::1.0"
@@ -101,16 +111,23 @@ class AncestryRecordTestCase(unittest.TestCase):
         parent_record = AncestryRecord(
             PdsLidVid.from_string("a:b:c:d:parent::1.0"),
             explicit_parent_bundle_lidvids=parent_record_bundle_lidvids,
-            explicit_parent_collection_lidvids=parent_record_collection_lidvids)
+            explicit_parent_collection_lidvids=parent_record_collection_lidvids,
+        )
 
         explicitly_empty_record = AncestryRecord(PdsLidVid.from_string("a:b:c:d:e:f::1.0"))
 
         explicitly_empty_record.attach_parent_record(parent_record)
-        self.assertEqual(parent_record_bundle_lidvids, explicitly_empty_record.resolve_parent_bundle_lidvids(),
-                         'child inherits bundle history correctly')
+        self.assertEqual(
+            parent_record_bundle_lidvids,
+            explicitly_empty_record.resolve_parent_bundle_lidvids(),
+            "child inherits bundle history correctly",
+        )
         expected_collection_ancestry = parent_record_collection_lidvids.union({parent_record.lidvid})
-        self.assertEqual(expected_collection_ancestry, explicitly_empty_record.resolve_parent_collection_lidvids(),
-                         'child inherits collection history correctly')
+        self.assertEqual(
+            expected_collection_ancestry,
+            explicitly_empty_record.resolve_parent_collection_lidvids(),
+            "child inherits collection history correctly",
+        )
 
 
 if __name__ == "__main__":
