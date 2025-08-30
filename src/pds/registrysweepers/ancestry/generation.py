@@ -229,7 +229,7 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
 
         except IndexError:
             doc_id = doc["_id"]
-            limit_log_length(log.warning(f'Encountered document with unexpected _id: "{doc_id}"'))
+            log.warning(limit_log_length(f'Encountered document with unexpected _id: "{doc_id}"'))
             continue
         except (ValueError, KeyError) as err:
             log.warning(
