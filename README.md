@@ -23,7 +23,7 @@ The reindexer sweeper ensures that the registry index mappings are updated with 
 ### Prerequisites
 
 #### Dependencies
-- Python >=3.9
+- Python >=3.13
 
 #### Environment Variables
 ```
@@ -73,70 +73,10 @@ To develop this project, use your favorite text editor, or an integrated develop
 For information on how to contribute to NASA-PDS codebases please take a look at our [Contributing guidelines](https://github.com/NASA-PDS/.github/blob/main/CONTRIBUTING.md).
 
 
-### Installation
-
-Install in editable mode and with extra developer dependencies into your virtual environment of choice:
-
-    pip install --editable '.[dev]'
-
-Configure the `pre-commit` hooks:
-
-    pre-commit install
-    pre-commit install -t pre-push
-    pre-commit install -t prepare-commit-msg
-    pre-commit install -t commit-msg
-
-These hooks check code formatting and also aborts commits that contain secrets such as passwords or API keys. However, a one time setup is required in your global Git configuration. See [the wiki entry on Git Secrets](https://github.com/NASA-PDS/nasa-pds.github.io/wiki/Git-and-Github-Guide#git-secrets) to learn how.
-
-### Packaging
-
-To isolate and be able to re-produce the environment for this package, you should use a [Python Virtual Environment](https://docs.python.org/3/tutorial/venv.html). To do so, run:
-
-    python -m venv venv
-
-Then exclusively use `venv/bin/python`, `venv/bin/pip`, etc.
-
-If you have `tox` installed and would like it to create your environment and install dependencies for you run:
-
-    tox --devenv <name you'd like for env> -e dev
-
-Dependencies for development are specified as the `dev` `extras_require` in `setup.cfg`; they are installed into the virtual environment as follows:
-
-    pip install --editable '.[dev]'
-
-All the source code is in a sub-directory under `src`.
-
-
-### Tests
-
-This section describes testing for your package.
-
-A complete "build" including test execution, linting (`mypy`, `black`, `flake8`, etc.), and documentation build is executed via:
-
-    tox
-
-
-#### Unit tests
-
-Your project should have built-in unit tests, functional, validation, acceptance, etc., tests.
-
-For unit testing, check out the [unittest](https://docs.python.org/3/library/unittest.html) module, built into Python 3.
-
-Tests objects should be in packages `test` modules or preferably in project 'tests' directory which mirrors the project package structure.
-
-Our unit tests are launched with command:
-
-    pytest
-
-If you want your tests to run automatically as you make changes start up `pytest` in watch mode with:
-
-    ptw
-
-
 ## Build
 
-    pip install wheel
-    python setup.py sdist bdist_wheel
+    pip install build
+    python3 -m build .
 
 
 ## Publication
@@ -148,7 +88,7 @@ NASA PDS packages can publish automatically using the [Roundup Action](https://g
 
 Create the package:
 
-    python setup.py bdist_wheel
+    python3 -m build .
 
 Publish it as a Github release.
 
@@ -161,6 +101,7 @@ Or publish on the Test PyPI (you need a Test PyPI account and configure `$HOME/.
 
     pip install twine
     twine upload --repository testpypi dist/*
+
 
 ## CI/CD
 
