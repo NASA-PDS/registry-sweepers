@@ -28,12 +28,13 @@ def get_already_loaded_lidvids(product_classes=None, es_conn=None):
             dict(match_phrase={prod_class_prop: prod_class}) for prod_class in product_classes
         ]
 
+    sort_field = "ops:Harvest_Info/ops:harvest_date_time"
     prod_id_resp = query_registry_db_with_search_after(
         es_conn,
         "registry",
-        _source={"includes": ["_id"], "excludes": []},
+        _source={"includes": ["_id", sort_field], "excludes": []},
         query=query,
-        sort_fields=["ops:Harvest_Info/ops:harvest_date_time"],
+        sort_fields=[sort_field],
     )
 
     return [p["_id"] for p in prod_id_resp]
