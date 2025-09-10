@@ -51,7 +51,7 @@ def get_node_from_file_ref(file_ref: str):
 
 
 class SolrOsWrapperIter:
-    def __init__(self, solr_itr, es_index, found_ids=None):
+    def __init__(self, solr_iterable, es_index, found_ids=None, rolls_over_target: int = 0):
         """
         Iterable on the Solr legacy registry documents returning the migrated document for each iteration (next).
         The migrated documents contains in addition to the Solr document properties:
@@ -62,12 +62,15 @@ class SolrOsWrapperIter:
         @param solr_itr: iterator on the solr documents. SlowSolrDocs instance from the solr-to-es repository
         @param es_index: OpenSearch/ElasticSearch index name
         @param found_ids: list of the lidvid already available in the new registry
+        @param rolls_over_target: increase artifially the number entries by re-running the loop n times
         """
         self.index = es_index
-        self.type = "_doc"
+        self.type = "update"
         self.id_field_fun = pds4_id_field_fun
         self.found_ids = found_ids
-        self.solr_itr = iter(solr_itr)
+        self._solr_iterable = solr_iterable
+        self._solr_itr = iter(solr_iterable)
+        self._rolls_over_target = rolls_over_target
 
     def __iter__(self):
         return self
@@ -76,6 +79,7 @@ class SolrOsWrapperIter:
         new_doc = dict()
         new_doc["_index"] = self.index
         new_doc["_type"] = self.type
+        new_doc["doc_as_upsert"] = True
 
         # remove empty fields
         new_doc["_source"] = {}
@@ -118,9 +122,15 @@ class SolrOsWrapperIter:
         return new_doc
 
     def __next__(self):
+        rolls_over = 0
         while True:
             try:
-                doc = next(self.solr_itr)
+                doc = next(self._solr_itr)
                 return self.solr_doc_to_os_doc(doc)
             except MissingIdentifierError as e:
                 log.warning(str(e))
+            except StopIteration as e:
+                if rolls_over == self._rolls_over_target:
+                    raise StopIteration(e)
+                rolls_over += 1
+                self._solr_itr = iter(self._solr_iterable)

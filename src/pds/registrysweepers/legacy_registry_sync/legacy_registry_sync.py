@@ -58,6 +58,7 @@ def run(
 
     es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids)
     dev_mode = is_dev_mode()
+
     for operation_successful, operation_info in opensearchpy.helpers.streaming_bulk(
         client, es_actions, chunk_size=50, max_chunk_bytes=50000000, max_retries=5, initial_backoff=10
     ):
