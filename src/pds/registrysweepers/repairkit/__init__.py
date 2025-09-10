@@ -25,6 +25,7 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import limit_log_length
 
 """
 dictionary repair tools is {field_name:[funcs]} where field_name can be:
@@ -73,7 +74,9 @@ def generate_updates(
         document_needed_fixing = len(set(repairs).difference({repairkit_version_metadata_key})) > 0
         if document_needed_fixing and not repair_already_logged_to_error:
             log.error(
-                "repairkit sweeper detects documents in need of repair - please ~harass~ *request* node user to update their harvest version"
+                limit_log_length(
+                    "repairkit sweeper detects documents in need of repair - please ~harass~ *request* node user to update their harvest version"
+                )
             )
             repair_already_logged_to_error = True
         yield Update(id=id, content=repairs)
@@ -85,7 +88,7 @@ def run(
     log_level: int = logging.INFO,
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
-    log.info(f"Starting repairkit v{SWEEPERS_REPAIRKIT_VERSION} sweeper processing...")
+    log.info(limit_log_length(f"Starting repairkit v{SWEEPERS_REPAIRKIT_VERSION} sweeper processing..."))
 
     def get_unprocessed_docs_query():
         return {
@@ -126,7 +129,7 @@ def run(
             bulk_chunk_max_update_count=update_max_chunk_size,
         )
 
-    log.info("Repairkit sweeper processing complete!")
+    log.info(limit_log_length("Repairkit sweeper processing complete!"))
 
 
 if __name__ == "__main__":

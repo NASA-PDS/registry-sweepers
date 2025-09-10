@@ -54,6 +54,7 @@ from typing import Union
 from opensearchpy import OpenSearch
 from pds.registrysweepers.provenance.constants import METADATA_SUCCESSOR_KEY
 from pds.registrysweepers.provenance.provenancerecord import ProvenanceRecord
+from pds.registrysweepers.provenance.versioning import SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.provenance.versioning import SWEEPERS_PROVENANCE_VERSION
 from pds.registrysweepers.provenance.versioning import SWEEPERS_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
@@ -67,6 +68,7 @@ from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import chunked
 from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import group_by_key
+from pds.registrysweepers.utils.misc import limit_log_length
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from tqdm import tqdm
 
@@ -75,7 +77,7 @@ log = logging.getLogger(__name__)
 
 def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterable[ProvenanceRecord]:
     ids_str = get_ids_list_str(lids, 3)  # type: ignore
-    log.info(f"Fetching docs and generating records for {len(lids)} LIDs: {ids_str}")
+    log.info(limit_log_length(f"Fetching docs and generating records for {len(lids)} LIDs: {ids_str}"))
 
     query = {
         "query": {
@@ -98,7 +100,9 @@ def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterab
             yield ProvenanceRecord.from_doc(doc)
         except ValueError as err:
             log.warning(
-                f'Failed to parse ProvenanceRecord from doc with id {doc["_id"]} due to {err} - source was {doc["_source"]}'
+                limit_log_length(
+                    f'Failed to parse ProvenanceRecord from doc with id {doc["_id"]} due to {err} - source was {doc["_source"]}'
+                )
             )
 
 
@@ -255,7 +259,7 @@ def run(
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
 
-    log.info(f"Starting provenance v{SWEEPERS_PROVENANCE_VERSION} sweeper processing...")
+    log.info(limit_log_length(f"Starting provenance v{SWEEPERS_PROVENANCE_VERSION} sweeper processing..."))
 
     ensure_index_mapping(
         client,
@@ -272,7 +276,7 @@ def run(
         client, updates, index_name=resolve_multitenant_index_name(client, "registry"), bulk_chunk_max_update_count=5000
     )
 
-    log.info("Completed provenance sweeper processing!")
+    log.info(limit_log_length("Completed provenance sweeper processing!"))
 
 
 def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
@@ -282,6 +286,7 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
         update_content = {
             METADATA_SUCCESSOR_KEY: str(record.successor) if record.successor else None,
             SWEEPERS_PROVENANCE_VERSION_METADATA_KEY: SWEEPERS_PROVENANCE_VERSION,
+            SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY: None,  # see comment in versioning.py for context - edunn
         }
 
         if record.skip_write:
@@ -292,7 +297,9 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
         yield Update(id=str(record.lidvid), content=update_content, skip_write=record.skip_write)
 
     log.info(
-        f"Generated provenance updates for {update_count} products, ({skippable_count} up-to-date products will be skipped)"
+        limit_log_length(
+            f"Generated provenance updates for {update_count} products, ({skippable_count} up-to-date products will be skipped)"
+        )
     )
 
 

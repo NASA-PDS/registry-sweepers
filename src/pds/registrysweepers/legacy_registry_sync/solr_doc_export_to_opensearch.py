@@ -2,6 +2,8 @@ import logging
 import os
 from datetime import datetime
 
+from pds.registrysweepers.utils.misc import limit_log_length
+
 log = logging.getLogger(__name__)
 
 NODE_FOLDERS = {
@@ -62,7 +64,7 @@ class SolrOsWrapperIter:
         @param solr_itr: iterator on the solr documents. SlowSolrDocs instance from the solr-to-es repository
         @param es_index: OpenSearch/ElasticSearch index name
         @param found_ids: list of the lidvid already available in the new registry
-        @param rolls_over_target: increase artifially the number entries by re-running the loop n times
+        @param rolls_over_target: increase artifialy the number entries by re-running the loop n times
         """
         self.index = es_index
         self.type = "update"
@@ -100,13 +102,17 @@ class SolrOsWrapperIter:
                     v = [datetime.fromisoformat(v[0].replace("Z", ""))]
                     new_doc["_source"][k] = v
                 except ValueError:
-                    log.warning("Date %s for field %s is invalid, assign default datetime 01-01-1950 instead", v, k)
+                    log.warning(
+                        limit_log_length(
+                            f"Date {v} for field {k} is invalid, assign default datetime 01-01-1950 instead"
+                        )
+                    )
                     new_doc["_source"][k] = [datetime(1950, 1, 1, 0, 0, 0)]
             elif "year" in k:
                 if len(v[0]) > 0:
                     new_doc["_source"][k] = v
                 else:
-                    log.warning("Year %s for field %s is invalid", v, k)
+                    log.warning(limit_log_length(f"Year {v} for field {k} is invalid"))
             else:
                 new_doc["_source"][k] = v
 
@@ -128,7 +134,7 @@ class SolrOsWrapperIter:
                 doc = next(self._solr_itr)
                 return self.solr_doc_to_os_doc(doc)
             except MissingIdentifierError as e:
-                log.warning(str(e))
+                log.warning(limit_log_length(str(e)))
             except StopIteration as e:
                 if rolls_over == self._rolls_over_target:
                     raise StopIteration(e)

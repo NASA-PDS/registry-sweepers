@@ -194,3 +194,12 @@ def get_ids_list_str(
         return display_id_str
     else:
         return f"{display_id_str} <list of {ids_count} ids truncated - enable DEBUG logging or increase display limit in code to see more>"
+
+
+def limit_log_length(log_msg: str, max_str_length: int = 5012) -> str:
+    log_msg = str(log_msg)
+
+    if len(log_msg) > max_str_length:
+        return log_msg[:max_str_length] + " ... <TRUNCATED>"
+    else:
+        return log_msg

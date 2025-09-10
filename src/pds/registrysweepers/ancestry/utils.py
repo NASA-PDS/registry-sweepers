@@ -18,17 +18,18 @@ from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTyp
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import Update
+from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
 
 
 def make_history_serializable(history: Dict[str, Dict[str, Union[str, Set[str], List[str]]]]):
     """Convert history with set attributes into something able to be dumped to JSON"""
-    log.debug("Converting history into serializable types...")
+    log.debug(limit_log_length("Converting history into serializable types..."))
     for lidvid in history.keys():
         history[lidvid]["parent_bundle_lidvids"] = list(history[lidvid]["parent_bundle_lidvids"])
         history[lidvid]["parent_collection_lidvids"] = list(history[lidvid]["parent_collection_lidvids"])
-    log.debug("    complete!")
+    log.debug(limit_log_length("    complete!"))
 
 
 def load_history_from_filepath(filepath) -> Dict[str, SerializableAncestryRecordTypeDef]:
@@ -44,22 +45,22 @@ def write_history_to_filepath(history: Dict[str, SerializableAncestryRecordTypeD
 def dump_history_to_disk(parent_dir: str, history: Dict[str, SerializableAncestryRecordTypeDef]) -> str:
     """Dump set of history records to disk and return the filepath"""
     output_filepath = os.path.join(parent_dir, datetime.now().isoformat().replace(":", "-"))
-    log.debug(f"Dumping history to {output_filepath} for later merging...")
+    log.debug(limit_log_length(f"Dumping history to {output_filepath} for later merging..."))
     write_history_to_filepath(history, output_filepath)
-    log.debug("    complete!")
+    log.debug(limit_log_length("    complete!"))
 
     return output_filepath
 
 
 def merge_matching_history_chunks(dest_fp: str, src_fps: List[str], max_chunk_size: Union[int, None] = None):
-    log.debug(f"Performing merges into {dest_fp} using max_chunk_size={max_chunk_size}")
+    log.debug(limit_log_length(f"Performing merges into {dest_fp} using max_chunk_size={max_chunk_size}"))
     dest_file_content = load_history_from_filepath(dest_fp)
 
     dest_file_updated = False
 
     for src_fn in src_fps:
         src_file_size_mb = os.stat(src_fn).st_size / 1024**2
-        log.debug(f"merging from {src_fn} ({int(src_file_size_mb)}MB)...")
+        log.debug(limit_log_length(f"merging from {src_fn} ({int(src_file_size_mb)}MB)..."))
         src_file_content = load_history_from_filepath(src_fn)
 
         src_file_updated = False
@@ -104,7 +105,7 @@ def merge_matching_history_chunks(dest_fp: str, src_fps: List[str], max_chunk_si
         # Overwrite the content of the destination file with updated history including absorbed elements
         write_history_to_filepath(dest_file_content, dest_fp)
 
-    log.debug("    complete!")
+    log.debug(limit_log_length("    complete!"))
 
 
 def split_content_chunk_if_oversized(
@@ -128,7 +129,7 @@ def split_content_chunk_if_oversized(
         split_content[k] = content.pop(k)
 
     split_filepath = dump_history_to_disk(parent_dir, split_content)
-    log.debug(f"split off excess chunk content to new file: {split_filepath}")
+    log.debug(limit_log_length(f"split off excess chunk content to new file: {split_filepath}"))
     return split_filepath
 
 
