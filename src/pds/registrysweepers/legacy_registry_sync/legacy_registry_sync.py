@@ -28,9 +28,9 @@ def create_legacy_registry_index(es_conn=None):
     @return:
     """
     if not es_conn.indices.exists(OS_INDEX):
-        log.info(limit_log_length("create index %s", OS_INDEX))
+        log.info("create index %s", OS_INDEX)
         es_conn.indices.create(index=OS_INDEX, body={})
-    log.info(limit_log_length("index created %s", OS_INDEX))
+    log.info("index created %s", OS_INDEX)
 
 
 def run(
