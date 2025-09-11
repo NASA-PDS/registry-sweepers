@@ -4,12 +4,10 @@ import shutil
 import tempfile
 import unittest
 
-from pds.registrysweepers.ancestry import AncestryRecord
 from pds.registrysweepers.ancestry.utils import load_history_from_filepath
 from pds.registrysweepers.ancestry.utils import make_history_serializable
 from pds.registrysweepers.ancestry.utils import merge_matching_history_chunks
 from pds.registrysweepers.ancestry.utils import write_history_to_filepath
-from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 
 class TestMakeHistorySerializableTestCase(unittest.TestCase):
