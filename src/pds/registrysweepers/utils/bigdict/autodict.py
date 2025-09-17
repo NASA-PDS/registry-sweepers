@@ -33,8 +33,7 @@ class AutoDict(BigDict):
             sqlite_dict = SqliteDict(self._db_path)
             logging.info(f'AutoDict disk flood threshold reached ({self.item_count_threshold})')
             logging.info(f'Switching AutoDict backend from {type(self._dict).__name__} to {type(sqlite_dict).__name__}')
-            for k, v in self._dict.items():
-                sqlite_dict.put(k, v)
+            sqlite_dict.put_many(self._dict.items())
             self._dict = sqlite_dict
 
     def put(self, key: str, value: Any) -> None:
