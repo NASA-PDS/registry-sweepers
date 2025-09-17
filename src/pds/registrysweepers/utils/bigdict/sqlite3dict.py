@@ -10,12 +10,13 @@ class SqliteDict(BigDict):
     """SQLite-backed BigDict for large datasets"""
 
     def __init__(self, db_path: str):
+        self.table_name = 'bigdict'
         self._db_path = db_path
         self._conn = sqlite3.connect(self._db_path)
         self._conn.execute('PRAGMA journal_mode = WAL')  # enable write-ahead logging for sanic.gif (>4x when tested)
         self._conn.execute('PRAGMA synchronous = OFF')  # db is transient - corruption-on-crash is acceptable
-        self._conn.execute("""
-                           CREATE TABLE IF NOT EXISTS bigdict
+        self._conn.execute(f"""
+                           CREATE TABLE IF NOT EXISTS {self.table_name}
                            (
                                key
                                TEXT
@@ -31,7 +32,7 @@ class SqliteDict(BigDict):
         blob = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
         with self._conn:
             self._conn.execute(
-                "REPLACE INTO bigdict (key, value) VALUES (?, ?)",
+                f"REPLACE INTO {self.table_name} (key, value) VALUES (?, ?)",
                 (key, blob)
             )
 
@@ -49,13 +50,13 @@ class SqliteDict(BigDict):
         for batch in iterate_pages_of_size(batch_size, to_insert):
             with self._conn:
                 self._conn.executemany(
-                    "REPLACE INTO bigdict (key, value) VALUES (?, ?)",
+                    f"REPLACE INTO {self.table_name} (key, value) VALUES (?, ?)",
                     batch
                 )
 
     def get(self, key: str) -> Optional[Any]:
         cur = self._conn.execute(
-            "SELECT value FROM bigdict WHERE key = ?", (key,)
+            f"SELECT value FROM {self.table_name} WHERE key = ?", (key,)
         )
         row = cur.fetchone()
         if row is None:
@@ -66,24 +67,34 @@ class SqliteDict(BigDict):
         val = self.get(key)
         if val is not None:
             with self._conn:
-                self._conn.execute("DELETE FROM bigdict WHERE key = ?", (key,))
+                self._conn.execute(f"DELETE FROM {self.table_name} WHERE key = ?", (key,))
         return val
 
     def has(self, key: str) -> bool:
         cur = self._conn.execute(
-            "SELECT 1 FROM bigdict WHERE key = ? LIMIT 1", (key,)
+            f"SELECT 1 FROM {self.table_name} WHERE key = ? LIMIT 1", (key,)
         )
         return cur.fetchone() is not None
 
     def __iter__(self) -> Iterator[str]:
-        cur = self._conn.execute("SELECT key FROM bigdict")
+        cur = self._conn.execute(f"SELECT key FROM {self.table_name}")
         for (key,) in cur:
             yield key
 
     def __len__(self) -> int:
-        cur = self._conn.execute("SELECT COUNT(*) FROM bigdict")
+        cur = self._conn.execute(f"SELECT COUNT(*) FROM {self.table_name}")
         (count,) = cur.fetchone()
         return count
+
+    def values(self) -> Iterator[Any]:
+        cur = self._conn.execute(f"SELECT value FROM {self.table_name}")
+        for (value,) in cur:
+            yield pickle.loads(value)
+
+    def items(self) -> Iterator[tuple[str, Any]]:
+        cur = self._conn.execute(f"SELECT key, value FROM {self.table_name}")
+        for (key, value) in cur:
+            yield key, pickle.loads(value)
 
     def close(self):
         """Close the SQLite connection."""
