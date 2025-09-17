@@ -1,8 +1,9 @@
 import pickle
 import sqlite3
-from typing import Any, Optional, Iterator
+from typing import Any, Optional, Iterator, Tuple, Iterable
 
 from src.pds.registrysweepers.utils.bigdict.base import BigDict
+from src.pds.registrysweepers.utils.misc import iterate_pages_of_size
 
 
 class SqliteDict(BigDict):
@@ -32,6 +33,24 @@ class SqliteDict(BigDict):
                 "REPLACE INTO bigdict (key, value) VALUES (?, ?)",
                 (key, blob)
             )
+
+    def put_many(self, kv_pairs: Iterable[Tuple[str, Any]], batch_size: int = 500) -> None:
+        """
+        Insert or replace multiple key/value pairs efficiently in one transaction.
+
+        :param kv_pairs: sequence of (key, value) pairs
+        """
+        # Pre-pickle everything to avoid pickling inside the transaction loop
+        to_insert = [
+            (key, pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL))
+            for key, value in kv_pairs
+        ]
+        for batch in iterate_pages_of_size(batch_size, to_insert):
+            with self._conn:
+                self._conn.executemany(
+                    "REPLACE INTO bigdict (key, value) VALUES (?, ?)",
+                    batch
+                )
 
     def get(self, key: str) -> Optional[Any]:
         cur = self._conn.execute(
