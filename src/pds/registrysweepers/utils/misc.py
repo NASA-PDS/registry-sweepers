@@ -92,6 +92,9 @@ def get_sweeper_version_metadata_key(sweeper_name: str) -> str:
 
 def iterate_pages_of_size(page_size: int, iterable: Iterable[T]) -> Iterable[List[T]]:
     """Provides a simple interface for lazily iterating over pages of an arbitrary iterable"""
+    # TODO: Evaluate whether this is equivalent to more_itertools.batched()
+    # TODO: Evaluate whether this is equivalent to utils.misc.chunked()
+
     if page_size < 1:
         raise ValueError(f"Cannot iterate over pages of size <1 (got {page_size})")
 
@@ -104,6 +107,7 @@ def iterate_pages_given(build_page_while: Callable[[List[T]], bool], iterable: I
     pages of elements from the input iterable.  This exists to support behaviour like "continue building page while
     sufficient memory is available".
     """
+    # TODO: Evaluate whether this is equivalent to itertools.takewhile()
 
     page: List[T] = []
     for el in iterable:
@@ -142,6 +146,8 @@ def bin_elements(elements: Iterable[V], key_f: Callable[[V], K]) -> Dict[K, List
     @return: a dict of bin keys onto the elements belonging to that bin
     """
 
+    # TODO: Evaluate whether this is equivalent to itertools.groupby()
+
     result: Dict[K, List[V]] = {}
     for e in elements:
         k = key_f(e)
@@ -159,6 +165,7 @@ def is_dev_mode():
 
 def chunked(iterable, n):
     """Lazily yield successive n-sized chunks from an iterable."""
+    # TODO: Evaluate whether this is equivalent to more_itertools.batched()
     iterator = iter(iterable)
     while True:
         chunk = list(itertools.islice(iterator, n))
