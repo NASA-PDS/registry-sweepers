@@ -84,3 +84,8 @@ class AutoDict(BigDict):
             self.close()
         except Exception:
             pass
+
+    @property
+    def backend(self) -> str:
+        """Return the name of the current backend ('DictDict' or 'SqliteDict') for unit testing"""
+        return type(self._dict).__name__
