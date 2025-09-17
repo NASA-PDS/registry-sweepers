@@ -22,6 +22,8 @@ from pds.registrysweepers.utils.productidentifiers.factory import PdsProductIden
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
+from src.pds.registrysweepers.utils.bigdict.autodict import AutoDict
+
 log = logging.getLogger(__name__)
 
 # It's necessary to track which registry-refs documents have been processed during this run.  This cannot be derived
@@ -215,7 +217,7 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
         client, collection_lid, registry_db_mock
     )
 
-    nonaggregate_ancestry_records_by_lidvid = {}
+    nonaggregate_ancestry_records_by_lidvid = AutoDict(item_count_threshold=100)
     # For each collection, add the collection and its bundle ancestry to all products the collection contains
     for doc in collection_refs_query_docs:
         try:
@@ -258,10 +260,11 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
             continue
 
         for lidvid in nonaggregate_lidvids:
-            if lidvid not in nonaggregate_ancestry_records_by_lidvid:
-                nonaggregate_ancestry_records_by_lidvid[lidvid] = AncestryRecord(lidvid=lidvid)
+            lidvid_id = str(lidvid)
+            if lidvid_id not in nonaggregate_ancestry_records_by_lidvid:
+                nonaggregate_ancestry_records_by_lidvid[lidvid_id] = AncestryRecord(lidvid=lidvid)
 
-            record: AncestryRecord = nonaggregate_ancestry_records_by_lidvid[lidvid]
+            record: AncestryRecord = nonaggregate_ancestry_records_by_lidvid[lidvid_id]
             record.attach_parent_record(collection_record)
 
     return nonaggregate_ancestry_records_by_lidvid.values()
