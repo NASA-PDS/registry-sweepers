@@ -1,6 +1,6 @@
 import pickle
 import sqlite3
-from typing import Any, Optional, Iterator, Tuple, Iterable
+from typing import Any, Optional, Iterator, Tuple, Iterable, List
 
 from src.pds.registrysweepers.utils.bigdict.base import BigDict
 from src.pds.registrysweepers.utils.misc import iterate_pages_of_size
@@ -54,6 +54,56 @@ class SqliteDict(BigDict):
                     batch
                 )
 
+    def put_many_returning_conflicts(
+            self,
+            kv_pairs: Iterable[Tuple[str, Any]]
+    ) -> List[Any]:
+        """
+        Insert rows in bulk into `table`, rejecting and returning primary keys of conflicting rows.
+        This is useful when merging conflicts is necessary.
+
+        Returns:
+            List of primary keys that conflicted.
+        """
+        if not kv_pairs:
+            return []
+
+        temp_table_name = f'{self.table_name}_tmp'
+
+        to_insert = [
+            (key, pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL))
+            for key, value in kv_pairs
+        ]
+
+        cur = self._conn.cursor()
+        # 1. Create temporary table
+        cur.execute(f"CREATE TEMP TABLE {temp_table_name} (key, value)")
+
+        # 2. Insert all rows into temp table
+        cur.executemany(f"INSERT INTO {temp_table_name} (key, value) VALUES (?, ?)", to_insert)
+
+        # 3. Find conflicting primary keys
+        cur.execute(f"""
+            SELECT {temp_table_name}.key
+            FROM {temp_table_name}
+            JOIN {self.table_name} USING (key)
+        """)
+        conflicts = [row[0] for row in cur.fetchall()]
+
+        # 4. Insert non-conflicting rows into main table
+        cur.execute(f"""
+            INSERT INTO {self.table_name} (key, value)
+            SELECT key, value FROM {temp_table_name}
+            WHERE key NOT IN (
+                SELECT key FROM {self.table_name}
+            )
+        """)
+
+        # 5. Drop temporary table
+        cur.execute(f"DROP TABLE {temp_table_name}")
+
+        return conflicts
+
     def get(self, key: str) -> Optional[Any]:
         cur = self._conn.execute(
             f"SELECT value FROM {self.table_name} WHERE key = ?", (key,)
@@ -62,6 +112,15 @@ class SqliteDict(BigDict):
         if row is None:
             return None
         return pickle.loads(row[0])
+
+    def get_many(self, keys: Iterable[str]) -> Iterable[Tuple[str, Any]]:
+        """Given an iterable collection of keys, return an iterable collection of dict.items()-like (k, v) tuples"""
+        keys = list(keys)
+        placeholders = ', '.join('?' for key in keys)
+        cur = self._conn.execute(f"SELECT key, value FROM {self.table_name} WHERE key IN ({placeholders})", tuple(keys))
+        rows = cur.fetchall()
+        return map(lambda row: (row[0], pickle.loads(row[1])), rows)
+
 
     def pop(self, key: str) -> Optional[Any]:
         val = self.get(key)
