@@ -13,6 +13,7 @@ class SqliteDict(BigDict):
         self._db_path = db_path
         self._conn = sqlite3.connect(self._db_path)
         self._conn.execute('PRAGMA journal_mode = WAL')  # enable write-ahead logging for sanic.gif (>4x when tested)
+        self._conn.execute('PRAGMA synchronous = OFF')  # db is transient - corruption-on-crash is acceptable
         self._conn.execute("""
                            CREATE TABLE IF NOT EXISTS bigdict
                            (
