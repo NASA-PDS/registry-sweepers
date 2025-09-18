@@ -104,6 +104,53 @@ class AncestryRecordTestCase(unittest.TestCase):
         # test update_with() raises ValueError on mismatched lidvids
         self.assertRaises(ValueError, lambda: dest.update_with(bad_src))
 
+    def test_combine_union_basic_functionality(self):
+        lidvid_str = "a:b:c:d:e:f::1.0"
+        mismatched_lidvid_str = "a:b:c:d:e:f::2.0"
+        collection_lidvid_strs = ["a:b:c:d:e::1.0", "a:b:c:d:e::2.0"]
+        bundle_lidvid_strs = ["a:b:c:d::1.0", "a:b:c:d::2.0"]
+
+        first_record = AncestryRecord(
+            lidvid=PdsLidVid.from_string(lidvid_str),
+            explicit_parent_collection_lidvids={
+                PdsLidVid.from_string(collection_lidvid_strs[0]),
+            },
+            explicit_parent_bundle_lidvids={
+                PdsLidVid.from_string(bundle_lidvid_strs[0]),
+            },
+        )
+
+        second_record = AncestryRecord(
+            lidvid=PdsLidVid.from_string(lidvid_str),
+            explicit_parent_collection_lidvids={
+                PdsLidVid.from_string(collection_lidvid_strs[1]),
+            },
+            explicit_parent_bundle_lidvids={
+                PdsLidVid.from_string(bundle_lidvid_strs[1]),
+            },
+        )
+
+        expected = AncestryRecord(
+            lidvid=PdsLidVid.from_string(lidvid_str),
+            explicit_parent_collection_lidvids={PdsLidVid.from_string(id) for id in collection_lidvid_strs},
+            explicit_parent_bundle_lidvids={PdsLidVid.from_string(id) for id in bundle_lidvid_strs},
+        )
+
+        self.assertEqual(expected, AncestryRecord.combine(first_record, second_record), "combine() works")
+
+        mismatched_record = AncestryRecord(
+            lidvid=PdsLidVid.from_string(mismatched_lidvid_str),
+            explicit_parent_collection_lidvids={
+                PdsLidVid.from_string(collection_lidvid_strs[1]),
+            },
+            explicit_parent_bundle_lidvids={
+                PdsLidVid.from_string(bundle_lidvid_strs[1]),
+            },
+        )
+
+        # test combine() raises ValueError on mismatched lidvids
+        self.assertRaises(ValueError, lambda: AncestryRecord.combine(first_record, mismatched_record))
+
     def test_resolve_collection_lidvids_with_inheritance(self):
         parent_record_bundle_lidvids = {PdsLidVid.from_string(s) for s in ["a:b:c:d::1.0"]}
         parent_record_collection_lidvids = {PdsLidVid.from_string(s) for s in ["a:b:c:d:e::1.0"]}
