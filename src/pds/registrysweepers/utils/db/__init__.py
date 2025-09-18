@@ -379,7 +379,10 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
     response_content = client.bulk(index=index_name, body=bulk_data, request_timeout=request_timeout)
 
     if response_content.get("errors"):
-        warn_types = {"document_missing_exception"}  # these types represent bad data, not bad sweepers behaviour
+        warn_types = {
+            "document_missing_exception",
+            "document_missing_in_index_exception",
+        }  # these types represent bad data, not bad sweepers behaviour
         items_with_problems = [item for item in response_content["items"] if "error" in item["update"]]
         if any(
             item["update"]["status"] == 429 and item["update"]["error"]["type"] == "circuit_breaking_exception"
@@ -426,8 +429,12 @@ def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str
     for item in items:
         id = item["update"]["_id"]
         error = item["update"]["error"]
-        error_type = error["type"]
-        error_reason = error["reason"]
+        raw_error_type = error["type"]
+        document_missing_type_str = "document_missing_in_index_exception"
+        error_type = (
+            document_missing_type_str if str(raw_error_type).startswith(document_missing_type_str) else raw_error_type
+        )
+        error_reason = error["reason"] if error["type"] != document_missing_type_str else ''
         if error_type not in agg:
             agg[error_type] = {}
 
