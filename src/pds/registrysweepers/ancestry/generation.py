@@ -216,7 +216,7 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
         client, collection_lid, registry_db_mock
     )
 
-    nonaggregate_ancestry_records_by_lidvid = SpillDict(spill_threshold=500000, merge=AncestryRecord.combine)
+    nonaggregate_ancestry_records_by_lidvid = SpillDict(spill_threshold=100000, merge=AncestryRecord.combine)
     # For each collection, add the collection and its bundle ancestry to all products the collection contains
     for doc in collection_refs_query_docs:
         try:
