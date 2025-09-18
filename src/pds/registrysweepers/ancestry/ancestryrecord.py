@@ -117,3 +117,19 @@ class AncestryRecord:
             raise ValueError(
                 f"Cannot attach a non-aggregate AncestryRecord as parent of another AncestryRecord (got {record.lidvid})"
             )
+
+    @staticmethod
+    def combine(first: AncestryRecord, second: AncestryRecord) -> AncestryRecord:
+        """Returns a non-mutating union of two AncestryRecords."""
+        if first.lidvid != second.lidvid:
+            raise ValueError(f'Cannot combine AncestryRecord objects with different lidvids (got {first.lidvid} and {second.lidvid})')
+        lidvid = first.lidvid
+        combined_record = AncestryRecord(lidvid)
+        combined_record.update_with(first)
+        combined_record.update_with(second)
+        return combined_record
+
+    def union(self, other: AncestryRecord) -> AncestryRecord:
+        """Returns a non-mutating union of two AncestryRecords."""
+
+        return AncestryRecord.combine(self, other)
