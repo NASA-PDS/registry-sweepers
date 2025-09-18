@@ -1,6 +1,6 @@
 import logging
 from collections import namedtuple
-from typing import Dict
+from typing import Dict, Any
 from typing import Iterable
 from typing import Mapping
 from typing import Set
@@ -71,7 +71,7 @@ def get_ancestry_by_collection_lidvid(collections_docs: Iterable[Dict]) -> Mappi
 
 
 def get_ancestry_by_collection_lid(
-    ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord]
+        ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord]
 ) -> Mapping[PdsLid, Set[AncestryRecord]]:
     # Create a dict of pointer-sets to the newly-instantiated records, binned/keyed by LID for fast access when a bundle
     #  only refers to a LID rather than a specific LIDVID
@@ -85,7 +85,7 @@ def get_ancestry_by_collection_lid(
 
 
 def get_collection_ancestry_records(
-    client: OpenSearch, registry_db_mock: DbMockTypeDef = None
+        client: OpenSearch, registry_db_mock: DbMockTypeDef = None
 ) -> Iterable[AncestryRecord]:
     log.info(limit_log_length("Generating AncestryRecords for collections..."))
     bundles_docs = get_collection_ancestry_records_bundles_query(client, registry_db_mock)
@@ -152,9 +152,9 @@ def get_collection_ancestry_records(
 
 
 def generate_nonaggregate_and_collection_records_iteratively(
-    client: OpenSearch,
-    all_collections_records: Iterable[AncestryRecord],
-    registry_db_mock: DbMockTypeDef = None,
+        client: OpenSearch,
+        all_collections_records: Iterable[AncestryRecord],
+        registry_db_mock: DbMockTypeDef = None,
 ) -> Iterable[AncestryRecord]:
     """
     Iteratively generate nonaggregate records in chunks, each chunk sharing a common collection LID.  This
@@ -190,7 +190,7 @@ def generate_nonaggregate_and_collection_records_iteratively(
             )
 
         for non_aggregate_record in get_nonaggregate_ancestry_records_for_collection_lid(
-            client, lid, collections_records_for_lid, registry_db_mock
+                client, lid, collections_records_for_lid, registry_db_mock
         ):
             yield non_aggregate_record
 
@@ -199,10 +199,10 @@ def generate_nonaggregate_and_collection_records_iteratively(
 
 
 def get_nonaggregate_ancestry_records_for_collection_lid(
-    client: OpenSearch,
-    collection_lid: PdsLid,
-    collection_ancestry_records: Iterable[AncestryRecord],
-    registry_db_mock: DbMockTypeDef = None,
+        client: OpenSearch,
+        collection_lid: PdsLid,
+        collection_ancestry_records: Iterable[AncestryRecord],
+        registry_db_mock: DbMockTypeDef = None,
 ) -> Iterable[AncestryRecord]:
     log.info(
         limit_log_length(
@@ -210,13 +210,20 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
         )
     )
 
-    collection_records_by_lidvid = {r.lidvid: r for r in collection_ancestry_records}
-
     collection_refs_query_docs = get_nonaggregate_ancestry_records_for_collection_lid_query(
         client, collection_lid, registry_db_mock
     )
 
+    return generate_nonaggregate_ancestry_records(collection_ancestry_records, collection_refs_query_docs)
+
+
+def generate_nonaggregate_ancestry_records(collection_ancestry_records: Iterable[AncestryRecord],
+                                           collection_refs_query_docs: Iterable[Dict[str, Any]]) -> Iterable[
+    AncestryRecord]:
+    collection_records_by_lidvid = {r.lidvid: r for r in collection_ancestry_records}
+
     nonaggregate_ancestry_records_by_lidvid = SpillDict(spill_threshold=100000, merge=AncestryRecord.combine)
+
     # For each collection, add the collection and its bundle ancestry to all products the collection contains
     for doc in collection_refs_query_docs:
         try:
