@@ -15,14 +15,13 @@ from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_reco
 from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.utils.bigdict.spilldict import SpillDict
 from pds.registrysweepers.utils.misc import bin_elements
 from pds.registrysweepers.utils.misc import coerce_list_type
 from pds.registrysweepers.utils.misc import limit_log_length
 from pds.registrysweepers.utils.productidentifiers.factory import PdsProductIdentifierFactory
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
-
-from src.pds.registrysweepers.utils.bigdict.autodict import AutoDict
 
 log = logging.getLogger(__name__)
 
@@ -217,7 +216,7 @@ def get_nonaggregate_ancestry_records_for_collection_lid(
         client, collection_lid, registry_db_mock
     )
 
-    nonaggregate_ancestry_records_by_lidvid = AutoDict(item_count_threshold=100)
+    nonaggregate_ancestry_records_by_lidvid = SpillDict(spill_threshold=500000, merge=AncestryRecord.combine)
     # For each collection, add the collection and its bundle ancestry to all products the collection contains
     for doc in collection_refs_query_docs:
         try:
