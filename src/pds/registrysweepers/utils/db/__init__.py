@@ -434,7 +434,7 @@ def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str
         error_type = (
             document_missing_type_str if str(raw_error_type).startswith(document_missing_type_str) else raw_error_type
         )
-        error_reason = error["reason"]
+        error_reason = error["reason"] if error["type"] != document_missing_type_str else ''
         if error_type not in agg:
             agg[error_type] = {}
 
