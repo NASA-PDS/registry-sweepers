@@ -1,5 +1,6 @@
 import logging
-from typing import Union, Optional
+from typing import Optional
+from typing import Union
 
 import opensearchpy.helpers
 import requests
@@ -114,21 +115,21 @@ def dry_run(
     @param sample_size: Number of sample documents to show (default: 5)
     @return: Dictionary with statistics about the dry run
     """
-    
+
     configure_logging(filepath=log_filepath, log_level=log_level)
-    
+
     log.info("Starting dry run - Solr data retrieval only")
     log.info("=" * 60)
-    
+
     # Get online resources from Solr
     log.info("Retrieving online resources from Solr...")
     online_resources = get_online_resources()
     log.info("Retrieved %d online resources", len(online_resources))
-    
+
     # Initialize Solr iterator
     log.info("Initializing Solr document iterator...")
     solr_itr = SlowSolrDocs(SOLR_URL, "*", rows=500)
-    
+
     # Statistics tracking
     stats = {
         "total_docs": 0,
@@ -140,71 +141,85 @@ def dry_run(
         "product_class_distribution": {},
         "node_by_product_class": {},  # node -> {product_class -> count}
         "sample_docs": [],
-        "errors": []
+        "errors": [],
     }
-    
+
     # Use the existing SolrOsWrapperIter to analyze documents without OpenSearch
     # We pass empty found_ids since we're not checking against OpenSearch
     wrapper = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=set(), online_resources=online_resources)
-    
+
     try:
         for i, os_doc in enumerate(wrapper):
             if max_docs and i >= max_docs:
                 log.info("Reached maximum document limit: %d", max_docs)
                 break
-            
+
             # Extract the original Solr document from the OpenSearch document
             solr_doc = os_doc["_source"]
-            
+
             # Analyze the document
             stats["total_docs"] += 1
-            
+
             # Check for lidvid
             if "lidvid" in solr_doc:
                 stats["docs_with_lidvid"] += 1
             else:
                 stats["docs_without_lidvid"] += 1
-            
+
             # Get node assignment (already computed by SolrOsWrapperIter)
             node = solr_doc.get("node", "UNK")
             stats["node_distribution"][node] = stats["node_distribution"].get(node, 0) + 1
-            
+
             # Track product class distribution
             product_class = "Unknown"
             if "product_class" in solr_doc:
-                product_class = solr_doc["product_class"][0] if isinstance(solr_doc["product_class"], list) else solr_doc["product_class"]
-                stats["product_class_distribution"][product_class] = stats["product_class_distribution"].get(product_class, 0) + 1
-            
+                product_class = (
+                    solr_doc["product_class"][0]
+                    if isinstance(solr_doc["product_class"], list)
+                    else solr_doc["product_class"]
+                )
+                stats["product_class_distribution"][product_class] = (
+                    stats["product_class_distribution"].get(product_class, 0) + 1
+                )
+
             # Track node by product class breakdown
             if node not in stats["node_by_product_class"]:
                 stats["node_by_product_class"][node] = {}
-            stats["node_by_product_class"][node][product_class] = stats["node_by_product_class"][node].get(product_class, 0) + 1
-            
+            stats["node_by_product_class"][node][product_class] = (
+                stats["node_by_product_class"][node].get(product_class, 0) + 1
+            )
+
             # Collect sample documents
             if show_sample_docs and len(stats["sample_docs"]) < sample_size:
                 sample_doc = {
                     "lid": solr_doc.get("lid", "N/A"),
                     "lidvid": solr_doc.get("lidvid", "N/A"),
-                    "product_class": solr_doc.get("product_class", ["N/A"])[0] if isinstance(solr_doc.get("product_class"), list) else solr_doc.get("product_class", "N/A"),
+                    "product_class": solr_doc.get("product_class", ["N/A"])[0]
+                    if isinstance(solr_doc.get("product_class"), list)
+                    else solr_doc.get("product_class", "N/A"),
                     "node": node,
-                    "resource_url": solr_doc.get("resource_url", ["N/A"])[0] if isinstance(solr_doc.get("resource_url"), list) else solr_doc.get("resource_url", "N/A"),
-                    "modification_date": solr_doc.get("modification_date", ["N/A"])[0] if isinstance(solr_doc.get("modification_date"), list) else solr_doc.get("modification_date", "N/A")
+                    "resource_url": solr_doc.get("resource_url", ["N/A"])[0]
+                    if isinstance(solr_doc.get("resource_url"), list)
+                    else solr_doc.get("resource_url", "N/A"),
+                    "modification_date": solr_doc.get("modification_date", ["N/A"])[0]
+                    if isinstance(solr_doc.get("modification_date"), list)
+                    else solr_doc.get("modification_date", "N/A"),
                 }
                 stats["sample_docs"].append(sample_doc)
-            
+
             # Update seen domains and node IDs from the wrapper
             stats["seen_domains"].update(wrapper._seen_domains)
             stats["seen_node_ids"].update(wrapper._seen_node_ids)
-            
+
             if i % 1000 == 0 and i > 0:
                 log.info("Processed %d documents...", i)
-    
+
     except StopIteration:
         log.info("Finished processing all documents from Solr")
     except Exception as e:
         log.error("Error during dry run: %s", str(e))
         stats["errors"].append(str(e))
-    
+
     # Print results
     log.info("=" * 60)
     log.info("DRY RUN RESULTS")
@@ -213,24 +228,24 @@ def dry_run(
     log.info("Documents with lidvid: %d", stats["docs_with_lidvid"])
     log.info("Documents without lidvid: %d", stats["docs_without_lidvid"])
     log.info("Online resources retrieved: %d", len(online_resources))
-    
+
     log.info("\nNode Distribution:")
     for node, count in sorted(stats["node_distribution"].items(), key=lambda x: x[1], reverse=True):
         log.info("  %s: %d documents", node, count)
-    
+
     log.info("\nProduct Class Distribution (top 10):")
     sorted_classes = sorted(stats["product_class_distribution"].items(), key=lambda x: x[1], reverse=True)
     for product_class, count in sorted_classes[:10]:
         log.info("  %s: %d documents", product_class, count)
-    
+
     log.info("\nSeen Domains (%d total):", len(stats["seen_domains"]))
     for domain in sorted(stats["seen_domains"]):
         log.info("  %s", domain)
-    
+
     log.info("\nSeen Node IDs (%d total):", len(stats["seen_node_ids"]))
     for node_id in sorted(stats["seen_node_ids"]):
         log.info("  %s", node_id)
-    
+
     if show_sample_docs and stats["sample_docs"]:
         log.info("\nSample Documents:")
         for i, doc in enumerate(stats["sample_docs"], 1):
@@ -242,15 +257,15 @@ def dry_run(
             log.info("    Resource URL: %s", doc["resource_url"])
             log.info("    Modification Date: %s", doc["modification_date"])
             log.info("")
-    
+
     if stats["errors"]:
         log.info("\nErrors encountered:")
         for error in stats["errors"]:
             log.info("  %s", error)
-    
+
     log.info("=" * 60)
     log.info("Dry run completed successfully")
-    
+
     return stats
 
 
@@ -258,7 +273,7 @@ def main():
     """Main entry point for the legacy registry sync console script."""
     import argparse
     import sys
-    
+
     parser = argparse.ArgumentParser(
         description="PDS Legacy Registry Sync - Test Solr data retrieval or sync to OpenSearch",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -267,22 +282,22 @@ Examples:
   # Dry run - test Solr data retrieval only
   %(prog)s --dry-run --max-docs 10
   %(prog)s --dry-run --max-docs 100 --log-file dry_run.log
-  
+
   # Dry run without showing sample documents
   %(prog)s --dry-run --max-docs 50 --no-samples
-  
+
   # Dry run with more sample documents
   %(prog)s --dry-run --max-docs 20 --sample-size 10
         """,
     )
-    
+
     # Dry run flag
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Perform dry run - only interact with Solr, no OpenSearch operations",
     )
-    
+
     # Logging arguments
     parser.add_argument(
         "--log-file",
@@ -294,7 +309,7 @@ Examples:
         default="INFO",
         help="Log level (default: INFO)",
     )
-    
+
     # Dry run arguments
     parser.add_argument(
         "--max-docs",
@@ -312,9 +327,9 @@ Examples:
         default=5,
         help="Number of sample documents to show (default: 5)",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Check if dry-run flag is provided
     if not args.dry_run:
         print("PDS Legacy Registry Sync")
@@ -331,18 +346,19 @@ Examples:
         print("For help with dry-run options:")
         print("  %s --dry-run --help" % sys.argv[0])
         sys.exit(1)
-    
+
     # Convert log level string to integer
     import logging
+
     log_level = getattr(logging, args.log_level)
-    
+
     # Run dry-run mode
     try:
         print("Starting PDS Legacy Registry Sync - DRY RUN MODE")
         print("=" * 60)
         print("This will only interact with Solr - no OpenSearch operations")
         print("=" * 60)
-        
+
         stats = dry_run(
             log_filepath=args.log_file,
             log_level=log_level,
@@ -350,7 +366,7 @@ Examples:
             show_sample_docs=not args.no_samples,
             sample_size=args.sample_size,
         )
-        
+
         print("\n" + "=" * 60)
         print("DRY RUN SUMMARY")
         print("=" * 60)
@@ -361,42 +377,44 @@ Examples:
         print(f"Unique node IDs found: {len(stats['seen_node_ids'])}")
         print(f"Node distribution: {len(stats['node_distribution'])} different nodes")
         print(f"Product classes found: {len(stats['product_class_distribution'])} different classes")
-        
+
         # Show node distribution details
-        if stats['node_distribution']:
+        if stats["node_distribution"]:
             print("\nNode Distribution:")
-            for node, count in sorted(stats['node_distribution'].items(), key=lambda x: x[1], reverse=True):
+            for node, count in sorted(stats["node_distribution"].items(), key=lambda x: x[1], reverse=True):
                 print(f"  {node}: {count} documents")
-        
+
         # Show node distribution by product class
-        if stats['node_by_product_class']:
+        if stats["node_by_product_class"]:
             print("\nNode Distribution by Product Class:")
-            for node in sorted(stats['node_distribution'].keys(), key=lambda x: stats['node_distribution'][x], reverse=True):
-                node_total = stats['node_distribution'][node]
+            for node in sorted(
+                stats["node_distribution"].keys(), key=lambda x: stats["node_distribution"][x], reverse=True
+            ):
+                node_total = stats["node_distribution"][node]
                 print(f"\n  {node} ({node_total} total documents):")
-                
+
                 # Sort product classes by count within this node
-                node_classes = stats['node_by_product_class'][node]
+                node_classes = stats["node_by_product_class"][node]
                 sorted_classes = sorted(node_classes.items(), key=lambda x: x[1], reverse=True)
-                
+
                 for product_class, count in sorted_classes:
                     percentage = (count / node_total) * 100
                     print(f"    {product_class}: {count} documents ({percentage:.1f}%)")
-        
+
         # Show product class distribution details (top 10)
-        if stats['product_class_distribution']:
+        if stats["product_class_distribution"]:
             print("\nProduct Class Distribution (top 10):")
-            sorted_classes = sorted(stats['product_class_distribution'].items(), key=lambda x: x[1], reverse=True)
+            sorted_classes = sorted(stats["product_class_distribution"].items(), key=lambda x: x[1], reverse=True)
             for product_class, count in sorted_classes[:10]:
                 print(f"  {product_class}: {count} documents")
-        
-        if stats['errors']:
+
+        if stats["errors"]:
             print(f"Errors encountered: {len(stats['errors'])}")
-            for error in stats['errors']:
+            for error in stats["errors"]:
                 print(f"  - {error}")
-        
+
         print("\nDry run completed successfully!")
-        
+
     except KeyboardInterrupt:
         print("\nDry run interrupted by user")
         sys.exit(1)

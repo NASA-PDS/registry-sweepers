@@ -35,32 +35,25 @@ NODE_DOMAINS = {
     # JAXA
     "www.darts.isas.jaxa.jp": "JAXA",
     "darts.isas.jaxa.jp": "JAXA",
-
     # KPDS
     "www.kari.re.kr": "KPDS",
-    
     # PSA
     "psa.esac.esa.int": "PSA",
-    
     # ATM
     "atmos.nmsu.edu": "PDS_ATM",
     "pds-atmospheres.nmsu.edu": "PDS_ATM",
-    
     "mars.nasa.gov": "PDS_IMG",
     "planetarydata.jpl.nasa.gov": "PDS_IMG",
-
     # ENG
     "starbrite.jpl.nasa.gov": "PDS_ENG",
     "starbase.jpl.nasa.gov": "PDS_ENG",
     "pds.nasa.gov": "PDS_ENG",
-    
     # GEO
     "ode.rsl.wustl.edu": "PDS_GEO",
     "pds-speclib.rsl.wustl.edu": "PDS_GEO",
     "an.rsl.wustl.edu": "PDS_GEO",
     "pds-geosciences.wustl.edu": "PDS_GEO",
     "astrogeology.usgs.gov": "PDS_GEO",
-
     # IMG
     "mars.jpl.nasa.gov": "PDS_IMG",
     "d2g5bbjkxk8tlv.cloudfront.net": "PDS_IMG",
@@ -73,27 +66,23 @@ NODE_DOMAINS = {
     "pdsmaps.wr.usgs.gov": "PDS_IMG",
     "pdsimg.jpl.nasa.gov": "PDS_IMG",
     "pdsimage.wr.usgs.gov": "PDS_IMG",
-
     # NAIF
     "wgc.jpl.nasa.gov:8443": "PDS_NAIF",
     "naif.jpl.nasa.gov": "PDS_NAIF",
-    
     # PPI
     "pds-ppi.igpp.ucla.edu": "PDS_PPI",
     "ppi.pds.nasa.gov": "PDS_PPI",
     "pgs-ppi.igpp.ucla.edu": "PDS_PPI",
     "www-pw.physics.uiowa.edu": "PDS_PPI",
-
     # RMS
     "pds-rings.seti.org": "PDS_RMS",
-    
     # SBN
     "pds-smallbodies.astro.umd.edu": "PDS_SBN",
     "arcnav.psi.edu": "PDS_SBN",
     "sbn.psi.edu": "PDS_SBN",
     "pdssbn.astro.umd.edu": "PDS_SBN",
     "sbnarchive.psi.edu": "PDS_SBN",
-    "www.psi.edu": "PDS_SBN"
+    "www.psi.edu": "PDS_SBN",
 }
 
 
@@ -131,13 +120,13 @@ def pds4_id_field_fun(doc):
 def get_online_resource_id(resource_ref: str) -> str:
     """
     Extract the LID (Logical Identifier) from a resource reference that might be a LIDVID.
-    
+
     The resource_ref can be either:
     - A LID (Logical Identifier): urn:nasa:pds:mission_name:data_type::1.0
     - A LIDVID (Logical Identifier + Version): urn:nasa:pds:mission_name:data_type::1.0
-    
+
     This function extracts just the LID part by removing the version component.
-    
+
     @param resource_ref: The resource reference from the document
     @return: The LID part of the resource reference
     """
@@ -146,7 +135,7 @@ def get_online_resource_id(resource_ref: str) -> str:
         # Split on "::" and take the first part (LID)
         parts = resource_ref.split("::")
         return parts[0]
-    
+
     # If no "::" found, return as-is (it's already a LID)
     return resource_ref
 
