@@ -128,6 +128,29 @@ def pds4_id_field_fun(doc):
         raise MissingIdentifierError()
 
 
+def get_online_resource_id(resource_ref: str) -> str:
+    """
+    Extract the LID (Logical Identifier) from a resource reference that might be a LIDVID.
+    
+    The resource_ref can be either:
+    - A LID (Logical Identifier): urn:nasa:pds:mission_name:data_type::1.0
+    - A LIDVID (Logical Identifier + Version): urn:nasa:pds:mission_name:data_type::1.0
+    
+    This function extracts just the LID part by removing the version component.
+    
+    @param resource_ref: The resource reference from the document
+    @return: The LID part of the resource reference
+    """
+    # If it contains "::", it's likely a LIDVID, so we take the LID part (before "::")
+    if "::" in resource_ref:
+        # Split on "::" and take the first part (LID)
+        parts = resource_ref.split("::")
+        return parts[0]
+    
+    # If no "::" found, return as-is (it's already a LID)
+    return resource_ref
+
+
 def get_node_from_file_ref(file_ref: str):
     """
     Thanks to the file system storage of the labels in the legacy registry we can retrieve the
@@ -193,7 +216,7 @@ class SolrOsWrapperIter:
                 return NODE_DOMAINS[domain]
 
         if "resource_ref" in doc:
-            online_resource_id = doc["resource_ref"][0]
+            online_resource_id = get_online_resource_id(doc["resource_ref"][0])
             if online_resource_id in self.online_resources:
                 url = self.online_resources.get(online_resource_id)
                 domain = urlparse(url).netloc
