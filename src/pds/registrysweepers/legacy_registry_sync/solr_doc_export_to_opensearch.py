@@ -1,10 +1,13 @@
 import logging
 import os
 from datetime import datetime
+from urllib.parse import urlparse
 
 from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
+
+UNKONWN_NODE = "UNK"
 
 NODE_FOLDERS = {
     "atmos": "PDS_ATM",
@@ -16,6 +19,67 @@ NODE_FOLDERS = {
     "rings": "PDS_RMS",
     "rs": "PDS_RS",
     "sbn": "PDS_SBN",
+}
+
+ENG_PRODUCT_CLASSES = {
+    "Product_Context",
+    "Product_XML_Schema",
+    "Product_Instrument_PDS3",
+    "Product_Mission_PDS3",
+    "Product_Instrument_Host_PDS3",
+    "Product_Target_PDS3",
+}
+UNK_PRODUCT_CLASSES = {"Product_SIP_Deep_Archive", "Product_Zipped", "Product_Ancillary"}
+
+NODE_DOMAINS = {
+    "www-pw.physics.uiowa.edu": "PDS_PPI",
+    "psa.esac.esa.int": "PSA",
+    "pds.nasa.gov": "PDS_ENG",
+    "sbnarchive.psi.edu": "PDS_SBN",
+    "pds.lroc.asu.edu": "PDS_IMG",
+    "grspds.lpl.arizona.edu": "PDS_IMG",
+    "pds-imaging.jpl.nasa.gov": "PDS_IMG",
+    "naif.jpl.nasa.gov": "PDS_NAIF",
+    "www.darts.isas.jaxa.jp": "JAXA",
+    "astrogeology.usgs.gov": "PDS_GEO",
+    "pds-atmospheres.nmsu.edu": "PDS_ATM",
+    "pdsimage2.wr.usgs.gov": "PDS_IMG",
+    "static.mars.asu.edu": "PDS_IMG",
+    "pds.shadowcam.im-ldi.com": "PDS_IMG",
+    "darts.isas.jaxa.jp": "JAXA",
+    "pdssbn.astro.umd.edu": "PDS_SBN",
+    "pds-geosciences.wustl.edu": "PDS_GEO",
+    "arcnav.psi.edu": "PDS_SBN",
+    "sbn.psi.edu": "PDS_SBN",
+    "ppi.pds.nasa.gov": "PDS_PPI",
+    "pgs-ppi.igpp.ucla.edu": "PDS_PPI",
+    "starbase.jpl.nasa.gov": "PDS_ENG",
+    "d2g5bbjkxk8tlv.cloudfront.net": "PDS_IMG",
+    "pds-rings.seti.org": "PDS_RMS",
+    "mars.jpl.nasa.gov": "PDS_IMG",
+    "pds-smallbodies.astro.umd.edu": "PDS_SBN",
+    "an.rsl.wustl.edu": "PDS_GEO",
+    "atmos.nmsu.edu": "PDS_ATM",
+    "mars.nasa.gov": "PDS_IMG",
+    "planetarydata.jpl.nasa.gov": "PDS_IMG",
+    "pds-ppi.igpp.ucla.edu": "PDS_PPI",
+    "wgc.jpl.nasa.gov:8443": "PDS_NAIF",
+    "www.kari.re.kr": "KASA",
+    "pds-speclib.rsl.wustl.edu": "PDS_GEO",
+    "starbrite.jpl.nasa.gov": "PDS_ENG",
+    "ode.rsl.wustl.edu": "PDS_GEO",
+}
+
+
+NODE_ID = {
+    "Engineering": "PDS_ENG",
+    "Planetary Rings": "PDS_RMS",
+    "Imaging": "PDS_IMG",
+    "Planetary Atmospheres": "PDS_ATM",
+    "Navigation and Ancillary Information Facility": "PDS_NAIF",
+    "Planetary Plasma Interactions": "PDS_PPI",
+    "Small Bodies": "PDS_SBN",
+    "Geosciences": "PDS_GEO",
 }
 
 DEFAULT_MODIFICATION_DATE = datetime(1950, 1, 1, 0, 0, 0)
@@ -46,14 +110,13 @@ def get_node_from_file_ref(file_ref: str):
     @param file_ref: location of the XML PDS4 Label in the legacy registry
     @return: the Discipline Node code used in the (new) registry.
     """
-    file_path = os.fspath(file_ref)
-    path = os.path.normpath(file_path)
-    dirs = path.split(os.sep)
-    return NODE_FOLDERS.get(dirs[4], "PDS_EN")
+    dirs = file_ref.split("/")
+    node_dir = dirs[6]
+    return NODE_FOLDERS.get(node_dir, "PDS_ENG")
 
 
 class SolrOsWrapperIter:
-    def __init__(self, solr_iterable, es_index, found_ids=None, rolls_over_target: int = 0):
+    def __init__(self, solr_itr, es_index, found_ids=None, online_resources=None):
         """
         Iterable on the Solr legacy registry documents returning the migrated document for each iteration (next).
         The migrated documents contains in addition to the Solr document properties:
@@ -70,12 +133,71 @@ class SolrOsWrapperIter:
         self.type = "update"
         self.id_field_fun = pds4_id_field_fun
         self.found_ids = found_ids
-        self._solr_iterable = solr_iterable
-        self._solr_itr = iter(solr_iterable)
-        self._rolls_over_target = rolls_over_target
+        self.online_resources = online_resources
+        self._solr_itr = iter(solr_itr)
+        self._seen_domains = set()
+        self._seen_node_ids = set()
 
     def __iter__(self):
         return self
+
+    def _get_node(self, doc: dict) -> str:
+        """Infer the node from the url resource's DNS"""
+
+        if "agency_name" in doc:
+            agency = doc["agency_name"][0]
+            if agency == "esa":
+                return "PSA"
+            elif agency == "Unknown":
+                return UNKONWN_NODE
+
+        if "product_class" in doc:
+            product_class = doc["product_class"][0]
+            if product_class in ENG_PRODUCT_CLASSES:
+                # we automatically assign specific product classes to ENG
+                return "PDS_ENG"
+            elif product_class in UNK_PRODUCT_CLASSES:  # we don't bother to attribute a node to other product classes
+                return UNKONWN_NODE
+
+        if "resource_url" in doc:
+            url = doc["resource_url"][0]
+            domain = urlparse(url).netloc
+            self._seen_domains.add(domain)
+            if domain in NODE_DOMAINS:
+                return NODE_DOMAINS[domain]
+
+        if "resource_ref" in doc:
+            online_resource_id = doc["resource_ref"][0]
+            if online_resource_id in self.online_resources:
+                url = self.online_resources.get(online_resource_id)
+                domain = urlparse(url).netloc
+                self._seen_domains.add(domain)
+                if domain in NODE_DOMAINS:
+                    return NODE_DOMAINS[domain]
+            else:
+                log.warning("Skipping not found online resource '%s' of doc %s", online_resource_id, doc["lid"])
+
+        if "node_id" in doc:
+            node_id = doc["node_id"][0]
+            self._seen_node_ids.add(node_id)
+            if node_id in NODE_ID:
+                return NODE_ID[node_id]
+
+        if "file_ref_url" in doc:
+            url = doc["file_ref_url"][0]
+            return get_node_from_file_ref(url)
+
+        log.warning(
+            "Unable to attribute node for product %s, none of resource_url, resource_ref, file_ref_url, node_id were found",
+            doc["lid"],
+        )
+
+        return UNKONWN_NODE
+
+        # if "file_ref_url" in doc:
+        #    node = get_node_from_file_ref(doc["file_ref_url"])
+
+        #    node = get_node_from_file_ref(doc["resource_ref"])
 
     def solr_doc_to_os_doc(self, doc):
         new_doc = dict()
@@ -86,11 +208,6 @@ class SolrOsWrapperIter:
         # remove empty fields
         new_doc["_source"] = {}
         for k, v in doc.items():
-            # get the node from the data string
-            # for example : /data/pds4/releases/ppi/galileo-traj-jup-20230818
-            if k == "file_ref_location":
-                new_doc["_source"]["node"] = get_node_from_file_ref(v[0])
-
             # manage dates
             if "date" in k:
                 # only keep the latest modification date, for kibana
@@ -125,18 +242,14 @@ class SolrOsWrapperIter:
             new_doc["_id"] = id
             new_doc["_source"]["found_in_registry"] = "true" if id in self.found_ids else "false"
 
+        new_doc["_source"]["node"] = self._get_node(doc)
         return new_doc
 
     def __next__(self):
-        rolls_over = 0
         while True:
+            # skip rows without an id
             try:
                 doc = next(self._solr_itr)
                 return self.solr_doc_to_os_doc(doc)
             except MissingIdentifierError as e:
                 log.warning(limit_log_length(str(e)))
-            except StopIteration as e:
-                if rolls_over == self._rolls_over_target:
-                    raise StopIteration(e)
-                rolls_over += 1
-                self._solr_itr = iter(self._solr_iterable)

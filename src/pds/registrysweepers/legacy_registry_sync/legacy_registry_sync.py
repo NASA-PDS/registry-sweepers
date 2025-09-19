@@ -1,10 +1,8 @@
-import json
 import logging
-import sys
-from time import sleep
 from typing import Union
 
 import opensearchpy.helpers
+import requests
 from opensearchpy import OpenSearch
 from pds.registrysweepers.legacy_registry_sync.opensearch_loaded_product import get_already_loaded_lidvids
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
@@ -18,6 +16,29 @@ log = logging.getLogger(__name__)
 SOLR_URL = "https://pds.nasa.gov/services/search/search"
 OS_INDEX = "en-legacy-registry"
 MAX_RETRIES = 5
+
+
+def get_online_resources():
+    """Get online resource from Solr."""
+    online_resources = {}
+    rows = 500
+    start = 0
+    while True:
+        log.info("pull online resource from solr, starting at %i", start)
+        response = requests.get(
+            f"https://pds.nasa.gov/services/search/search?q=data_class:Resource&wt=json&qt=all&rows={rows}&start={start}"
+        )
+        docs = response.json()["response"]["docs"]
+        for doc in docs:
+            if "lid" in doc and "resource_url" in doc:
+                online_resources[doc["lid"]] = doc["resource_url"][0]
+
+        if len(docs) < rows:
+            break
+
+        start += rows
+
+    return online_resources
 
 
 def create_legacy_registry_index(es_conn=None):
@@ -57,14 +78,19 @@ def run(
         product_classes=["Product_Context", "Product_Collection", "Product_Bundle"], es_conn=client
     )
 
-    es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids)
+    online_resources = get_online_resources()
+
+    es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids, online_resources=online_resources)
     dev_mode = is_dev_mode()
 
     for operation_successful, operation_info in opensearchpy.helpers.streaming_bulk(
-        client, es_actions, chunk_size=50, max_chunk_bytes=50000000, max_retries=5, initial_backoff=10
+        client, es_actions, chunk_size=50, max_chunk_bytes=50000000, max_retries=5, initial_backoff=10, timeout=120
     ):
         if not operation_successful:
             log.error(limit_log_length(operation_info))
 
         if dev_mode:
             break
+
+    print(es_actions._seen_domains)
+    print(es_actions._seen_node_ids)
