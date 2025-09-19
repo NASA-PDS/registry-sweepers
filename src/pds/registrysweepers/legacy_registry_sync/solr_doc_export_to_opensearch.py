@@ -153,7 +153,7 @@ class SolrOsWrapperIter:
         @param solr_itr: iterator on the solr documents. SlowSolrDocs instance from the solr-to-es repository
         @param es_index: OpenSearch/ElasticSearch index name
         @param found_ids: list of the lidvid already available in the new registry
-        @param rolls_over_target: increase artifialy the number entries by re-running the loop n times
+        @param rolls_over_target: artificially increase the number entries by re-running the loop n times
         """
         self.index = es_index
         self.type = "update"
