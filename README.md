@@ -18,6 +18,50 @@ The ancestry sweeper generates membership metadata for each product, i.e. which 
 #### [Reindexer](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/reindexer/main.py)
 The reindexer sweeper ensures that the registry index mappings are updated with all fields available in the registry-dd index, and then triggers reindexation on all products which have not yet been successfully processed previously.  This ensures that all products are searchable on all fields, provided a field type mapping is defined in the registry-dd index at the time of processing.
 
+#### [Legacy Registry Sync](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/legacy_registry_sync/legacy_registry_sync.py)
+The legacy registry sync tool migrates data from the legacy Solr-based PDS registry to the new OpenSearch-based registry. It includes a dry-run mode for testing Solr data retrieval without affecting OpenSearch.
+
+**Console Script Usage:**
+
+```bash
+# Install the package first
+pip install -e .
+
+# Run dry-run mode (Solr data retrieval only, no OpenSearch operations)
+pds-legacy-registry-sync --dry-run --max-docs 10
+
+# Comprehensive dry-run with logging
+pds-legacy-registry-sync --dry-run --max-docs 100 --log-file dry_run.log
+
+# Dry-run without showing sample documents
+pds-legacy-registry-sync --dry-run --max-docs 50 --no-samples
+
+# Dry-run with more sample documents
+pds-legacy-registry-sync --dry-run --max-docs 20 --sample-size 10
+
+# Get help
+pds-legacy-registry-sync --dry-run --help
+```
+
+**Dry-Run Features:**
+- **Solr-only operations**: No OpenSearch connection required
+- **Data analysis**: Shows node distribution, product class breakdown, and data quality metrics
+- **Sample documents**: Displays sample documents with key fields
+- **Progress tracking**: Logs progress every 1000 documents
+- **Error handling**: Continues processing and reports errors
+
+**Dry-Run Output:**
+The tool provides comprehensive statistics including:
+- Total documents processed
+- Documents with/without lidvid
+- Node distribution (PDS_ENG, PDS_IMG, etc.)
+- Product class distribution
+- Node-by-product-class breakdown with percentages
+- Sample documents with key fields
+- Domain and node ID analysis
+
+**Full synchronization** (Solr + OpenSearch) is available programmatically via the `run()` function but is not yet implemented as a console script option.
+
 ## Developer Quickstart
 
 ### Prerequisites
