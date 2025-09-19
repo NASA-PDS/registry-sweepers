@@ -7,7 +7,7 @@ from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
 
-UNKONWN_NODE = "UNK"
+UNKNOWN_NODE = "UNK"
 
 NODE_FOLDERS = {
     "atmos": "PDS_ATM",
@@ -175,7 +175,7 @@ class SolrOsWrapperIter:
             if agency == "esa":
                 return "PSA"
             elif agency == "Unknown":
-                return UNKONWN_NODE
+                return UNKNOWN_NODE
 
         if "product_class" in doc:
             product_class = doc["product_class"][0]
@@ -183,7 +183,7 @@ class SolrOsWrapperIter:
                 # we automatically assign specific product classes to ENG
                 return "PDS_ENG"
             elif product_class in UNK_PRODUCT_CLASSES:  # we don't bother to attribute a node to other product classes
-                return UNKONWN_NODE
+                return UNKNOWN_NODE
 
         if "resource_url" in doc:
             url = doc["resource_url"][0]
@@ -218,7 +218,7 @@ class SolrOsWrapperIter:
             doc["lid"],
         )
 
-        return UNKONWN_NODE
+        return UNKNOWN_NODE
 
         # if "file_ref_url" in doc:
         #    node = get_node_from_file_ref(doc["file_ref_url"])
