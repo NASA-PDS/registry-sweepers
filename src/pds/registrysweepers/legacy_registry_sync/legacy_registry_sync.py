@@ -1,5 +1,9 @@
 import logging
+from typing import Any
+from typing import Dict
+from typing import List
 from typing import Optional
+from typing import Set
 from typing import Union
 
 import opensearchpy.helpers
@@ -19,7 +23,7 @@ OS_INDEX = "en-legacy-registry"
 MAX_RETRIES = 5
 
 
-def get_online_resources():
+def get_online_resources() -> Dict[str, str]:
     """Get online resource from Solr."""
     online_resources = {}
     rows = 2000
@@ -103,7 +107,7 @@ def dry_run(
     max_docs: Optional[int] = None,
     show_sample_docs: bool = True,
     sample_size: int = 5,
-):
+) -> Dict[str, Any]:
     """
     Performs a dry run of the Solr Legacy Registry synchronization without interacting with OpenSearch.
     This function only retrieves data from Solr and shows what would be processed.
@@ -131,7 +135,7 @@ def dry_run(
     solr_itr = SlowSolrDocs(SOLR_URL, "*", rows=500)
 
     # Statistics tracking
-    stats = {
+    stats: Dict[str, Any] = {
         "total_docs": 0,
         "docs_with_lidvid": 0,
         "docs_without_lidvid": 0,
@@ -139,7 +143,7 @@ def dry_run(
         "seen_node_ids": set(),
         "node_distribution": {},
         "product_class_distribution": {},
-        "node_by_product_class": {},  # node -> {product_class -> count}
+        "node_by_product_class": {},
         "sample_docs": [],
         "errors": [],
     }
