@@ -32,42 +32,68 @@ ENG_PRODUCT_CLASSES = {
 UNK_PRODUCT_CLASSES = {"Product_SIP_Deep_Archive", "Product_Zipped", "Product_Ancillary"}
 
 NODE_DOMAINS = {
-    "www-pw.physics.uiowa.edu": "PDS_PPI",
-    "psa.esac.esa.int": "PSA",
-    "pds.nasa.gov": "PDS_ENG",
-    "sbnarchive.psi.edu": "PDS_SBN",
-    "pds.lroc.asu.edu": "PDS_IMG",
-    "grspds.lpl.arizona.edu": "PDS_IMG",
-    "pds-imaging.jpl.nasa.gov": "PDS_IMG",
-    "naif.jpl.nasa.gov": "PDS_NAIF",
+    # JAXA
     "www.darts.isas.jaxa.jp": "JAXA",
-    "astrogeology.usgs.gov": "PDS_GEO",
+    "darts.isas.jaxa.jp": "JAXA",
+
+    # KPDS
+    "www.kari.re.kr": "KPDS",
+    
+    # PSA
+    "psa.esac.esa.int": "PSA",
+    
+    # ATM
+    "atmos.nmsu.edu": "PDS_ATM",
     "pds-atmospheres.nmsu.edu": "PDS_ATM",
+    
+    "mars.nasa.gov": "PDS_IMG",
+    "planetarydata.jpl.nasa.gov": "PDS_IMG",
+
+    # ENG
+    "starbrite.jpl.nasa.gov": "PDS_ENG",
+    "starbase.jpl.nasa.gov": "PDS_ENG",
+    "pds.nasa.gov": "PDS_ENG",
+    
+    # GEO
+    "ode.rsl.wustl.edu": "PDS_GEO",
+    "pds-speclib.rsl.wustl.edu": "PDS_GEO",
+    "an.rsl.wustl.edu": "PDS_GEO",
+    "pds-geosciences.wustl.edu": "PDS_GEO",
+    "astrogeology.usgs.gov": "PDS_GEO",
+
+    # IMG
+    "mars.jpl.nasa.gov": "PDS_IMG",
+    "d2g5bbjkxk8tlv.cloudfront.net": "PDS_IMG",
     "pdsimage2.wr.usgs.gov": "PDS_IMG",
     "static.mars.asu.edu": "PDS_IMG",
     "pds.shadowcam.im-ldi.com": "PDS_IMG",
-    "darts.isas.jaxa.jp": "JAXA",
-    "pdssbn.astro.umd.edu": "PDS_SBN",
-    "pds-geosciences.wustl.edu": "PDS_GEO",
-    "arcnav.psi.edu": "PDS_SBN",
-    "sbn.psi.edu": "PDS_SBN",
+    "pds.lroc.asu.edu": "PDS_IMG",
+    "grspds.lpl.arizona.edu": "PDS_IMG",
+    "pds-imaging.jpl.nasa.gov": "PDS_IMG",
+    "pdsmaps.wr.usgs.gov": "PDS_IMG",
+    "pdsimg.jpl.nasa.gov": "PDS_IMG",
+    "pdsimage.wr.usgs.gov": "PDS_IMG",
+
+    # NAIF
+    "wgc.jpl.nasa.gov:8443": "PDS_NAIF",
+    "naif.jpl.nasa.gov": "PDS_NAIF",
+    
+    # PPI
+    "pds-ppi.igpp.ucla.edu": "PDS_PPI",
     "ppi.pds.nasa.gov": "PDS_PPI",
     "pgs-ppi.igpp.ucla.edu": "PDS_PPI",
-    "starbase.jpl.nasa.gov": "PDS_ENG",
-    "d2g5bbjkxk8tlv.cloudfront.net": "PDS_IMG",
+    "www-pw.physics.uiowa.edu": "PDS_PPI",
+
+    # RMS
     "pds-rings.seti.org": "PDS_RMS",
-    "mars.jpl.nasa.gov": "PDS_IMG",
+    
+    # SBN
     "pds-smallbodies.astro.umd.edu": "PDS_SBN",
-    "an.rsl.wustl.edu": "PDS_GEO",
-    "atmos.nmsu.edu": "PDS_ATM",
-    "mars.nasa.gov": "PDS_IMG",
-    "planetarydata.jpl.nasa.gov": "PDS_IMG",
-    "pds-ppi.igpp.ucla.edu": "PDS_PPI",
-    "wgc.jpl.nasa.gov:8443": "PDS_NAIF",
-    "www.kari.re.kr": "KASA",
-    "pds-speclib.rsl.wustl.edu": "PDS_GEO",
-    "starbrite.jpl.nasa.gov": "PDS_ENG",
-    "ode.rsl.wustl.edu": "PDS_GEO",
+    "arcnav.psi.edu": "PDS_SBN",
+    "sbn.psi.edu": "PDS_SBN",
+    "pdssbn.astro.umd.edu": "PDS_SBN",
+    "sbnarchive.psi.edu": "PDS_SBN",
+    "www.psi.edu": "PDS_SBN"
 }
 
 
