@@ -8,6 +8,9 @@ from typing import Optional
 class BigDict(ABC):
     """Abstract base class for a big dictionary-like object."""
 
+    # TODO: investigate lmdb as an alternative backend (as standalone, or for spill) in case it provides superior
+    #  performance.  It's used in https://pypi.org/project/bigdict/ - edunn 20250922
+
     @abstractmethod
     def put(self, key: str, value: Any) -> None:
         pass
