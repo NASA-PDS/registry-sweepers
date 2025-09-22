@@ -3,15 +3,15 @@ import os
 import tempfile
 import unittest
 
-from pds.registrysweepers.utils.bigdict.autodict import AutoDict, DictDict, SqliteDict
+from pds.registrysweepers.utils.bigdict.autodict import AutoDict
+from pds.registrysweepers.utils.bigdict.autodict import DictDict
+from pds.registrysweepers.utils.bigdict.autodict import SqliteDict
 
 
 class TestAutoDict(unittest.TestCase):
     def setUp(self):
         # use a unique temp file per test
-        self.db_path = os.path.join(
-            tempfile.gettempdir(), f"autodict_test_{os.getpid()}.sqlite"
-        )
+        self.db_path = os.path.join(tempfile.gettempdir(), f"autodict_test_{os.getpid()}.sqlite")
         if os.path.exists(self.db_path):
             os.remove(self.db_path)
 

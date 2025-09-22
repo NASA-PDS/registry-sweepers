@@ -1,7 +1,8 @@
 import os
+import pickle
 import tempfile
 import unittest
-import pickle
+
 from pds.registrysweepers.utils.bigdict.sqlite3dict import SqliteDict
 
 
