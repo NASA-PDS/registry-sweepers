@@ -4,9 +4,13 @@ import math
 import os
 import tempfile
 from itertools import islice
-from more_itertools import batched
-from typing import Callable, Optional, Any, Iterator, Tuple
+from typing import Any
+from typing import Callable
+from typing import Iterator
+from typing import Optional
+from typing import Tuple
 
+from more_itertools import batched
 from pds.registrysweepers.utils.bigdict.base import BigDict
 from pds.registrysweepers.utils.bigdict.dictdict import DictDict
 from pds.registrysweepers.utils.bigdict.sqlite3dict import SqliteDict
@@ -21,18 +25,18 @@ class SpillDict(BigDict):
     - When spilling an item with a key already existing in the Sqlite db, the conflict is managed according to a
       function provided by the caller during initialisation
     """
+
     _cache: DictDict
     _spill: SqliteDict
     _item_merge_fn: Callable[[Any, Any], Any]
     _spill_proportion: float
-
 
     def __init__(
         self,
         spill_threshold: int,
         merge: Callable[[Any, Any], Any],
         spill_proportion: float = 0.9,
-        db_path: Optional[str] = None
+        db_path: Optional[str] = None,
     ):
         """
         :param spill_threshold: maximum fast cache items before spilling to disk
@@ -43,9 +47,7 @@ class SpillDict(BigDict):
         self.spill_threshold = spill_threshold
         self._item_merge_fn = merge
         self._spill_proportion = spill_proportion
-        self._db_path = db_path or os.path.join(
-            tempfile.gettempdir(), f"spilldict_{os.getpid()}_{id(self)}.sqlite"
-        )
+        self._db_path = db_path or os.path.join(tempfile.gettempdir(), f"spilldict_{os.getpid()}_{id(self)}.sqlite")
         self._cache = DictDict()
         self._spill = SqliteDict(self._db_path)
 
@@ -55,7 +57,9 @@ class SpillDict(BigDict):
             return
 
         spill_count = math.ceil(self.spill_threshold * self._spill_proportion)
-        logging.info(f"Spill threshold {self.spill_threshold} reached - spilling {spill_count} items from cache to disk")
+        logging.info(
+            f"Spill threshold {self.spill_threshold} reached - spilling {spill_count} items from cache to disk"
+        )
 
         items_to_spill = list(islice(self._cache.items(), spill_count))
 
@@ -121,7 +125,6 @@ class SpillDict(BigDict):
             if key in self._cache:
                 continue
             yield key
-
 
     def __len__(self) -> int:
         """Total unique count across cache and spill."""

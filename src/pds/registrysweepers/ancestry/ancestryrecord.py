@@ -122,7 +122,9 @@ class AncestryRecord:
     def combine(first: AncestryRecord, second: AncestryRecord) -> AncestryRecord:
         """Returns a non-mutating union of two AncestryRecords."""
         if first.lidvid != second.lidvid:
-            raise ValueError(f'Cannot combine AncestryRecord objects with different lidvids (got {first.lidvid} and {second.lidvid})')
+            raise ValueError(
+                f"Cannot combine AncestryRecord objects with different lidvids (got {first.lidvid} and {second.lidvid})"
+            )
         lidvid = first.lidvid
         combined_record = AncestryRecord(lidvid)
         combined_record.update_with(first)

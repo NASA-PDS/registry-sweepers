@@ -1,11 +1,13 @@
 import logging
 import os
 import tempfile
-from typing import Optional, Any, Iterator
+from typing import Any
+from typing import Iterator
+from typing import Optional
 
-from src.pds.registrysweepers.utils.bigdict.base import BigDict
-from src.pds.registrysweepers.utils.bigdict.dictdict import DictDict
-from src.pds.registrysweepers.utils.bigdict.sqlite3dict import SqliteDict
+from pds.registrysweepers.utils.bigdict.base import BigDict
+from pds.registrysweepers.utils.bigdict.dictdict import DictDict
+from pds.registrysweepers.utils.bigdict.sqlite3dict import SqliteDict
 
 
 class AutoDict(BigDict):
@@ -21,9 +23,7 @@ class AutoDict(BigDict):
         :param db_path: optional explicit SQLite file path. If None, a temp file is used.
         """
         self.item_count_threshold = item_count_threshold
-        self._db_path = db_path or os.path.join(
-            tempfile.gettempdir(), f"autodict_{os.getpid()}_{id(self)}.sqlite"
-        )
+        self._db_path = db_path or os.path.join(tempfile.gettempdir(), f"autodict_{os.getpid()}_{id(self)}.sqlite")
         self._dict: BigDict = DictDict()  # start with in-memory
 
     def _check_upgrade(self) -> None:
@@ -31,8 +31,8 @@ class AutoDict(BigDict):
         if isinstance(self._dict, DictDict) and len(self._dict) > self.item_count_threshold:
             # Create new SqliteDict and copy items over
             sqlite_dict = SqliteDict(self._db_path)
-            logging.info(f'AutoDict disk flood threshold reached ({self.item_count_threshold})')
-            logging.info(f'Switching AutoDict backend from {type(self._dict).__name__} to {type(sqlite_dict).__name__}')
+            logging.info(f"AutoDict disk flood threshold reached ({self.item_count_threshold})")
+            logging.info(f"Switching AutoDict backend from {type(self._dict).__name__} to {type(sqlite_dict).__name__}")
             sqlite_dict.put_many(self._dict.items())
             self._dict = sqlite_dict
 
