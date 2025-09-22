@@ -172,13 +172,6 @@ def generate_nonaggregate_and_collection_records_iteratively(
 
     for lid, collections_records_for_lid in collection_records_by_lid.items():
 
-        # # TODO: REMOVE THIS TROUBLESHOOTING ARTIFACT
-        # problematic_collection_lid = PdsLid('urn:esa:psa:em16_tgo_cas:browse_calibrated')  # works in isolation
-        problematic_collection_lid = PdsLid('urn:esa:psa:em16_tgo_cas:browse_raw')
-        if lid != problematic_collection_lid:
-            continue
-        # #     END TODO
-
         if all([record.skip_write for record in collections_records_for_lid]):
             log.debug(limit_log_length(f"Skipping updates for up-to-date collection family: {str(lid)}"))
             continue
