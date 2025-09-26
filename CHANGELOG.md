@@ -1,5 +1,17 @@
 # Changelog
 
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-09-26)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.4.0...«unknown»)
+
+**Defects:**
+
+- Ancestry not working properly for SBN [\#171](https://github.com/NASA-PDS/registry-sweepers/issues/171) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
+
+**Other closed issues:**
+
+- Optimize sweepers further for memory usage [\#165](https://github.com/NASA-PDS/registry-sweepers/issues/165)
+
 ## [v1.4.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.4.0) (2025-07-16)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.3.0...v1.4.0)
