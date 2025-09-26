@@ -232,11 +232,6 @@ class SolrOsWrapperIter:
 
         return UNKNOWN_NODE
 
-        # if "file_ref_url" in doc:
-        #    node = get_node_from_file_ref(doc["file_ref_url"])
-
-        #    node = get_node_from_file_ref(doc["resource_ref"])
-
     def solr_doc_to_os_doc(self, doc):
         new_doc = dict()
         new_doc["_index"] = self.index
