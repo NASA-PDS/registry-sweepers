@@ -67,7 +67,7 @@ The tool provides comprehensive statistics including:
 ### Prerequisites
 
 #### Dependencies
-- Python >=3.13
+- Python >=3.12
 
 #### Environment Variables
 ```
