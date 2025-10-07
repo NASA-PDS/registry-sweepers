@@ -1,6 +1,6 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-09-30)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-10-07)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.4.0...«unknown»)
 
