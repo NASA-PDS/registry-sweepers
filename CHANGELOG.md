@@ -1,8 +1,12 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-10-07)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-10-13)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.4.0...«unknown»)
+
+**Improvements:**
+
+- Enable Python 3.12 compatibility [\#181](https://github.com/NASA-PDS/registry-sweepers/issues/181)
 
 **Defects:**
 
@@ -11,6 +15,7 @@
 **Other closed issues:**
 
 - Optimize sweepers further for memory usage [\#165](https://github.com/NASA-PDS/registry-sweepers/issues/165)
+- Enable/Start sweepers in production [\#159](https://github.com/NASA-PDS/registry-sweepers/issues/159)
 
 ## [v1.4.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.4.0) (2025-07-16)
 
