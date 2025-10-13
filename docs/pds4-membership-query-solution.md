@@ -8,8 +8,8 @@ Enable users to query and sort by **any PDS metadata attribute** (hundreds of po
 
 ## Core Challenge
 
-- Products (data, collections, bundles) live in a single index, `products_full_metadata`.  
-- Membership (collection/bundle → member) is versioned and potentially huge (millions of members).  
+- Products (data, collections, bundles) live in a single index, `products_full_metadata`.
+- Membership (collection/bundle → member) is versioned and potentially huge (millions of members).
 - We must allow queries like:
 
   ```
@@ -33,12 +33,12 @@ All queries and sorts run directly against the `products_full_metadata` index �
 
 ### 1. `products_full_metadata`
 - One document per product (child).
-- `_id = child_lidvid`  
-- Contains **all** PDS metadata attributes.  
+- `_id = child_lidvid`
+- Contains **all** PDS metadata attributes.
 - Supports arbitrary filtering and sorting.
 
 ### 2. `members_by_parent_version`
-- One document per membership edge.  
+- One document per membership edge.
 - Fields:
   ```json
   {
@@ -46,7 +46,7 @@ All queries and sorts run directly against the `products_full_metadata` index �
     "child_lidvid": "urn:nasa:pds:my_prod::1.0"
   }
   ```
-- Authoritative list of relationships.  
+- Authoritative list of relationships.
 - Used by sweepers and for analytics.
 
 ### 3. `terms_holder`
@@ -161,7 +161,7 @@ Keep PIT alive between pages.
 ## Sorting & Filtering
 
 - **Any filter**: Executed directly in `products_full_metadata`.
-- **Any sort**: Also executed in `products_full_metadata`.  
+- **Any sort**: Also executed in `products_full_metadata`.
   Example:
   ```json
   "sort": [
@@ -189,10 +189,10 @@ Keep PIT alive between pages.
 
 ## Advantages
 
-✅ **Filter/sort by any metadata field** — executed in one index.  
-✅ **Accurate membership by parent version** — enforced via lookup filter.  
-✅ **No joins or full-doc duplication** — only small ID-set docs added.  
-✅ **Supports stable pagination** using PIT + search_after.  
+✅ **Filter/sort by any metadata field** — executed in one index.
+✅ **Accurate membership by parent version** — enforced via lookup filter.
+✅ **No joins or full-doc duplication** — only small ID-set docs added.
+✅ **Supports stable pagination** using PIT + search_after.
 ✅ **Efficient updates** — only a few docs written per parent version.
 
 ---
