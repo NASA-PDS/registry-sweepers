@@ -2,6 +2,8 @@
 
 Requires a running deployment of registry
 
+**Python Version:** This Docker container uses Python 3.13.7 to leverage the latest Python features and security updates for production deployments, while the package itself supports both Python 3.12 and 3.13 for development flexibility.
+
 #### Env Variables
 `PROV_ENDPOINT` - the URL of the registry OpenSearch http endpoint
 `PROV_CREDENTIALS` - a JSON string of format `{"$username": "$password"}`
