@@ -71,14 +71,28 @@ The tool provides comprehensive statistics including:
 
 #### Environment Variables
 ```
-MULTITENANCY_NODE_ID=  // If running in a multitenant environment, the id of the node, used to distinguish registry/registry-refs index instances
-PROV_CREDENTIALS={"admin": "admin"}  // OpenSearch username/password, if targeting an OpenSearch host other than AWS AOSS
-SWEEPERS_IAM_ROLE_NAME=<value>  // AWS IAM role name, if targeting AWS AOSS
-PROV_ENDPOINT=https://localhost:9200  // OpenSearch host url and port
-LOGLEVEL - an integer log level or anycase string matching a python log level like `INFO` (optional - defaults to `INFO`))
-DEV_MODE=1  // disables host verification
+## General Config
+LOGLEVEL=INFO   # an integer log level (0, 1, 2, 3) or string matching a
+                # log level (e.g. `INFO`). Default: `INFO`
 
-// tqdm dependency may cause fatal crashes on some architectures when breakpoints are used in debug mode with Cython speedup extension enabled
+
+## Applicable when using AWS AOSS
+MULTITENANCY_NODE_ID=                 # If running in a multitenant environment, the id of the node.
+                                      # Previously, distinguished registry/registry-refs index instances
+
+SWEEPERS_IAM_ROLE_NAME=<value>        # AWS IAM role name, if targeting AWS AOSS
+
+PROV_ENDPOINT=https://localhost:9200  # OpenSearch host url and port
+
+## Applicable when using non-AWS OpenSearch
+PROV_CREDENTIALS={"admin": "admin"}   # OpenSearch username/password
+                                      # Only applicable for hosts other than AWS AOSS
+
+## For Developers
+DEV_MODE=1      #disables host verification
+
+# tqdm dependency may cause fatal crashes on some architectures when
+# breakpoints are used in debug mode with Cython speedup extension enabled
 PYDEVD_USE_CYTHON=NO // disables Cython speedup extension
 ```
 
