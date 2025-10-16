@@ -1,5 +1,6 @@
 import logging
 from collections import namedtuple
+from collections.abc import Collection
 from typing import Any
 from typing import Dict
 from typing import Iterable
@@ -57,7 +58,7 @@ def get_ancestry_by_collection_lidvid(collections_docs: Iterable[Dict]) -> Mappi
     for doc in collections_docs:
         try:
             sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
-            skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
+            skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION  # this is unset later if a parent bundle was stale
             lidvid = PdsLidVid.from_string(doc["_source"]["lidvid"])
             ancestry_by_collection_lidvid[lidvid] = AncestryRecord(lidvid=lidvid, skip_write=skip_write)
         except (ValueError, KeyError) as err:
@@ -86,8 +87,17 @@ def get_ancestry_by_collection_lid(
 
 
 def get_collection_ancestry_records(
-    client: OpenSearch, registry_db_mock: DbMockTypeDef = None
-) -> Iterable[AncestryRecord]:
+        client: OpenSearch,
+        nonstale_bundle_lidvids: Collection[PdsLidVid],
+        registry_db_mock: DbMockTypeDef = None) -> Iterable[AncestryRecord]:
+    """
+
+    :param client: OpenSearch client
+    :param nonstale_bundle_lidvids: a collection of bundles which have been confirmed to be up-to-date.
+            If a collection is referenced by a bundle not in this list, it is likewise stale and requires updating
+    :param registry_db_mock:  db registry mock for functional testing
+    :return:
+    """
     log.info(limit_log_length("Generating AncestryRecords for collections..."))
     bundles_docs = get_collection_ancestry_records_bundles_query(client, registry_db_mock)
     collections_docs = list(get_collection_ancestry_records_collections_query(client, registry_db_mock))
@@ -100,7 +110,7 @@ def get_collection_ancestry_records(
         ancestry_by_collection_lidvid
     )
 
-    # For each bundle, add it to the bundle-ancestry of every collection it references
+    # For each bundle, add it to the bundle-ancestry of every collection it references, and stale their records
     for doc in bundles_docs:
         try:
             bundle_lidvid = PdsLidVid.from_string(doc["_source"]["lidvid"])
@@ -117,12 +127,16 @@ def get_collection_ancestry_records(
             continue
 
         # For each collection identifier
-        #   - if a LIDVID is specified, add bundle to that LIDVID's record
-        #   - else if a LID is specified, add bundle to the record of every LIDVID with that LID
+        #   - if a LIDVID is specified, add bundle to that LIDVID's record (and stale it)
+        #   - else if a LID is specified, add bundle to the record (and stale it) of every LIDVID with that LID
         for identifier in referenced_collection_identifiers:
             if isinstance(identifier, PdsLidVid):
                 try:
-                    ancestry_by_collection_lidvid[identifier].explicit_parent_bundle_lidvids.add(bundle_lidvid)
+                    collection_record = ancestry_by_collection_lidvid[identifier]
+                    collection_record.explicit_parent_bundle_lidvids.add(bundle_lidvid)
+                    if bundle_lidvid not in nonstale_bundle_lidvids:
+                        # stale the collection record if required
+                        collection_record.skip_write = False
                 except KeyError:
                     log.warning(
                         limit_log_length(
@@ -132,8 +146,11 @@ def get_collection_ancestry_records(
                     )
             elif isinstance(identifier, PdsLid):
                 try:
-                    for record in ancestry_by_collection_lid[identifier.lid]:
-                        record.explicit_parent_bundle_lidvids.add(bundle_lidvid)
+                    for collection_record in ancestry_by_collection_lid[identifier.lid]:
+                        collection_record.explicit_parent_bundle_lidvids.add(bundle_lidvid)
+                        if bundle_lidvid not in nonstale_bundle_lidvids:
+                            # stale the collection record if required
+                            collection_record.skip_write = False
                 except KeyError:
                     log.warning(
                         limit_log_length(
