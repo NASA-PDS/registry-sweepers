@@ -202,7 +202,7 @@ class AncestryLegacyTypesTestCase(unittest.TestCase):
 
     def test_collection_refs_parsing(self):
         query_mock_f = self.registry_query_mock.get_mocked_query
-        collection_ancestry_records = list(get_collection_ancestry_records(None, registry_db_mock=query_mock_f))
+        collection_ancestry_records = list(get_collection_ancestry_records(None, [], registry_db_mock=query_mock_f))
 
         self.assertEqual(1, len(collection_ancestry_records))
 
