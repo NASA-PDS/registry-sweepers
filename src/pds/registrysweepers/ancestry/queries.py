@@ -38,25 +38,16 @@ def product_class_query_factory(cls: ProductClass) -> Dict:
     return {"query": queries[cls]}
 
 
-def get_bundle_ancestry_records_query(client: OpenSearch, db_mock: DbMockTypeDef = None) -> Iterable[Dict]:
+def process_collection_bundle_ancestry_bundles_query(client: OpenSearch, db_mock: DbMockTypeDef = None) -> Iterable[Dict]:
     query = product_class_query_factory(ProductClass.BUNDLE)
-    _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
-    query_f = query_registry_db_or_mock(db_mock, "get_bundle_ancestry_records", use_search_after=True)
-    docs = query_f(client, resolve_multitenant_index_name(client, "registry"), query, _source)
-
-    return docs
-
-
-def get_collection_ancestry_records_bundles_query(client: OpenSearch, db_mock: DbMockTypeDef = None) -> Iterable[Dict]:
-    query = product_class_query_factory(ProductClass.BUNDLE)
-    _source = {"includes": ["lidvid", "ref_lid_collection"]}
+    _source = {"includes": ["lidvid", "ref_lid_collection", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
     query_f = query_registry_db_or_mock(db_mock, "get_collection_ancestry_records_bundles", use_search_after=True)
     docs = query_f(client, resolve_multitenant_index_name(client, "registry"), query, _source)
 
     return docs
 
 
-def get_collection_ancestry_records_collections_query(
+def process_collection_bundle_ancestry_collections_query(
     client: OpenSearch, db_mock: DbMockTypeDef = None
 ) -> Iterable[Dict]:
     # Query the registry for all collection identifiers

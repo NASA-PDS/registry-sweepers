@@ -1,6 +1,7 @@
 import logging
 from collections import namedtuple
 from collections.abc import Collection
+from itertools import chain
 from typing import Any
 from typing import Dict
 from typing import Iterable
@@ -10,9 +11,10 @@ from typing import Set
 import psutil  # type: ignore
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
+from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
 from pds.registrysweepers.ancestry.queries import get_bundle_ancestry_records_query
-from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_bundles_query
-from pds.registrysweepers.ancestry.queries import get_collection_ancestry_records_collections_query
+from pds.registrysweepers.ancestry.queries import process_collection_bundle_ancestry_bundles_query
+from pds.registrysweepers.ancestry.queries import process_collection_bundle_ancestry_collections_query
 from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_for_collection_lid_query
 from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
@@ -34,37 +36,18 @@ log = logging.getLogger(__name__)
 RefDocBookkeepingEntry = namedtuple("RefDocBookkeepingEntry", ["id", "primary_term", "seq_no"])
 
 
-def get_bundle_ancestry_records(client: OpenSearch, db_mock: DbMockTypeDef = None) -> Iterable[AncestryRecord]:
-    log.info(limit_log_length("Generating AncestryRecords for bundles..."))
-    docs = get_bundle_ancestry_records_query(client, db_mock)
-    for doc in docs:
-        try:
-            sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
-            skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
-            yield AncestryRecord(lidvid=PdsLidVid.from_string(doc["_source"]["lidvid"]), skip_write=skip_write)
-        except (ValueError, KeyError) as err:
-            log.warning(
-                limit_log_length(
-                    f'Failed to instantiate AncestryRecord from document in index "{doc.get("_index")}" with id "{doc.get("_id")}" due to {type(err)}: {err}'
-                )
-            )
-            continue
-
-
-def get_ancestry_by_collection_lidvid(collections_docs: Iterable[Dict]) -> Mapping[PdsLidVid, AncestryRecord]:
-    # Instantiate the AncestryRecords, keyed by collection LIDVID for fast access
+def get_ancestry_by_collection_lidvid(collections_docs: Iterable[Dict]) -> Mapping[PdsLidVid, ProductUpdateRecord]:
+    # Instantiate the collections' ProductUpdateRecords, keyed by collection LIDVID for fast access
 
     ancestry_by_collection_lidvid = {}
     for doc in collections_docs:
         try:
-            sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
-            skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION  # this is unset later if a parent bundle was stale
-            lidvid = PdsLidVid.from_string(doc["_source"]["lidvid"])
-            ancestry_by_collection_lidvid[lidvid] = AncestryRecord(lidvid=lidvid, skip_write=skip_write)
+            collection_lidvid = PdsLidVid.from_string(doc["_source"]["lidvid"])
+            ancestry_by_collection_lidvid[collection_lidvid] = ProductUpdateRecord(product=collection_lidvid)
         except (ValueError, KeyError) as err:
             log.warning(
                 limit_log_length(
-                    f'Failed to instantiate AncestryRecord from document in index "{doc.get("_index")}" with id "{doc.get("_id")}" due to {type(err)}: {err}'
+                    f'Failed to instantiate ProductUpdateRecord from document in index "{doc.get("_index")}" with id "{doc.get("_id")}" due to {type(err)}: {err}'
                 )
             )
             continue
@@ -73,84 +56,86 @@ def get_ancestry_by_collection_lidvid(collections_docs: Iterable[Dict]) -> Mappi
 
 
 def get_ancestry_by_collection_lid(
-    ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord]
-) -> Mapping[PdsLid, Set[AncestryRecord]]:
+    ancestry_by_collection_lidvid: Mapping[PdsLidVid, ProductUpdateRecord]
+) -> Mapping[PdsLid, Set[ProductUpdateRecord]]:
     # Create a dict of pointer-sets to the newly-instantiated records, binned/keyed by LID for fast access when a bundle
     #  only refers to a LID rather than a specific LIDVID
-    ancestry_by_collection_lid: Dict[PdsLid, Set[AncestryRecord]] = {}
+    ancestry_by_collection_lid: Dict[PdsLid, Set[ProductUpdateRecord]] = {}
     for record in ancestry_by_collection_lidvid.values():
-        if record.lidvid.lid not in ancestry_by_collection_lid:
-            ancestry_by_collection_lid[record.lidvid.lid] = set()
-        ancestry_by_collection_lid[record.lidvid.lid].add(record)
+        if record.product.lid not in ancestry_by_collection_lid:
+            ancestry_by_collection_lid[record.product.lid] = set()
+        ancestry_by_collection_lid[record.product.lid].add(record)
 
     return ancestry_by_collection_lid
 
 
-def get_collection_ancestry_records(
+def process_collection_bundle_ancestry(
         client: OpenSearch,
-        nonstale_bundle_lidvids: Collection[PdsLidVid],
-        registry_db_mock: DbMockTypeDef = None) -> Iterable[AncestryRecord]:
+        registry_db_mock: DbMockTypeDef = None) -> Iterable[ProductUpdateRecord]:
     """
-
+    Because the number of bundles and collections is relatively small, we can process all bundle-ancestries at once to
+    leverage the existing code.
     :param client: OpenSearch client
-    :param nonstale_bundle_lidvids: a collection of bundles which have been confirmed to be up-to-date.
-            If a collection is referenced by a bundle not in this list, it is likewise stale and requires updating
     :param registry_db_mock:  db registry mock for functional testing
     :return:
     """
-    log.info(limit_log_length("Generating AncestryRecords for collections..."))
-    bundles_docs = get_collection_ancestry_records_bundles_query(client, registry_db_mock)
-    collections_docs = list(get_collection_ancestry_records_collections_query(client, registry_db_mock))
+
+
+    log.info(limit_log_length("Generating ProductUpdateRecords for collections' bundle-ancestries..."))
+    bundles_docs = list(process_collection_bundle_ancestry_bundles_query(client, registry_db_mock))
+    collections_docs = list(process_collection_bundle_ancestry_collections_query(client, registry_db_mock))
 
     # Prepare empty ancestry records for collections, with fast access by LID or LIDVID
-    ancestry_by_collection_lidvid: Mapping[PdsLidVid, AncestryRecord] = get_ancestry_by_collection_lidvid(
+    collection_update_records_by_collection_lidvid: Mapping[PdsLidVid, ProductUpdateRecord] = get_ancestry_by_collection_lidvid(
         collections_docs
     )
-    ancestry_by_collection_lid: Mapping[PdsLid, Set[AncestryRecord]] = get_ancestry_by_collection_lid(
-        ancestry_by_collection_lidvid
+    collection_update_records_by_collection_lid: Mapping[PdsLid, Set[ProductUpdateRecord]] = get_ancestry_by_collection_lid(
+        collection_update_records_by_collection_lidvid
     )
 
-    # For each bundle, add it to the bundle-ancestry of every collection it references, and stale their records
-    for doc in bundles_docs:
+    bundle_update_records_by_bundle_lidvid: Mapping[PdsLidVid, ProductUpdateRecord] = {record.product: record for record in bundle_update_records_from_docs(bundles_docs)}
+
+    # For each bundle, add it to the bundle-ancestry of every collection it references
+    for bundle_doc in bundles_docs:
         try:
-            bundle_lidvid = PdsLidVid.from_string(doc["_source"]["lidvid"])
+            bundle_lidvid = PdsLidVid.from_string(bundle_doc["_source"]["lidvid"])
+            bundle_update_record = bundle_update_records_by_bundle_lidvid[bundle_lidvid]
             referenced_collection_identifiers = [
                 PdsProductIdentifierFactory.from_string(id)
-                for id in coerce_list_type(doc["_source"]["ref_lid_collection"])
+                for id in coerce_list_type(bundle_doc["_source"]["ref_lid_collection"])
             ]
         except (ValueError, KeyError) as err:
             log.warning(
                 limit_log_length(
-                    f'Failed to parse LIDVID and/or collection reference identifiers from document in index "{doc.get("_index")}" with id "{doc.get("_id")}" due to {type(err)}: {err}'
+                    f'Failed to parse LIDVID and/or collection reference identifiers from document in index "{bundle_doc.get("_index")}" with id "{bundle_doc.get("_id")}" due to {type(err)}: {err}'
                 )
             )
             continue
 
+        # skip processing if bundle is up-to-date
+        if bundle_update_record.skippable:
+            continue
+
         # For each collection identifier
-        #   - if a LIDVID is specified, add bundle to that LIDVID's record (and stale it)
-        #   - else if a LID is specified, add bundle to the record (and stale it) of every LIDVID with that LID
+        #   - if a LIDVID is specified, add bundle to that LIDVID's record
+        #   - else if a LID is specified, add bundle to the record of every LIDVID with that LID
         for identifier in referenced_collection_identifiers:
             if isinstance(identifier, PdsLidVid):
                 try:
-                    collection_record = ancestry_by_collection_lidvid[identifier]
-                    collection_record.explicit_parent_bundle_lidvids.add(bundle_lidvid)
-                    if bundle_lidvid not in nonstale_bundle_lidvids:
-                        # stale the collection record if required
-                        collection_record.skip_write = False
+                    collection_record = collection_update_records_by_collection_lidvid[identifier]
+                    collection_record.add_direct_ancestor_ref(bundle_lidvid)
                 except KeyError:
                     log.warning(
                         limit_log_length(
                             f"Collection {identifier} referenced by bundle {bundle_lidvid} "
                             f"does not exist in registry - skipping"
                         )
+                    #     TODO: need to defer this update per https://github.com/NASA-PDS/registry-sweepers/issues/188
                     )
             elif isinstance(identifier, PdsLid):
                 try:
-                    for collection_record in ancestry_by_collection_lid[identifier.lid]:
-                        collection_record.explicit_parent_bundle_lidvids.add(bundle_lidvid)
-                        if bundle_lidvid not in nonstale_bundle_lidvids:
-                            # stale the collection record if required
-                            collection_record.skip_write = False
+                    for collection_record in collection_update_records_by_collection_lid[identifier.lid]:
+                        collection_record.add_direct_ancestor_ref(bundle_lidvid)
                 except KeyError:
                     log.warning(
                         limit_log_length(
@@ -158,18 +143,39 @@ def get_collection_ancestry_records(
                             f"exist in registry - skipping"
                         )
                     )
+                    #     TODO: need to defer this update per https://github.com/NASA-PDS/registry-sweepers/issues/188
+                    #      This is tricky, as we don't know how to handle future versions yet to be created.
             else:
                 raise RuntimeError(
                     f"Encountered product identifier of unknown type {identifier.__class__} "
                     f"(should be PdsLidVid or PdsLid)"
                 )
+        bundle_update_record.mark_processed()
 
-    # We could retain the keys for better performance, as they're used by the non-aggregate record generation, but this
-    # is cleaner, so we'll regenerate the dict from the records later unless performance is a problem.
-    return ancestry_by_collection_lidvid.values()
+    collection_and_bundle_update_records = chain(collection_update_records_by_collection_lidvid.values(), bundle_update_records_by_bundle_lidvid.values())
+    return collection_and_bundle_update_records
 
 
-def generate_nonaggregate_and_collection_records_iteratively(
+def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpdateRecord]:
+    """
+    Generate ProductUpdateRecords from bundle docs, indicating whether they are up-to-date or require processing.
+    """
+    for doc in docs:
+        try:
+            sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
+            skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
+            yield ProductUpdateRecord(product=PdsLidVid.from_string(doc["_source"]["lidvid"]),
+                                       skip_write=skip_write)
+        except (ValueError, KeyError) as err:
+            log.warning(
+                limit_log_length(
+                    f'Failed to instantiate ProductUpdateRecord from document in index "{doc.get("_index")}" with id "{doc.get("_id")}" due to {type(err)}: {err}'
+                )
+            )
+
+
+
+def process_collection_ancestries_for_nonaggregates(
     client: OpenSearch,
     all_collections_records: Iterable[AncestryRecord],
     registry_db_mock: DbMockTypeDef = None,

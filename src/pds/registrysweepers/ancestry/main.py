@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import tempfile
+from collections.abc import Sequence, Generator
 from itertools import chain
 from typing import Callable
 from typing import Dict
@@ -17,9 +18,11 @@ from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
-from pds.registrysweepers.ancestry.generation import generate_nonaggregate_and_collection_records_iteratively
-from pds.registrysweepers.ancestry.generation import get_bundle_ancestry_records
-from pds.registrysweepers.ancestry.generation import get_collection_ancestry_records
+from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates, \
+    process_collection_bundle_ancestry
+from pds.registrysweepers.ancestry.generation import get_bundle_update_records
+from pds.registrysweepers.ancestry.generation import get_update_records_for_collections_from_bundle
+from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
 from pds.registrysweepers.ancestry.queries import get_existing_ancestry_for_product
 from pds.registrysweepers.ancestry.queries import get_orphaned_documents
 from pds.registrysweepers.ancestry.queries import get_orphaned_documents_count
@@ -51,22 +54,17 @@ def run(
 
     log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing...")
 
-    bundle_records = list(get_bundle_ancestry_records(client, registry_mock_query_f))
-    non_stale_bundle_lidvids = [r.lidvid for r in bundle_records if r.skip_write]
-    preresolved_collection_records = get_collection_ancestry_records(
-        client,
-        non_stale_bundle_lidvids,
-        registry_db_mock=registry_mock_query_f
-    )  # used to generate nonagg/collection records iteratively
-    collection_and_nonaggregate_records = generate_nonaggregate_and_collection_records_iteratively(
-        client, preresolved_collection_records, registry_mock_query_f
-    )
+    log.info("Updating bundle ancestries for collections...")
+    bundle_and_collection_update_records = process_collection_bundle_ancestry(client, registry_mock_query_f)
 
-    ancestry_records = chain(collection_and_nonaggregate_records, bundle_records)
-    ancestry_records_to_write = filter(lambda r: not r.skip_write, ancestry_records)
+    logging.info("Updating collection ancestries for non-aggregate products...")
+    # TODO: BOOKMARK LMAO - CONTINUE WORK HERE VVV
+    collection_nonaggregate_updates = process_collection_membership_references(client, registry_mock_query_f)
+
+    product_update_records_to_write = filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records, collection_nonaggregate_updates))
     deferred_records_file = tempfile.NamedTemporaryFile(mode="w+", delete=False)
     updates = generate_updates(
-        ancestry_records_to_write, deferred_records_file.name, ancestry_records_accumulator, bulk_updates_sink
+        product_update_records_to_write, deferred_records_file.name, ancestry_records_accumulator, bulk_updates_sink
     )
 
     if bulk_updates_sink is None:
@@ -133,6 +131,30 @@ def run(
             )
 
     log.info("Ancestry sweeper processing complete!")
+
+
+def process_collection_membership_references(client, registry_mock_query_f) -> Generator[ProductUpdateRecord]:
+    """
+    Process each non-up-to-date collection, yielding updates for its descendant nonaggregate products, then an update for the collection itself to mark it as up-to-date.
+    """
+    update_records: List[ProductUpdateRecord] = []
+    #
+    # # Generate trivially-empty ancestry records for all bundles.
+    # # Bundles which are up-to-date need not generate updates for their descendant collections.
+    # pending_bundle_update_records = [record for record in get_bundle_update_records(client, registry_mock_query_f) if not record.skippable]
+    # for bundle_update_record in pending_bundle_update_records:
+    #     collection_update_records = get_update_records_for_collections_from_bundle(
+    #         client,
+    #         bundle_update_record.product,
+    #         registry_db_mock=registry_mock_query_f
+    #     )
+    #     update_records.extend(collection_update_records)
+    #     bundle_update_record.mark_processed()
+    #     update_records.append(bundle_update_record)
+    #
+    # return update_records
+    # TODO: BOOKMARK - CONTINUE WORK HERE, LEVERAGING THE EXISTING FUNCTIONALITY IN generation.generate_nonaggregate_ancestry_records()
+    pass
 
 
 def generate_updates(
