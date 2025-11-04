@@ -11,8 +11,8 @@ from pds.registrysweepers.ancestry import main as ancestry
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
-from pds.registrysweepers.ancestry.generation import generate_nonaggregate_and_collection_records_iteratively
-from pds.registrysweepers.ancestry.generation import get_collection_ancestry_records
+from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
+from pds.registrysweepers.ancestry.generation import get_update_records_for_collections_from_bundle
 from pds.registrysweepers.ancestry.main import generate_deferred_updates
 from pds.registrysweepers.ancestry.main import generate_updates
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
@@ -202,7 +202,7 @@ class AncestryLegacyTypesTestCase(unittest.TestCase):
 
     def test_collection_refs_parsing(self):
         query_mock_f = self.registry_query_mock.get_mocked_query
-        collection_ancestry_records = list(get_collection_ancestry_records(None, [], registry_db_mock=query_mock_f))
+        collection_ancestry_records = list(get_update_records_for_collections_from_bundle(None, [], registry_db_mock=query_mock_f))
 
         self.assertEqual(1, len(collection_ancestry_records))
 
@@ -313,7 +313,7 @@ class AncestryDeferredPartialUpdatesTestCase(unittest.TestCase):
         ]
 
         collection_and_nonaggregate_records = list(
-            generate_nonaggregate_and_collection_records_iteratively(None, collection_ancestry_records, query_mock_f)
+            process_collection_ancestries_for_nonaggregates(None, collection_ancestry_records, query_mock_f)
         )
 
         deferred_records_file = tempfile.NamedTemporaryFile(mode="w+", delete=False)
