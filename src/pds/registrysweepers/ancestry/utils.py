@@ -12,8 +12,10 @@ from typing import Set
 from typing import Union
 
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
-from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
+from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY, ANCESTRY_REFS_METADATA_KEY
+from pds.registrysweepers.ancestry.constants import ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
+from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
@@ -146,11 +148,11 @@ def gb_mem_to_size(desired_mem_usage_gb) -> int:
     return desired_mem_usage_gb / 3.1 * 2621536
 
 
-def update_from_record(record: AncestryRecord) -> Update:
-    doc_id = str(record.lidvid)
+def update_from_record(record: ProductUpdateRecord) -> Update:
+    doc_id = str(record.product)
     content = {
-        METADATA_PARENT_BUNDLE_KEY: [str(id) for id in record.resolve_parent_bundle_lidvids()],
-        METADATA_PARENT_COLLECTION_KEY: [str(id) for id in record.resolve_parent_collection_lidvids()],
+        ANCESTRY_REFS_METADATA_KEY: [str(id) for id in record.direct_ancestor_refs],
         SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: int(SWEEPERS_ANCESTRY_VERSION),
     }
-    return Update(id=doc_id, content=content)
+
+    return Update(id=doc_id, content=content, inline_script_content=ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED)
