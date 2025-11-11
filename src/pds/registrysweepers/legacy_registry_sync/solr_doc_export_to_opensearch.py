@@ -53,8 +53,8 @@ NODE_DOMAINS = {
     "pds-speclib.rsl.wustl.edu": "PDS_GEO",
     "an.rsl.wustl.edu": "PDS_GEO",
     "pds-geosciences.wustl.edu": "PDS_GEO",
-    "astrogeology.usgs.gov": "PDS_GEO",
     # IMG
+    "astrogeology.usgs.gov": "PDS_IMG",
     "mars.jpl.nasa.gov": "PDS_IMG",
     "d2g5bbjkxk8tlv.cloudfront.net": "PDS_IMG",
     "pdsimage2.wr.usgs.gov": "PDS_IMG",
