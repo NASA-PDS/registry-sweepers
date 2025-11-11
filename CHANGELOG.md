@@ -1,16 +1,12 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-10-15)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-11-11)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.4.0...«unknown»)
 
 **Improvements:**
 
 - Enable Python 3.12 compatibility [\#181](https://github.com/NASA-PDS/registry-sweepers/issues/181)
-
-**Defects:**
-
-- Ancestry not working properly for SBN [\#171](https://github.com/NASA-PDS/registry-sweepers/issues/171) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
 
 **Other closed issues:**
 
