@@ -14,7 +14,7 @@ from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_K
 from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
 from pds.registrysweepers.ancestry.generation import get_update_records_for_collections_from_bundle
 from pds.registrysweepers.ancestry.main import generate_deferred_updates
-from pds.registrysweepers.ancestry.main import generate_updates
+from pds.registrysweepers.ancestry.main import convert_records_to_updates
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
@@ -318,7 +318,7 @@ class AncestryDeferredPartialUpdatesTestCase(unittest.TestCase):
 
         deferred_records_file = tempfile.NamedTemporaryFile(mode="w+", delete=False)
         non_deferred_updates = list(
-            generate_updates(collection_and_nonaggregate_records, deferred_records_file.name, None, None)
+            convert_records_to_updates(collection_and_nonaggregate_records, deferred_records_file.name, None, None)
         )
         deferred_updates = list(generate_deferred_updates(None, deferred_records_file.name, query_mock_f))
         updates = non_deferred_updates + deferred_updates

@@ -1,26 +1,20 @@
 import logging
 from collections import namedtuple
-from collections.abc import Collection
 from itertools import chain
-from typing import Any
-from typing import Dict
+from typing import Dict, Generator
 from typing import Iterable
 from typing import Mapping
 from typing import Set
 
 import psutil  # type: ignore
 from opensearchpy import OpenSearch
-from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
-from pds.registrysweepers.ancestry.queries import get_bundle_ancestry_records_query
-from pds.registrysweepers.ancestry.queries import process_collection_bundle_ancestry_bundles_query
-from pds.registrysweepers.ancestry.queries import process_collection_bundle_ancestry_collections_query
-from pds.registrysweepers.ancestry.queries import get_nonaggregate_ancestry_records_for_collection_lid_query
+from pds.registrysweepers.ancestry.queries import query_for_pending_bundles
+from pds.registrysweepers.ancestry.queries import query_for_pending_collections
+from pds.registrysweepers.ancestry.queries import query_for_collection_nonaggregate_refs
 from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
-from pds.registrysweepers.utils.bigdict.spilldict import SpillDict
-from pds.registrysweepers.utils.misc import bin_elements
 from pds.registrysweepers.utils.misc import coerce_list_type
 from pds.registrysweepers.utils.misc import limit_log_length
 from pds.registrysweepers.utils.productidentifiers.factory import PdsProductIdentifierFactory
@@ -82,8 +76,8 @@ def process_collection_bundle_ancestry(
 
 
     log.info(limit_log_length("Generating ProductUpdateRecords for collections' bundle-ancestries..."))
-    bundles_docs = list(process_collection_bundle_ancestry_bundles_query(client, registry_db_mock))
-    collections_docs = list(process_collection_bundle_ancestry_collections_query(client, registry_db_mock))
+    bundles_docs = list(query_for_pending_bundles(client, registry_db_mock))
+    collections_docs = list(query_for_pending_collections(client, registry_db_mock))
 
     # Prepare empty ancestry records for collections, with fast access by LID or LIDVID
     collection_update_records_by_collection_lidvid: Mapping[PdsLidVid, ProductUpdateRecord] = get_ancestry_by_collection_lidvid(
@@ -174,119 +168,26 @@ def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpd
             )
 
 
-
-def process_collection_ancestries_for_nonaggregates(
-    client: OpenSearch,
-    all_collections_records: Iterable[AncestryRecord],
-    registry_db_mock: DbMockTypeDef = None,
-) -> Iterable[AncestryRecord]:
+def process_collection_ancestries_for_nonaggregates(client, registry_mock_query_f) -> Generator[ProductUpdateRecord]:
     """
-    Iteratively generate nonaggregate records in chunks, each chunk sharing a common collection LID.  This
-    prevents the need to simultaneously store data in memory for a large volume of nonaggregate records.
-
-    AncestryRecords for non-aggregate products which are present in collections which do not all share the same LID will
-    be incomplete, and must be merged separately prior to db write, with all collection-LID-specific AncestryRecords
-    generated prior to that merge/write.  This deferral is handled separately in generate_updates().
-
-    After non-aggregate records are generated, the corresponding collections' records are updated, such that they are
-    only processed and marked up-to-date if their non-aggregates have successfully been updated.
+    Process each non-up-to-date collection, yielding updates for its descendant nonaggregate products, then an update for the collection itself to mark it as up-to-date.
     """
 
-    collection_records_by_lid = bin_elements(all_collections_records, lambda r: r.lidvid.lid)
+    # iterate over collections (and their member nonaggregate products) which require ancestry updates
+    pending_collections_docs = query_for_pending_collections(client, registry_mock_query_f)
+    pending_collections = iter(PdsLidVid.from_string(record["lidvid"]) for record in pending_collections_docs)
+    # TODO: add orphan processing step. not sure if it belongs here or as a separate step after ancestry has completed - edunn 20251112
 
-    for lid, collections_records_for_lid in collection_records_by_lid.items():
-        if all([record.skip_write for record in collections_records_for_lid]):
-            log.debug(limit_log_length(f"Skipping updates for up-to-date collection family: {str(lid)}"))
-            continue
-        else:
-            log.info(
-                limit_log_length(
-                    f"Processing all versions of collection {str(lid)}: {[str(id) for id in sorted([r.lidvid for r in collections_records_for_lid])]}"
-                )
-            )
+    for collection_lidvid in pending_collections:
+        collection_nonaggregate_refs = query_for_collection_nonaggregate_refs(client, collection_lidvid,
+                                                                              registry_mock_query_f)
 
-        for non_aggregate_record in get_nonaggregate_ancestry_records_for_collection_lid(
-            client, lid, collections_records_for_lid, registry_db_mock
-        ):
-            yield non_aggregate_record
+        for nonaggregate_lidvid in collection_nonaggregate_refs:
+            nonagg_update_record = ProductUpdateRecord(product=nonaggregate_lidvid,
+                                                      direct_ancestor_refs=[collection_lidvid])
+            yield nonagg_update_record
 
-        for collection_record in collections_records_for_lid:
-            yield collection_record
-
-
-def get_nonaggregate_ancestry_records_for_collection_lid(
-    client: OpenSearch,
-    collection_lid: PdsLid,
-    collection_ancestry_records: Iterable[AncestryRecord],
-    registry_db_mock: DbMockTypeDef = None,
-) -> Iterable[AncestryRecord]:
-    log.info(
-        limit_log_length(
-            f"Generating AncestryRecords for non-aggregate products of collections with LID {str(collection_lid)}, using non-chunked input/output..."
-        )
-    )
-
-    collection_refs_query_docs = get_nonaggregate_ancestry_records_for_collection_lid_query(
-        client, collection_lid, registry_db_mock
-    )
-
-    return generate_nonaggregate_ancestry_records(collection_ancestry_records, collection_refs_query_docs)
-
-
-def generate_nonaggregate_ancestry_records(
-    collection_ancestry_records: Iterable[AncestryRecord], collection_refs_query_docs: Iterable[Dict[str, Any]]
-) -> Iterable[AncestryRecord]:
-    collection_records_by_lidvid = {r.lidvid: r for r in collection_ancestry_records}
-
-    nonaggregate_ancestry_records_by_lidvid = SpillDict(spill_threshold=100000, merge=AncestryRecord.combine)
-
-    # For each collection, add the collection and its bundle ancestry to all products the collection contains
-    for doc in collection_refs_query_docs:
-        try:
-            if doc["_id"].split("::")[2].startswith("S"):
-                log.info(limit_log_length(f'Skipping secondary-collection document {doc["_id"]}'))
-                continue
-
-            collection_lidvid = PdsLidVid.from_string(doc["_source"]["collection_lidvid"])
-            referenced_lidvids = [PdsLidVid.from_string(s) for s in doc["_source"]["product_lidvid"]]
-            nonaggregate_lidvids = [id for id in referenced_lidvids if id.is_basic_product()]
-
-            erroneous_lidvids = [id for id in referenced_lidvids if not id.is_basic_product()]
-            if len(erroneous_lidvids) > 0:
-                log.error(
-                    limit_log_length(
-                        f'registry-refs document with id {doc["_id"]} references one or more aggregate products in its product_lidvid refs list: {[str(id) for id in erroneous_lidvids]}'
-                    )
-                )
-
-        except IndexError:
-            doc_id = doc["_id"]
-            log.warning(limit_log_length(f'Encountered document with unexpected _id: "{doc_id}"'))
-            continue
-        except (ValueError, KeyError) as err:
-            log.warning(
-                limit_log_length(
-                    f'Failed to parse collection and/or product LIDVIDs from document in index "{doc.get("_index")}" with id "{doc.get("_id")}" due to {type(err).__name__}: {err}'
-                )
-            )
-            continue
-
-        try:
-            collection_record = collection_records_by_lidvid[collection_lidvid]
-        except KeyError:
-            log.debug(
-                limit_log_length(
-                    f'Failed to resolve history for page {doc.get("_id")} in index {doc.get("_index")} with collection_lidvid {collection_lidvid} - no such collection exists in registry.'
-                )
-            )
-            continue
-
-        for lidvid in nonaggregate_lidvids:
-            lidvid_id = str(lidvid)
-            if lidvid_id not in nonaggregate_ancestry_records_by_lidvid:
-                nonaggregate_ancestry_records_by_lidvid[lidvid_id] = AncestryRecord(lidvid=lidvid)
-
-            record: AncestryRecord = nonaggregate_ancestry_records_by_lidvid[lidvid_id]
-            record.attach_parent_record(collection_record)
-
-    return nonaggregate_ancestry_records_by_lidvid.values()
+        # finally, collection can be updated to mark it as complete
+        collection_complete_update_record = ProductUpdateRecord(collection_lidvid)
+        collection_complete_update_record.mark_processed()
+        yield collection_complete_update_record
