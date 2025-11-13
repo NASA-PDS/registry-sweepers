@@ -1,11 +1,14 @@
-from collections.abc import Iterable, Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from collections.abc import Iterable
+from dataclasses import dataclass
+from dataclasses import field
+from typing import Optional
 from typing import Set
 
-from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
-from pds.registrysweepers.utils.productidentifiers.pdsproductidentifier import PdsProductIdentifier
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
+from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
+from pds.registrysweepers.utils.productidentifiers.pdsproductidentifier import PdsProductIdentifier
 
 
 @dataclass
@@ -19,12 +22,12 @@ class ProductUpdateRecord:
     _skip_write: bool = False
     _complete: bool = False
 
-    def __init__(self, product: PdsLidVid, direct_ancestor_refs: Iterable[PdsProductIdentifier] = None, skip_write: bool = False):
+    def __init__(self, product: PdsLidVid, direct_ancestor_refs: Optional[Iterable[PdsProductIdentifier]] = None, skip_write: bool = False):
         self._product = product
-        self._direct_ancestor_refs = direct_ancestor_refs or set()
+        self._direct_ancestor_refs = set(direct_ancestor_refs or [])
         self._skip_write = skip_write
         self._complete = False
-        
+
     def __post_init__(self):
         if not isinstance(self._product, PdsLidVid):
             raise ValueError('Cannot initialise ProductUpdateRecord with non-PdsLidVid value for "product"')
@@ -62,7 +65,7 @@ class ProductUpdateRecord:
 
     def add_direct_ancestor_refs(self, refs: Iterable[PdsProductIdentifier]):
         self._direct_ancestor_refs.update(refs)
-    
+
     @property
     def direct_ancestor_lid_refs(self) -> Set[PdsLid]:
         return {ref.lid for ref in self._direct_ancestor_refs}
@@ -74,4 +77,3 @@ class ProductUpdateRecord:
     @property
     def direct_ancestor_refs(self) -> Set[PdsProductIdentifier]:
         return self.direct_ancestor_lid_refs | self.direct_ancestor_lid_refs
-

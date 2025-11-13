@@ -10,12 +10,12 @@ ANCESTRY_REFS_METADATA_KEY = "ops.Provenance/ops:ancestor_refs"
 #     ctx._source['ancestry'] = [];
 #     changed = true;
 # }
-# 
+#
 # def existing = new HashSet();
 # for (item in ctx._source['ancestry']) {
 #     existing.add(item.lid + '::' + item.vid);
 # }
-# 
+#
 # for (item in params.new_items) {
 # def key = item.lid + '::' + item.vid;
 #     if (!existing.contains(key)) {
@@ -23,7 +23,7 @@ ANCESTRY_REFS_METADATA_KEY = "ops.Provenance/ops:ancestor_refs"
 #       changed = true;
 #     }
 # }
-# 
+#
 # if (!changed) {
 #     ctx.op = 'none';  // <— Prevents reindexing if nothing changed
 # }"""

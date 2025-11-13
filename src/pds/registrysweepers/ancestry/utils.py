@@ -12,9 +12,8 @@ from typing import Set
 from typing import Union
 
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
-from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY, ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.constants import ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED
-from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
+from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION

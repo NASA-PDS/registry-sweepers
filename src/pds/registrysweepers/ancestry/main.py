@@ -11,8 +11,8 @@ from typing import Union
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
-from pds.registrysweepers.ancestry.generation import process_collection_bundle_ancestry, \
-    process_collection_ancestries_for_nonaggregates
+from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
+from pds.registrysweepers.ancestry.generation import process_collection_bundle_ancestry
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
 from pds.registrysweepers.ancestry.utils import update_from_record
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
@@ -29,12 +29,12 @@ log = logging.getLogger(__name__)
 
 
 def run(
-    client: OpenSearch,
-    log_filepath: Union[str, None] = None,
-    log_level: int = logging.INFO,
-    registry_mock_query_f: Optional[Callable[[str], Iterable[Dict]]] = None,
-    ancestry_records_accumulator: Optional[List[AncestryRecord]] = None,
-    bulk_updates_sink: Optional[List[Tuple[str, Dict[str, List]]]] = None,
+        client: OpenSearch,
+        log_filepath: Union[str, None] = None,
+        log_level: int = logging.INFO,
+        registry_mock_query_f: Optional[Callable[[str], Iterable[Dict]]] = None,
+        ancestry_records_accumulator: Optional[List[AncestryRecord]] = None,
+        bulk_updates_sink: Optional[List[Tuple[str, Dict[str, List]]]] = None,
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
 
@@ -44,9 +44,11 @@ def run(
     bundle_and_collection_update_records = process_collection_bundle_ancestry(client, registry_mock_query_f)
 
     logging.info("Updating collection ancestries for non-aggregate products...")
-    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client, registry_mock_query_f)
+    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client,
+                                                                                           registry_mock_query_f)
 
-    product_update_records_to_write = filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records, collection_nonaggregate_refs_updates))
+    product_update_records_to_write = filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records,
+                                                                                collection_nonaggregate_refs_updates))
     updates = convert_records_to_updates(
         product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
     )
@@ -82,7 +84,6 @@ def run(
         for _ in updates:
             pass
 
-
     # TODO: reimplement orphan checking for ancestry sweeper - edunn 20251112
     log.critical("Skipping checks for for orphaned documents - requires reimplementation")
     # index_names = [resolve_multitenant_index_name(client, index_label) for index_label in ["registry", "registry-refs"]]
@@ -115,9 +116,9 @@ def run(
 
 
 def convert_records_to_updates(
-    update_records: Iterable[ProductUpdateRecord],
-    update_records_accumulator=None,
-    bulk_updates_sink=None,
+        update_records: Iterable[ProductUpdateRecord],
+        update_records_accumulator=None,
+        bulk_updates_sink=None,
 ) -> Iterable[Update]:
     """
     Given a collection of ProductUpdateRecords, yield corresponding Update objects.

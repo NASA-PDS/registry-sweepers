@@ -1,7 +1,9 @@
 import logging
 from collections import namedtuple
+from collections.abc import Iterator
 from itertools import chain
-from typing import Dict, Generator
+from typing import Dict
+from typing import Generator
 from typing import Iterable
 from typing import Mapping
 from typing import Set
@@ -9,9 +11,9 @@ from typing import Set
 import psutil  # type: ignore
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
+from pds.registrysweepers.ancestry.queries import query_for_collection_nonaggregate_refs
 from pds.registrysweepers.ancestry.queries import query_for_pending_bundles
 from pds.registrysweepers.ancestry.queries import query_for_pending_collections
-from pds.registrysweepers.ancestry.queries import query_for_collection_nonaggregate_refs
 from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
@@ -74,7 +76,6 @@ def process_collection_bundle_ancestry(
     :return:
     """
 
-
     log.info(limit_log_length("Generating ProductUpdateRecords for collections' bundle-ancestries..."))
     bundles_docs = list(query_for_pending_bundles(client, registry_db_mock))
     collections_docs = list(query_for_pending_collections(client, registry_db_mock))
@@ -124,7 +125,7 @@ def process_collection_bundle_ancestry(
                             f"Collection {identifier} referenced by bundle {bundle_lidvid} "
                             f"does not exist in registry - skipping"
                         )
-                    #     TODO: need to defer this update per https://github.com/NASA-PDS/registry-sweepers/issues/188
+                        # TODO: need to defer this update per https://github.com/NASA-PDS/registry-sweepers/issues/188
                     )
             elif isinstance(identifier, PdsLid):
                 try:
@@ -159,7 +160,7 @@ def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpd
             sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
             skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
             yield ProductUpdateRecord(product=PdsLidVid.from_string(doc["_source"]["lidvid"]),
-                                       skip_write=skip_write)
+                                      skip_write=skip_write)
         except (ValueError, KeyError) as err:
             log.warning(
                 limit_log_length(
@@ -168,7 +169,7 @@ def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpd
             )
 
 
-def process_collection_ancestries_for_nonaggregates(client, registry_mock_query_f) -> Generator[ProductUpdateRecord]:
+def process_collection_ancestries_for_nonaggregates(client, registry_mock_query_f) -> Iterator[ProductUpdateRecord]:
     """
     Process each non-up-to-date collection, yielding updates for its descendant nonaggregate products, then an update for the collection itself to mark it as up-to-date.
     """
@@ -184,7 +185,7 @@ def process_collection_ancestries_for_nonaggregates(client, registry_mock_query_
 
         for nonaggregate_lidvid in collection_nonaggregate_refs:
             nonagg_update_record = ProductUpdateRecord(product=nonaggregate_lidvid,
-                                                      direct_ancestor_refs=[collection_lidvid])
+                                                       direct_ancestor_refs=[collection_lidvid])
             yield nonagg_update_record
 
         # finally, collection can be updated to mark it as complete

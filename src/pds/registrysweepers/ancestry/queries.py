@@ -151,4 +151,3 @@ def get_orphaned_documents_count(client: OpenSearch, index_name: str) -> int:
     # Query an index documents without an up-to-date ancestry version reference - this would indicate a product which is
     # orphaned and is getting missed in processing
     return get_query_hits_count(client, index_name, _orphaned_docs_query)
-
