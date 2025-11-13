@@ -11,10 +11,10 @@ from pds.registrysweepers.ancestry import main as ancestry
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
 from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
-from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
 from pds.registrysweepers.ancestry.generation import get_update_records_for_collections_from_bundle
-from pds.registrysweepers.ancestry.main import generate_deferred_updates
+from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
 from pds.registrysweepers.ancestry.main import convert_records_to_updates
+from pds.registrysweepers.ancestry.main import generate_deferred_updates
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
