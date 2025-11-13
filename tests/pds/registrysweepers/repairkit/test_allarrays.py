@@ -26,7 +26,6 @@ class AllArrays(unittest.TestCase):
             "ops:Provenance/ops:parent_bundle_identifier": ["urn:nasa:pds:clementine_lwir_bt::1.0"],
             "ops:Provenance/ops:registry_sweepers_repairkit_version": 2,
             "ops:Provenance/someStringTypedProp": "someValue",
-            "ops:Tracking_Meta/ops:archive_status": "archived",
         }
 
         repairs = {}
