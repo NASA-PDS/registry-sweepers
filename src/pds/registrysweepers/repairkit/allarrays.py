@@ -15,7 +15,6 @@ EXCLUDED_PROPERTIES = {
     "title",
     "product_class",
     "_package_id",
-    "ops:Tracking_Meta/ops:archive_status",
 }
 
 
