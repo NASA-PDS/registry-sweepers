@@ -57,4 +57,8 @@ RUN apt-get autoremove && \
     apt-get remove --quiet --yes gcc python3-dev && \
     rm --force --recursive /var/lib/apt/lists/*
 
+# Create non-root user for security best practices
+RUN useradd --create-home --shell /bin/bash sweeper
+USER sweeper
+
 CMD ["/usr/local/bin/sweepers_driver.py"]
