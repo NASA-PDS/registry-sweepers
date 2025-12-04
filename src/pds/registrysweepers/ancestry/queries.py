@@ -51,7 +51,7 @@ def query_for_pending_collections(client: OpenSearch, db_mock: DbMockTypeDef = N
     """Query the registry for all collection LIDVIDs which require ancestry processing"""
 
     query = product_class_query_factory(ProductClass.COLLECTION)
-    query["bool"].update(
+    query["query"]["bool"].update(
         {"must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]}
     )
 
