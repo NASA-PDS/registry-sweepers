@@ -76,4 +76,5 @@ class ProductUpdateRecord:
 
     @property
     def direct_ancestor_refs(self) -> Set[PdsProductIdentifier]:
-        return self.direct_ancestor_lid_refs | self.direct_ancestor_lid_refs
+        """Return the set of distinct LID and LIDVID direct ancestor, including all LIDs implied by LIDVIDs"""
+        return self.direct_ancestor_lid_refs | self.direct_ancestor_lidvid_refs
