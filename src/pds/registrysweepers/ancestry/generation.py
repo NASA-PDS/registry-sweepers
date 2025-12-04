@@ -14,7 +14,6 @@ from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecor
 from pds.registrysweepers.ancestry.queries import query_for_collection_nonaggregate_refs
 from pds.registrysweepers.ancestry.queries import query_for_pending_bundles
 from pds.registrysweepers.ancestry.queries import query_for_pending_collections
-from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.misc import coerce_list_type
@@ -66,19 +65,17 @@ def get_ancestry_by_collection_lid(
 
 
 def process_collection_bundle_ancestry(
-        client: OpenSearch,
-        registry_db_mock: DbMockTypeDef = None) -> Iterable[ProductUpdateRecord]:
+        client: OpenSearch) -> Iterable[ProductUpdateRecord]:
     """
     Because the number of bundles and collections is relatively small, we can process all bundle-ancestries at once to
     leverage the existing code.
     :param client: OpenSearch client
-    :param registry_db_mock:  db registry mock for functional testing
     :return:
     """
 
     log.info(limit_log_length("Generating ProductUpdateRecords for collections' bundle-ancestries..."))
-    bundles_docs = list(query_for_pending_bundles(client, registry_db_mock))
-    collections_docs = list(query_for_pending_collections(client, registry_db_mock))
+    bundles_docs = list(query_for_pending_bundles(client))
+    collections_docs = list(query_for_pending_collections(client))
 
     # Prepare empty ancestry records for collections, with fast access by LID or LIDVID
     collection_update_records_by_collection_lidvid: Mapping[PdsLidVid, ProductUpdateRecord] = get_ancestry_by_collection_lidvid(
@@ -169,19 +166,18 @@ def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpd
             )
 
 
-def process_collection_ancestries_for_nonaggregates(client, registry_mock_query_f) -> Iterator[ProductUpdateRecord]:
+def process_collection_ancestries_for_nonaggregates(client) -> Iterator[ProductUpdateRecord]:
     """
     Process each non-up-to-date collection, yielding updates for its descendant nonaggregate products, then an update for the collection itself to mark it as up-to-date.
     """
 
     # iterate over collections (and their member nonaggregate products) which require ancestry updates
-    pending_collections_docs = query_for_pending_collections(client, registry_mock_query_f)
+    pending_collections_docs = query_for_pending_collections(client)
     pending_collections = iter(PdsLidVid.from_string(record["_source"]["lidvid"]) for record in pending_collections_docs)
     # TODO: add orphan processing step. not sure if it belongs here or as a separate step after ancestry has completed - edunn 20251112
 
     for collection_lidvid in pending_collections:
-        collection_nonaggregate_refs = query_for_collection_nonaggregate_refs(client, collection_lidvid,
-                                                                              registry_mock_query_f)
+        collection_nonaggregate_refs = query_for_collection_nonaggregate_refs(client, collection_lidvid)
 
         for nonaggregate_lidvid in collection_nonaggregate_refs:
             nonagg_update_record = ProductUpdateRecord(product=nonaggregate_lidvid,

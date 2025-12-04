@@ -7,11 +7,9 @@ from typing import Iterable
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
-from pds.registrysweepers.ancestry.typedefs import DbMockTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import get_query_hits_count
-from pds.registrysweepers.utils.db import query_registry_db_or_mock
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
@@ -37,18 +35,20 @@ def product_class_query_factory(cls: ProductClass) -> Dict:
     return {"query": queries[cls]}
 
 
-def query_for_pending_bundles(client: OpenSearch, db_mock: DbMockTypeDef = None) -> Iterable[Dict]:
+def query_for_pending_bundles(client: OpenSearch) -> Iterable[Dict]:
     """Query the registry for all bundle LIDVIDs which require ancestry processing"""
+    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+
     query = product_class_query_factory(ProductClass.BUNDLE)
     _source = {"includes": ["lidvid", "ref_lid_collection", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
-    query_f = query_registry_db_or_mock(db_mock, "pending_collections", use_search_after=True)
-    docs = query_f(client, resolve_multitenant_index_name(client, "registry"), query, _source)
+    docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query, _source)
 
     return docs
 
 
-def query_for_pending_collections(client: OpenSearch, db_mock: DbMockTypeDef = None) -> Iterable[Dict]:
+def query_for_pending_collections(client: OpenSearch) -> Iterable[Dict]:
     """Query the registry for all collection LIDVIDs which require ancestry processing"""
+    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 
     query = product_class_query_factory(ProductClass.COLLECTION)
     query["query"]["bool"].update(
@@ -56,14 +56,15 @@ def query_for_pending_collections(client: OpenSearch, db_mock: DbMockTypeDef = N
     )
 
     _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
-    query_f = query_registry_db_or_mock(db_mock, "pending_collections", use_search_after=True)
-    docs = query_f(client, resolve_multitenant_index_name(client, "registry"), query, _source)
+    docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query, _source)
 
     return docs
 
 
-def get_nonaggregate_ancestry_records_query(client: OpenSearch, registry_db_mock: DbMockTypeDef) -> Iterable[Dict]:
+def get_nonaggregate_ancestry_records_query(client: OpenSearch) -> Iterable[Dict]:
     # Query the registry-refs index for the contents of all collections
+    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+
     query: Dict = {
         "query": {
             "bool": {
@@ -73,10 +74,9 @@ def get_nonaggregate_ancestry_records_query(client: OpenSearch, registry_db_mock
         "seq_no_primary_term": True,
     }
     _source = {"includes": ["collection_lidvid", "batch_id", "product_lidvid"]}
-    query_f = query_registry_db_or_mock(registry_db_mock, "get_nonaggregate_ancestry_records", use_search_after=True)
 
     # each document will have many product lidvids, so a smaller page size is warranted here
-    docs = query_f(
+    docs = query_registry_db_with_search_after(
         client,
         resolve_multitenant_index_name(client, "registry-refs"),
         query,
@@ -90,9 +90,11 @@ def get_nonaggregate_ancestry_records_query(client: OpenSearch, registry_db_mock
 
 
 def query_for_collection_nonaggregate_refs(
-    client: OpenSearch, collection_lidvid: PdsLidVid, registry_db_mock: DbMockTypeDef
+    client: OpenSearch, collection_lidvid: PdsLidVid
 ) -> Iterable[PdsLidVid]:
     # Query the registry-refs index for the contents of the given collection
+    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+
     query: Dict = {
         "query": {
             "bool": {
@@ -103,14 +105,9 @@ def query_for_collection_nonaggregate_refs(
         "seq_no_primary_term": True,
     }
     _source = {"includes": ["collection_lidvid", "batch_id", "product_lidvid"]}
-    query_f = query_registry_db_or_mock(
-        registry_db_mock,
-        f"query_for_collection_nonaggregate_refs-{collection_lidvid}",
-        use_search_after=True,
-    )
 
     # each document will have many product lidvids, so a smaller page size is warranted here
-    docs = query_f(
+    docs = query_registry_db_with_search_after(
         client,
         resolve_multitenant_index_name(client, "registry-refs"),
         query,
@@ -132,17 +129,18 @@ _orphaned_docs_query = {
 }
 
 
-def get_orphaned_documents(client: OpenSearch, registry_db_mock: DbMockTypeDef, index_name: str) -> Iterable[Dict]:
+def get_orphaned_documents(client: OpenSearch, index_name: str) -> Iterable[Dict]:
     # Query an index for documents without an up-to-date ancestry version reference - this would indicate a product
     # which is orphaned and is getting missed in processing
+    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+
     _source: Dict = {"includes": []}
-    query_f = query_registry_db_or_mock(registry_db_mock, "get_orphaned_ancestry_docs", use_search_after=True)
 
     sort_fields_override = (
         ["collection_lidvid", "batch_id"] if "registry-refs" in index_name else None
     )  # use default for registry
 
-    docs = query_f(client, index_name, _orphaned_docs_query, _source, sort_fields=sort_fields_override)
+    docs = query_registry_db_with_search_after(client, index_name, _orphaned_docs_query, _source, sort_fields=sort_fields_override)
 
     return docs
 

@@ -23,6 +23,8 @@ class ProductUpdateRecord:
     _complete: bool = False
 
     def __init__(self, product: PdsLidVid, direct_ancestor_refs: Optional[Iterable[PdsProductIdentifier]] = None, skip_write: bool = False):
+        if not isinstance(product, PdsLidVid):
+            raise ValueError('Cannot initialise ProductUpdateRecord with non-PdsLidVid value for "product"')
         self._product = product
         self._direct_ancestor_refs = set(direct_ancestor_refs or [])
         self._skip_write = skip_write

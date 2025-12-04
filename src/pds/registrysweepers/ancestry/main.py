@@ -32,7 +32,6 @@ def run(
         client: OpenSearch,
         log_filepath: Union[str, None] = None,
         log_level: int = logging.INFO,
-        registry_mock_query_f: Optional[Callable[[str], Iterable[Dict]]] = None,
         ancestry_records_accumulator: Optional[List[AncestryRecord]] = None,
         bulk_updates_sink: Optional[List[Tuple[str, Dict[str, List]]]] = None,
 ):
@@ -41,11 +40,10 @@ def run(
     log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing...")
 
     log.info("Updating bundle ancestries for collections...")
-    bundle_and_collection_update_records = process_collection_bundle_ancestry(client, registry_mock_query_f)
+    bundle_and_collection_update_records = process_collection_bundle_ancestry(client)
 
     logging.info("Updating collection ancestries for non-aggregate products...")
-    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client,
-                                                                                           registry_mock_query_f)
+    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client)
 
     product_update_records_to_write = filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records,
                                                                                 collection_nonaggregate_refs_updates))
