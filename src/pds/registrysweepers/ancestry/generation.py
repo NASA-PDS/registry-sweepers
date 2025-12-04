@@ -176,7 +176,7 @@ def process_collection_ancestries_for_nonaggregates(client, registry_mock_query_
 
     # iterate over collections (and their member nonaggregate products) which require ancestry updates
     pending_collections_docs = query_for_pending_collections(client, registry_mock_query_f)
-    pending_collections = iter(PdsLidVid.from_string(record["lidvid"]) for record in pending_collections_docs)
+    pending_collections = iter(PdsLidVid.from_string(record["_source"]["lidvid"]) for record in pending_collections_docs)
     # TODO: add orphan processing step. not sure if it belongs here or as a separate step after ancestry has completed - edunn 20251112
 
     for collection_lidvid in pending_collections:
