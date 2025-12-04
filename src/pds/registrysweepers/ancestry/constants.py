@@ -1,4 +1,4 @@
-ANCESTRY_REFS_METADATA_KEY = "ops.Provenance/ops:ancestor_refs"
+ANCESTRY_REFS_METADATA_KEY = "ops:Provenance/ops:ancestor_refs"
 
 # The following is a minified painless script to deduplicate ancestry elements at update-time
 # Because AOSS does not support named/stored scripts, it is necessary to inline the script within each update
