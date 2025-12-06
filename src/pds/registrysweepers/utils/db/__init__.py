@@ -362,7 +362,24 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
     if update.has_versioning_information():
         metadata_statement["if_primary_term"] = update.primary_term
         metadata_statement["if_seq_no"] = update.seq_no
-    content_statement = {"doc": update.content, "doc_as_upsert": as_upsert}
+
+    # Presumably, upsert is incompatible with inline scripts - edunn 20251111
+    conflict = update.inline_script_content is not None and as_upsert
+    if conflict:
+        raise ValueError("Cannot specify both inline_script_content and as_upsert=True for the same Update")
+
+    if update.inline_script_content is None:
+        content_statement = {"doc": update.content, "doc_as_upsert": as_upsert}
+    else:
+        # TODO: Confirm correctness
+        content_statement = {
+            "script": {
+                "source": update.inline_script_content,
+                "lang": "painless",
+                "params": update.content,
+            }
+
+        }
     update_objs = [metadata_statement, content_statement]
     updates_strs = [json.dumps(obj) for obj in update_objs]
     return updates_strs

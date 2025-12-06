@@ -25,6 +25,8 @@ class PdsLid(PdsProductIdentifier):
         return PdsLid(lid)
 
     def __eq__(self, other):
+        if not isinstance(other, PdsLid):
+            return False
         return self.value == other.value
 
     def __hash__(self):

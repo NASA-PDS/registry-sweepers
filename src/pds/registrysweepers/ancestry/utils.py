@@ -12,8 +12,9 @@ from typing import Set
 from typing import Union
 
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
-from pds.registrysweepers.ancestry.constants import METADATA_PARENT_BUNDLE_KEY
-from pds.registrysweepers.ancestry.constants import METADATA_PARENT_COLLECTION_KEY
+from pds.registrysweepers.ancestry.constants import ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED
+from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
+from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
@@ -50,62 +51,6 @@ def dump_history_to_disk(parent_dir: str, history: Dict[str, SerializableAncestr
     log.debug(limit_log_length("    complete!"))
 
     return output_filepath
-
-
-def merge_matching_history_chunks(dest_fp: str, src_fps: List[str], max_chunk_size: Union[int, None] = None):
-    log.debug(limit_log_length(f"Performing merges into {dest_fp} using max_chunk_size={max_chunk_size}"))
-    dest_file_content = load_history_from_filepath(dest_fp)
-
-    dest_file_updated = False
-
-    for src_fn in src_fps:
-        src_file_size_mb = os.stat(src_fn).st_size / 1024**2
-        log.debug(limit_log_length(f"merging from {src_fn} ({int(src_file_size_mb)}MB)..."))
-        src_file_content = load_history_from_filepath(src_fn)
-
-        src_file_updated = False
-
-        # For every lidvid with history in the "active" file, absorb all relevant history from this inactive file
-        for lidvid_str, dest_history_entry in dest_file_content.items():
-            try:
-                src_history_to_merge = src_file_content[lidvid_str]
-                src_file_content.pop(lidvid_str)
-
-                # Flag files as updated - will trigger re-write to disk
-                dest_file_updated = True
-                src_file_updated = True
-
-                dest_history_entry = dest_file_content[lidvid_str]
-                for k in ["parent_bundle_lidvids", "parent_collection_lidvids"]:
-                    dest_history_entry[k].extend(src_history_to_merge[k])  # type: ignore
-
-            except KeyError:
-                # If the src history doesn't contain history for this lidvid, there's nothing to do
-                pass
-
-        if src_file_updated:
-            # Overwrite the content of the source file with any remaining history not absorbed
-            write_history_to_filepath(src_file_content, src_fn)
-
-        # this prevents a memory spike when reading in the next chunk of src_file_content
-        del src_file_content
-        gc.collect()
-
-        dest_parent_dir = os.path.split(dest_fp)[0]
-        split_filepath = split_content_chunk_if_oversized(max_chunk_size, dest_parent_dir, dest_file_content)
-        if split_filepath is not None:
-            # the path of the newly-created file with the split-off data is appended and will be processed next
-            # intuitively it seems like this is most-likely to create the fewest additional split-off files as it should
-            # avoid a bunch of unnecessary split-off files with overlapping content, but this is just a hunch which
-            # won't hurt anything to follow
-            src_fps.append(split_filepath)
-            dest_file_updated = True
-
-    if dest_file_updated:
-        # Overwrite the content of the destination file with updated history including absorbed elements
-        write_history_to_filepath(dest_file_content, dest_fp)
-
-    log.debug(limit_log_length("    complete!"))
 
 
 def split_content_chunk_if_oversized(
@@ -146,11 +91,11 @@ def gb_mem_to_size(desired_mem_usage_gb) -> int:
     return desired_mem_usage_gb / 3.1 * 2621536
 
 
-def update_from_record(record: AncestryRecord) -> Update:
-    doc_id = str(record.lidvid)
+def update_from_record(record: ProductUpdateRecord) -> Update:
+    doc_id = str(record.product)
     content = {
-        METADATA_PARENT_BUNDLE_KEY: [str(id) for id in record.resolve_parent_bundle_lidvids()],
-        METADATA_PARENT_COLLECTION_KEY: [str(id) for id in record.resolve_parent_collection_lidvids()],
+        ANCESTRY_REFS_METADATA_KEY: [str(id) for id in record.direct_ancestor_refs],
         SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: int(SWEEPERS_ANCESTRY_VERSION),
     }
-    return Update(id=doc_id, content=content)
+
+    return Update(id=doc_id, content=content, inline_script_content=ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED)
