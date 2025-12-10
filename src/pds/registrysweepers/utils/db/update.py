@@ -22,6 +22,8 @@ class Update:
     primary_term: Union[int, None] = None
     seq_no: Union[int, None] = None
 
+    inline_script_content: Union[None, str] = None
+
     def has_versioning_information(self) -> bool:
         has_primary_term = self.primary_term is not None
         has_sequence_number = self.seq_no is not None
