@@ -1,12 +1,17 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-12-05)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-12-10)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.5.0...«unknown»)
+
+**Improvements:**
+
+- Update ancestry handling for handling members of collection LIDVID [\#187](https://github.com/NASA-PDS/registry-sweepers/issues/187)
 
 **Defects:**
 
 - Docker container does not run with non-root user [\#192](https://github.com/NASA-PDS/registry-sweepers/issues/192) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
+- Ancestry not working properly for SBN [\#171](https://github.com/NASA-PDS/registry-sweepers/issues/171) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
 
 ## [v1.5.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.5.0) (2025-11-19)
 
