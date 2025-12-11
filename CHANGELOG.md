@@ -1,8 +1,8 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2025-12-10)
+## [release/1.6.0](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.6.0) (2025-12-10)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.5.0...«unknown»)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.5.0...release/1.6.0)
 
 **Improvements:**
 
@@ -15,7 +15,11 @@
 
 ## [v1.5.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.5.0) (2025-11-19)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.4.0...v1.5.0)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/release/1.5.0...v1.5.0)
+
+## [release/1.5.0](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.5.0) (2025-11-19)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.4.0...release/1.5.0)
 
 **Improvements:**
 
@@ -28,7 +32,11 @@
 
 ## [v1.4.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.4.0) (2025-07-16)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.3.0...v1.4.0)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/release/1.4.0...v1.4.0)
+
+## [release/1.4.0](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.4.0) (2025-06-12)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.3.0...release/1.4.0)
 
 **Requirements:**
 
@@ -51,7 +59,15 @@
 
 ## [v1.3.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.3.0) (2024-10-14)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.1...v1.3.0)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/release/1.3.0...v1.3.0)
+
+**Other closed issues:**
+
+- Deploy Registry-Sweeper in MCP Prod [\#135](https://github.com/NASA-PDS/registry-sweepers/issues/135)
+
+## [release/1.3.0](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.3.0) (2024-09-18)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.1...release/1.3.0)
 
 **Requirements:**
 
@@ -69,7 +85,6 @@
 
 **Other closed issues:**
 
-- Deploy Registry-Sweeper in MCP Prod [\#135](https://github.com/NASA-PDS/registry-sweepers/issues/135)
 - Registry-sweeper upgrade for multitenant registry [\#120](https://github.com/NASA-PDS/registry-sweepers/issues/120) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
 - Investigate questionable repairkit behaviour [\#119](https://github.com/NASA-PDS/registry-sweepers/issues/119)
 - Run sweepers locally against PSA prod [\#108](https://github.com/NASA-PDS/registry-sweepers/issues/108) [[s.high](https://github.com/NASA-PDS/registry-sweepers/labels/s.high)]
@@ -80,7 +95,11 @@
 
 ## [v1.2.1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.2.1) (2024-01-24)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.0...v1.2.1)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/release/1.2.1...v1.2.1)
+
+## [release/1.2.1](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.2.1) (2024-01-23)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.2.0...release/1.2.1)
 
 **Defects:**
 
