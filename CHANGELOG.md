@@ -1,8 +1,21 @@
 # Changelog
 
-## [release/1.6.0](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.6.0) (2025-12-10)
+## [1.5.0](https://github.com/NASA-PDS/registry-sweepers/tree/1.5.0) (2025-12-16)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.5.0...release/1.6.0)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.0...1.5.0)
+
+**Improvements:**
+
+- Remove `parent_bundle_identifier` support for non-aggregate products [\#185](https://github.com/NASA-PDS/registry-sweepers/issues/185)
+
+**Other closed issues:**
+
+- Document or remove Claude code container stuff [\#196](https://github.com/NASA-PDS/registry-sweepers/issues/196)
+- Document the memory requirements needed for sweepers based upon the data being updated [\#162](https://github.com/NASA-PDS/registry-sweepers/issues/162)
+
+## [v1.6.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.6.0) (2025-12-11)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.5.0...v1.6.0)
 
 **Improvements:**
 
