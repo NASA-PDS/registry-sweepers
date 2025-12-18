@@ -8,7 +8,7 @@ from pds.registrysweepers.utils.bigdict.base import BigDict
 class DictDict(BigDict):
     """Baseline in-memory dictionary-backed BigDict, for speed"""
 
-    def __init__(self) -> None:
+    def __init__(self):
         self._store: dict[str, Any] = {}
 
     def put(self, key: str, value: Any) -> None:
