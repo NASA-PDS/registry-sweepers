@@ -1,8 +1,16 @@
 # Changelog
 
-## [release/1.6.1](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.6.1) (2025-12-18)
+## [1.6.0](https://github.com/NASA-PDS/registry-sweepers/tree/1.6.0) (2026-01-07)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.0...release/1.6.1)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.1...1.6.0)
+
+**Other closed issues:**
+
+- Verify repair-kit has executed in prod to fix NASA-PDS/registry-api\#705 [\#194](https://github.com/NASA-PDS/registry-sweepers/issues/194)
+
+## [v1.6.1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.6.1) (2025-12-18)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.0...v1.6.1)
 
 **Improvements:**
 
