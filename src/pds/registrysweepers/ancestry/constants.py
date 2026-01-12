@@ -27,13 +27,4 @@ ANCESTRY_REFS_METADATA_KEY = "ops:Provenance/ops:ancestor_refs"
 #     ctx.op = 'none';  // <— Prevents reindexing if nothing changed
 # }
 
-for (item in params.new_items) {
-    if (!existing.contains(item)) {
-      ctx._source['ancestry'].add(item);
-      changed = true;
-    }
-}
-
-if (!changed) {
-    ctx.op = 'none';  // <— Prevents reindexing if nothing changed
-}"""
+ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED = "boolean c=false;if(ctx._source[\'ancestry\']==null){ctx._source[\'ancestry\']=[];c=true;}def e=new HashSet();for(i in ctx._source[\'ancestry\']){e.add(i);}for(i in params.new_items){if(!e.contains(i)){ctx._source[\'ancestry\'].add(i);c=true;}}if(!c){ctx.op=\'none\';}"
