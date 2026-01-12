@@ -12,6 +12,7 @@ from typing import Optional
 from typing import Union
 
 from opensearchpy import OpenSearch
+from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import get_random_hex_id
@@ -371,12 +372,16 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
     if update.inline_script_content is None:
         content_statement = {"doc": update.content, "doc_as_upsert": as_upsert}
     else:
-        # TODO: Confirm correctness
+        if not update.content:
+            return []
+
         content_statement = {
             "script": {
                 "source": update.inline_script_content,
                 "lang": "painless",
-                "params": update.content,
+                "params": {
+                    "new_items": update.content.get(ANCESTRY_REFS_METADATA_KEY, []),
+                },
             }
 
         }
