@@ -13,12 +13,11 @@ ANCESTRY_REFS_METADATA_KEY = "ops:Provenance/ops:ancestor_refs"
 #
 # def existing = new HashSet();
 # for (item in ctx._source['ancestry']) {
-#     existing.add(item.lid + '::' + item.vid);
+#     existing.add(item);
 # }
 #
 # for (item in params.new_items) {
-# def key = item.lid + '::' + item.vid;
-#     if (!existing.contains(key)) {
+#     if (!existing.contains(item)) {
 #       ctx._source['ancestry'].add(item);
 #       changed = true;
 #     }
@@ -26,5 +25,15 @@ ANCESTRY_REFS_METADATA_KEY = "ops:Provenance/ops:ancestor_refs"
 #
 # if (!changed) {
 #     ctx.op = 'none';  // <— Prevents reindexing if nothing changed
-# }"""
-ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED = "boolean c=false;if(ctx._source[\'ancestry\']==null){ctx._source[\'ancestry\']=[];c=true;}def e=new HashSet();for(i in ctx._source[\'ancestry\']){e.add(i.lid+\'::\'+i.vid);}for(i in params.new_items){def k=i.lid+\'::\'+i.vid;if(!e.contains(k)){ctx._source[\'ancestry\'].add(i);c=true;}}if(!c){ctx.op=\'none\';}"
+# }
+
+for (item in params.new_items) {
+    if (!existing.contains(item)) {
+      ctx._source['ancestry'].add(item);
+      changed = true;
+    }
+}
+
+if (!changed) {
+    ctx.op = 'none';  // <— Prevents reindexing if nothing changed
+}"""
