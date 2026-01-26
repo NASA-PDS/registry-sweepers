@@ -6,19 +6,19 @@ ANCESTRY_REFS_METADATA_KEY = "ops:Provenance/ops:ancestor_refs"
 #
 # """
 # boolean changed = false;
-# if (ctx._source['ancestry'] == null) {
-#     ctx._source['ancestry'] = [];
+# if (ctx._source['ops:Provenance/ops:ancestor_refs'] == null) {
+#     ctx._source['ops:Provenance/ops:ancestor_refs'] = [];
 #     changed = true;
 # }
 #
 # def existing = new HashSet();
-# for (item in ctx._source['ancestry']) {
+# for (item in ctx._source['ops:Provenance/ops:ancestor_refs']) {
 #     existing.add(item);
 # }
 #
 # for (item in params.new_items) {
 #     if (!existing.contains(item)) {
-#       ctx._source['ancestry'].add(item);
+#       ctx._source['ops:Provenance/ops:ancestor_refs'].add(item);
 #       changed = true;
 #     }
 # }
@@ -27,4 +27,4 @@ ANCESTRY_REFS_METADATA_KEY = "ops:Provenance/ops:ancestor_refs"
 #     ctx.op = 'none';  // <— Prevents reindexing if nothing changed
 # }
 
-ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED = "boolean c=false;if(ctx._source[\'ancestry\']==null){ctx._source[\'ancestry\']=[];c=true;}def e=new HashSet();for(i in ctx._source[\'ancestry\']){e.add(i);}for(i in params.new_items){if(!e.contains(i)){ctx._source[\'ancestry\'].add(i);c=true;}}if(!c){ctx.op=\'none\';}"
+ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED = "boolean c=false;if(ctx._source[\'ops:Provenance/ops:ancestor_refs\']==null){ctx._source[\'ops:Provenance/ops:ancestor_refs\']=[];c=true;}def e=new HashSet();for(i in ctx._source[\'ops:Provenance/ops:ancestor_refs\']){e.add(i);}for(i in params.new_items){if(!e.contains(i)){ctx._source[\'ops:Provenance/ops:ancestor_refs\'].add(i);c=true;}}if(!c){ctx.op=\'none\';}"
