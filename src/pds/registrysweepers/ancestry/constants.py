@@ -1,30 +1,34 @@
 ANCESTRY_REFS_METADATA_KEY = "ops:Provenance/ops:ancestor_refs"
 
+# this placeholder exists to provide interpolation of the key without needing to escape special characters in the painless script
+KEY_PLACEHOLDER = "ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER"
+
 # The following is a minified painless script to deduplicate ancestry elements at update-time
 # Because AOSS does not support named/stored scripts, it is necessary to inline the script within each update
 # The script is equivalent to the following unminified version:
 #
 # """
 # boolean changed = false;
-# if (ctx._source['ancestry'] == null) {
-#     ctx._source['ancestry'] = [];
+# if (ctx._source['ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER'] == null) {
+#     ctx._source['ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER'] = [];
 #     changed = true;
 # }
 #
 # def existing = new HashSet();
-# for (item in ctx._source['ancestry']) {
-#     existing.add(item.lid + '::' + item.vid);
+# for (item in ctx._source['ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER']) {
+#     existing.add(item);
 # }
 #
 # for (item in params.new_items) {
-# def key = item.lid + '::' + item.vid;
-#     if (!existing.contains(key)) {
-#       ctx._source['ancestry'].add(item);
+#     if (!existing.contains(item)) {
+#       ctx._source['ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER'].add(item);
 #       changed = true;
 #     }
 # }
 #
 # if (!changed) {
 #     ctx.op = 'none';  // <— Prevents reindexing if nothing changed
-# }"""
-ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED = "boolean c=false;if(ctx._source[\'ancestry\']==null){ctx._source[\'ancestry\']=[];c=true;}def e=new HashSet();for(i in ctx._source[\'ancestry\']){e.add(i.lid+\'::\'+i.vid);}for(i in params.new_items){def k=i.lid+\'::\'+i.vid;if(!e.contains(k)){ctx._source[\'ancestry\'].add(i);c=true;}}if(!c){ctx.op=\'none\';}"
+# }
+
+ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED = "boolean c=false;if(ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\']==null){ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\']=[];c=true;}def e=new HashSet();for(i in ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\']){e.add(i);}for(i in params.new_items){if(!e.contains(i)){ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\'].add(i);c=true;}}if(!c){ctx.op=\'none\';}" \
+    .replace(KEY_PLACEHOLDER, ANCESTRY_REFS_METADATA_KEY)
