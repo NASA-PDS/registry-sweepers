@@ -183,8 +183,8 @@ class SolrOsWrapperIter:
         self.found_ids = found_ids
         self.online_resources = online_resources
         self._solr_itr = iter(solr_itr)
-        self._seen_domains = set()
-        self._seen_node_ids = set()
+        self._seen_domains: Set[str] = set()
+        self._seen_node_ids: Set[str] = set()
 
     def __iter__(self) -> "SolrOsWrapperIter":
         return self
@@ -192,7 +192,7 @@ class SolrOsWrapperIter:
     def _get_node(self, doc: dict) -> str:
         """Infer the node from the url resource's DNS"""
 
-        if "lidvid" in doc:
+        if "lidvid" in doc and self.found_ids is not None:
             registry_node = self.found_ids.get(doc["lidvid"])
             if registry_node:
                 return registry_node
@@ -221,7 +221,7 @@ class SolrOsWrapperIter:
 
         if "resource_ref" in doc:
             online_resource_id = get_online_resource_id(doc["resource_ref"][0])
-            if online_resource_id in self.online_resources:
+            if self.online_resources is not None and online_resource_id in self.online_resources:
                 url = self.online_resources.get(online_resource_id)
                 domain = urlparse(url).netloc
                 self._seen_domains.add(domain)
@@ -248,7 +248,7 @@ class SolrOsWrapperIter:
         return UNKNOWN_NODE
 
     def solr_doc_to_os_doc(self, doc: Dict[str, Any]) -> Dict[str, Any]:
-        new_doc = dict()
+        new_doc: Dict[str, Any] = dict()
         new_doc["_index"] = self.index
         new_doc["_type"] = self.type
         new_doc["doc_as_upsert"] = True
@@ -285,10 +285,9 @@ class SolrOsWrapperIter:
         if "modification_date" not in new_doc["_source"]:
             new_doc["_source"]["modification_date"] = [DEFAULT_MODIFICATION_DATE]
 
-        if self.id_field_fun:
-            doc_id = self.id_field_fun(doc)
-            new_doc["_id"] = doc_id
-            new_doc["_source"]["found_in_registry"] = "true" if doc_id in self.found_ids else "false"
+        doc_id = self.id_field_fun(doc)
+        new_doc["_id"] = doc_id
+        new_doc["_source"]["found_in_registry"] = "true" if self.found_ids is not None and doc_id in self.found_ids else "false"
 
         new_doc["_source"]["node"] = self._get_node(doc)
         return new_doc

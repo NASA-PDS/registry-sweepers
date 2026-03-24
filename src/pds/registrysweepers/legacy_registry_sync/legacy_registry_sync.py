@@ -56,7 +56,7 @@ def get_online_resources() -> Dict[str, str]:
     return online_resources
 
 
-def create_legacy_registry_index(es_conn: Optional[OpenSearch] = None) -> None:
+def create_legacy_registry_index(es_conn: OpenSearch) -> None:
     """
     Creates if not already created the legacy_registry index.
 

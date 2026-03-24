@@ -1,4 +1,6 @@
+from typing import Any
 from typing import Dict
+from typing import Iterable
 from typing import List
 from typing import Optional
 
@@ -24,7 +26,7 @@ def get_already_loaded_lidvids(
     @return: dict mapping already-loaded PDS4 lidvid to ops:Harvest_Info/ops:node_name (or None if absent)
     """
 
-    query = {"query": {"bool": {"should": [], "minimum_should_match": 1}}, "fields": ["_id"]}
+    query: Dict[str, Any] = {"query": {"bool": {"should": [], "minimum_should_match": 1}}, "fields": ["_id"]}
 
     prod_class_prop = "pds:Identification_Area/pds:product_class"
     node_name_field = "ops:Harvest_Info/ops:node_name"
@@ -35,7 +37,8 @@ def get_already_loaded_lidvids(
         ]
 
     sort_field = "ops:Harvest_Info/ops:harvest_date_time"
-    prod_id_resp = query_registry_db_with_search_after(
+    assert es_conn is not None, "es_conn must be provided"
+    prod_id_resp: Iterable[Dict[str, Any]] = query_registry_db_with_search_after(
         es_conn,
         "registry",
         _source={"includes": ["_id", sort_field, node_name_field], "excludes": []},
