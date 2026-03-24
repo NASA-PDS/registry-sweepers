@@ -1,6 +1,9 @@
-import os
+from typing import Dict
+from typing import List
+from typing import Optional
 
 import opensearchpy  # type: ignore
+from opensearchpy import OpenSearch
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 
 # Optional Environment variable  used for the Cross Cluster Search
@@ -8,7 +11,9 @@ from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 CCS_CONN = "CCS_CONN"
 
 
-def get_already_loaded_lidvids(product_classes=None, es_conn=None):
+def get_already_loaded_lidvids(
+    product_classes: Optional[List[str]] = None, es_conn: Optional[OpenSearch] = None
+) -> Dict[str, Optional[str]]:
     """
     Get the lidvids of the PDS4 products already loaded in the (new) registry.
     Note that this function should not be applied to the product classes Product_Observational or documents, there would be too many results.

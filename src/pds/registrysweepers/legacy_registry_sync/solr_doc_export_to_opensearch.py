@@ -1,6 +1,10 @@
 import logging
-import os
 from datetime import datetime
+from typing import Any
+from typing import Dict
+from typing import Iterator
+from typing import Optional
+from typing import Set
 from urllib.parse import urlparse
 
 from pds.registrysweepers.utils.misc import limit_log_length
@@ -104,7 +108,7 @@ class MissingIdentifierError(Exception):
     pass
 
 
-def pds4_id_field_fun(doc):
+def pds4_id_field_fun(doc: Dict[str, Any]) -> str:
     """
     Compute the unique identifier in the new registry from a document in the legacy registry
 
@@ -140,7 +144,7 @@ def get_online_resource_id(resource_ref: str) -> str:
     return resource_ref
 
 
-def get_node_from_file_ref(file_ref: str):
+def get_node_from_file_ref(file_ref: str) -> str:
     """
     Thanks to the file system storage of the labels in the legacy registry we can retrieve the
     Discipline Node in charge of each label.
@@ -154,7 +158,13 @@ def get_node_from_file_ref(file_ref: str):
 
 
 class SolrOsWrapperIter:
-    def __init__(self, solr_itr, es_index, found_ids=None, online_resources=None):
+    def __init__(
+        self,
+        solr_itr: Any,
+        es_index: str,
+        found_ids: Optional[Dict[str, Optional[str]]] = None,
+        online_resources: Optional[Dict[str, str]] = None,
+    ):
         """
         Iterable on the Solr legacy registry documents returning the migrated document for each iteration (next).
         The migrated documents contains in addition to the Solr document properties:
@@ -176,7 +186,7 @@ class SolrOsWrapperIter:
         self._seen_domains = set()
         self._seen_node_ids = set()
 
-    def __iter__(self):
+    def __iter__(self) -> "SolrOsWrapperIter":
         return self
 
     def _get_node(self, doc: dict) -> str:
@@ -237,7 +247,7 @@ class SolrOsWrapperIter:
 
         return UNKNOWN_NODE
 
-    def solr_doc_to_os_doc(self, doc):
+    def solr_doc_to_os_doc(self, doc: Dict[str, Any]) -> Dict[str, Any]:
         new_doc = dict()
         new_doc["_index"] = self.index
         new_doc["_type"] = self.type
@@ -276,14 +286,14 @@ class SolrOsWrapperIter:
             new_doc["_source"]["modification_date"] = [DEFAULT_MODIFICATION_DATE]
 
         if self.id_field_fun:
-            id = self.id_field_fun(doc)
-            new_doc["_id"] = id
-            new_doc["_source"]["found_in_registry"] = "true" if id in self.found_ids else "false"
+            doc_id = self.id_field_fun(doc)
+            new_doc["_id"] = doc_id
+            new_doc["_source"]["found_in_registry"] = "true" if doc_id in self.found_ids else "false"
 
         new_doc["_source"]["node"] = self._get_node(doc)
         return new_doc
 
-    def __next__(self):
+    def __next__(self) -> Dict[str, Any]:
         while True:
             # skip rows without an id
             try:

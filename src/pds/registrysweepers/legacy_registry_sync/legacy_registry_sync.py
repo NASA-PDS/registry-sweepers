@@ -1,13 +1,12 @@
+import argparse
 import json
 import logging
+import sys
 from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import IO
-from typing import List
 from typing import Optional
-from typing import Set
-from typing import Union
 
 import opensearchpy.helpers
 import requests
@@ -23,7 +22,7 @@ log = logging.getLogger(__name__)
 
 
 class _DatetimeEncoder(json.JSONEncoder):
-    def default(self, obj):
+    def default(self, obj: Any) -> Any:
         if isinstance(obj, datetime):
             return obj.isoformat()
         return super().default(obj)
@@ -57,7 +56,7 @@ def get_online_resources() -> Dict[str, str]:
     return online_resources
 
 
-def create_legacy_registry_index(es_conn=None):
+def create_legacy_registry_index(es_conn: Optional[OpenSearch] = None) -> None:
     """
     Creates if not already created the legacy_registry index.
 
@@ -72,9 +71,9 @@ def create_legacy_registry_index(es_conn=None):
 
 def run(
     client: OpenSearch,
-    log_filepath: Union[str, None] = None,
+    log_filepath: Optional[str] = None,
     log_level: int = logging.INFO,
-):
+) -> None:
     """
     Runs the Solr Legacy Registry synchronization with OpenSearch.
 
@@ -113,7 +112,7 @@ def run(
 
 
 def dry_run(
-    log_filepath: Union[str, None] = None,
+    log_filepath: Optional[str] = None,
     log_level: int = logging.INFO,
     max_docs: Optional[int] = None,
     show_sample_docs: bool = True,
@@ -298,11 +297,8 @@ def dry_run(
     return stats
 
 
-def main():
+def main() -> None:
     """Main entry point for the legacy registry sync console script."""
-    import argparse
-    import sys
-
     parser = argparse.ArgumentParser(
         description="PDS Legacy Registry Sync - Test Solr data retrieval or sync to OpenSearch",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -383,8 +379,6 @@ Examples:
         sys.exit(1)
 
     # Convert log level string to integer
-    import logging
-
     log_level = getattr(logging, args.log_level)
 
     # Run dry-run mode
