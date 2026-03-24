@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased](https://github.com/NASA-PDS/registry-sweepers/tree/HEAD)
+
+**Defects:**
+
+- Fix legacy sync node assignment to use registry API node metadata instead of DNS-based inference [\#212](https://github.com/NASA-PDS/registry-sweepers/issues/212)
+
+**Improvements:**
+
+- Add `--output-file` option to `pds-legacy-registry-sync --dry-run` to write OpenSearch payloads as JSON lines for offline inspection
+
 ## [v1.6.2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.6.2) (2026-01-08)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.1...v1.6.2)
