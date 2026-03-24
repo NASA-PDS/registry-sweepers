@@ -164,7 +164,7 @@ class SolrOsWrapperIter:
 
         @param solr_itr: iterator on the solr documents. SlowSolrDocs instance from the solr-to-es repository
         @param es_index: OpenSearch/ElasticSearch index name
-        @param found_ids: list of the lidvid already available in the new registry
+        @param found_ids: dict mapping lidvid to ops:Harvest_Info/ops:node_name for products already in the new registry
         @param rolls_over_target: artificially increase the number entries by re-running the loop n times
         """
         self.index = es_index
@@ -181,6 +181,11 @@ class SolrOsWrapperIter:
 
     def _get_node(self, doc: dict) -> str:
         """Infer the node from the url resource's DNS"""
+
+        if "lidvid" in doc:
+            registry_node = self.found_ids.get(doc["lidvid"])
+            if registry_node:
+                return registry_node
 
         if "agency_name" in doc:
             agency = doc["agency_name"][0]

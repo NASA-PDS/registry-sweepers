@@ -16,12 +16,13 @@ def get_already_loaded_lidvids(product_classes=None, es_conn=None):
     @param product_classes: list of the product classes you are interested in,
     e.g. "Product_Bundle", "Product_Collection" ...
     @param es_conn: elasticsearch.ElasticSearch instance for the ElasticSearch or OpenSearch connection
-    @return: the list of the already loaded PDS4 lidvid
+    @return: dict mapping already-loaded PDS4 lidvid to ops:Harvest_Info/ops:node_name (or None if absent)
     """
 
     query = {"query": {"bool": {"should": [], "minimum_should_match": 1}}, "fields": ["_id"]}
 
     prod_class_prop = "pds:Identification_Area/pds:product_class"
+    node_name_field = "ops:Harvest_Info/ops:node_name"
 
     if product_classes is not None:
         query["query"]["bool"]["should"] = [
@@ -32,9 +33,9 @@ def get_already_loaded_lidvids(product_classes=None, es_conn=None):
     prod_id_resp = query_registry_db_with_search_after(
         es_conn,
         "registry",
-        _source={"includes": ["_id", sort_field], "excludes": []},
+        _source={"includes": ["_id", sort_field, node_name_field], "excludes": []},
         query=query,
         sort_fields=[sort_field],
     )
 
-    return [p["_id"] for p in prod_id_resp]
+    return {p["_id"]: p.get("_source", {}).get(node_name_field) for p in prod_id_resp}
