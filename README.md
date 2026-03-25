@@ -39,6 +39,9 @@ pds-legacy-registry-sync --dry-run --max-docs 50 --no-samples
 # Dry-run with more sample documents
 pds-legacy-registry-sync --dry-run --max-docs 20 --sample-size 10
 
+# Dry-run with payload output for offline inspection
+pds-legacy-registry-sync --dry-run --max-docs 100 --output-file /tmp/payload.jsonl
+
 # Get help
 pds-legacy-registry-sync --dry-run --help
 ```
@@ -49,6 +52,7 @@ pds-legacy-registry-sync --dry-run --help
 - **Sample documents**: Displays sample documents with key fields
 - **Progress tracking**: Logs progress every 1000 documents
 - **Error handling**: Continues processing and reports errors
+- **Payload export**: Optionally writes OpenSearch payloads as JSON lines to a file for offline inspection (default: `/tmp/legacy_registry_sync_payload.jsonl`)
 
 **Dry-Run Output:**
 The tool provides comprehensive statistics including:

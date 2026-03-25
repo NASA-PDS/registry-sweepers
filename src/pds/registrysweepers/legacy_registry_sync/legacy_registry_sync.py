@@ -1,10 +1,12 @@
+import argparse
+import json
 import logging
+import sys
+from datetime import datetime
 from typing import Any
 from typing import Dict
-from typing import List
+from typing import IO
 from typing import Optional
-from typing import Set
-from typing import Union
 
 import opensearchpy.helpers
 import requests
@@ -17,6 +19,14 @@ from pds.registrysweepers.utils.misc import limit_log_length
 from solr_to_es.solrSource import SlowSolrDocs  # type: ignore
 
 log = logging.getLogger(__name__)
+
+
+class _DatetimeEncoder(json.JSONEncoder):
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
 
 SOLR_URL = "https://pds.nasa.gov/services/search/search"
 OS_INDEX = "en-legacy-registry"
@@ -46,7 +56,7 @@ def get_online_resources() -> Dict[str, str]:
     return online_resources
 
 
-def create_legacy_registry_index(es_conn=None):
+def create_legacy_registry_index(es_conn: OpenSearch) -> None:
     """
     Creates if not already created the legacy_registry index.
 
@@ -61,9 +71,9 @@ def create_legacy_registry_index(es_conn=None):
 
 def run(
     client: OpenSearch,
-    log_filepath: Union[str, None] = None,
+    log_filepath: Optional[str] = None,
     log_level: int = logging.INFO,
-):
+) -> None:
     """
     Runs the Solr Legacy Registry synchronization with OpenSearch.
 
@@ -102,11 +112,12 @@ def run(
 
 
 def dry_run(
-    log_filepath: Union[str, None] = None,
+    log_filepath: Optional[str] = None,
     log_level: int = logging.INFO,
     max_docs: Optional[int] = None,
     show_sample_docs: bool = True,
     sample_size: int = 5,
+    output_file: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Performs a dry run of the Solr Legacy Registry synchronization without interacting with OpenSearch.
@@ -117,6 +128,7 @@ def dry_run(
     @param max_docs: Maximum number of documents to process (default: None for all)
     @param show_sample_docs: Whether to show sample documents (default: True)
     @param sample_size: Number of sample documents to show (default: 5)
+    @param output_file: Path to write OpenSearch payloads as JSON lines (default: None)
     @return: Dictionary with statistics about the dry run
     """
 
@@ -150,13 +162,21 @@ def dry_run(
 
     # Use the existing SolrOsWrapperIter to analyze documents without OpenSearch
     # We pass empty found_ids since we're not checking against OpenSearch
-    wrapper = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=set(), online_resources=online_resources)
+    wrapper = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids={}, online_resources=online_resources)
+
+    output_fh: Optional[IO] = None
+    if output_file:
+        output_fh = open(output_file, "w")
+        log.info("Writing OpenSearch payloads to %s", output_file)
 
     try:
         for i, os_doc in enumerate(wrapper):
             if max_docs and i >= max_docs:
                 log.info("Reached maximum document limit: %d", max_docs)
                 break
+
+            if output_fh:
+                output_fh.write(json.dumps(os_doc, cls=_DatetimeEncoder) + "\n")
 
             # Extract the original Solr document from the OpenSearch document
             solr_doc = os_doc["_source"]
@@ -223,6 +243,10 @@ def dry_run(
     except Exception as e:
         log.error("Error during dry run: %s", str(e))
         stats["errors"].append(str(e))
+    finally:
+        if output_fh:
+            output_fh.close()
+            log.info("Payload written to %s", output_file)
 
     # Print results
     log.info("=" * 60)
@@ -273,11 +297,8 @@ def dry_run(
     return stats
 
 
-def main():
+def main() -> None:
     """Main entry point for the legacy registry sync console script."""
-    import argparse
-    import sys
-
     parser = argparse.ArgumentParser(
         description="PDS Legacy Registry Sync - Test Solr data retrieval or sync to OpenSearch",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -292,6 +313,7 @@ Examples:
 
   # Dry run with more sample documents
   %(prog)s --dry-run --max-docs 20 --sample-size 10
+  %(prog)s --dry-run --max-docs 100 --output-file /tmp/payload.jsonl
         """,
     )
 
@@ -331,6 +353,11 @@ Examples:
         default=5,
         help="Number of sample documents to show (default: 5)",
     )
+    parser.add_argument(
+        "--output-file",
+        default="/tmp/legacy_registry_sync_payload.jsonl",
+        help="File to write OpenSearch payloads as JSON lines (default: /tmp/legacy_registry_sync_payload.jsonl)",
+    )
 
     args = parser.parse_args()
 
@@ -352,8 +379,6 @@ Examples:
         sys.exit(1)
 
     # Convert log level string to integer
-    import logging
-
     log_level = getattr(logging, args.log_level)
 
     # Run dry-run mode
@@ -369,6 +394,7 @@ Examples:
             max_docs=args.max_docs,
             show_sample_docs=not args.no_samples,
             sample_size=args.sample_size,
+            output_file=args.output_file,
         )
 
         print("\n" + "=" * 60)
