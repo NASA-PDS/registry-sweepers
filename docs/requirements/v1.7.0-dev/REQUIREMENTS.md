@@ -36,3 +36,15 @@ This requirement is not impacted by the current version
 
 
 This requirement is not impacted by the current version
+## As a registry administrator, I want the system to enforce that only one sweeper can operate on a single node concurrently ([#203](https://github.com/NASA-PDS/registry-sweepers/issues/203)) 
+
+
+This requirement is not impacted by the current version
+## As a data user, I want to superseded products using PROV LDD metadata ([#206](https://github.com/NASA-PDS/registry-sweepers/issues/206)) 
+
+
+This requirement is not impacted by the current version
+## As a PDS cloud operator, I want to automatically deploy sweepers with specific docker commands ([#211](https://github.com/NASA-PDS/registry-sweepers/issues/211)) 
+
+
+This requirement is not impacted by the current version
