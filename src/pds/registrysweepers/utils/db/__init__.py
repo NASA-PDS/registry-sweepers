@@ -169,7 +169,7 @@ def query_registry_db_with_search_after(
         limit_log_length(f"Query {query_id} returns {total_hits} total hits{limit_log_msg_part}: {json.dumps(query)}")
     )
 
-    with tqdm(total=expected_hits, desc=f"Query {query_id}") as pbar:
+    with tqdm(total=expected_hits, desc=f"Query {query_id}", disable=None) as pbar:
         while more_data_exists:
             # Manually set sort - this is required for subsequent calls, despite being passed in fetch_func's call to
             # client.search as sort kwarg.

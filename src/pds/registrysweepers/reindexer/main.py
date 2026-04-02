@@ -325,6 +325,7 @@ def run(
     with tqdm(
         total=total_outstanding_doc_count,
         desc="Reindexer sweeper progress",
+        disable=None,
     ) as pbar:
         current_batch_size = min(batch_size_limit, total_outstanding_doc_count)
         final_batch_is_processed = False
