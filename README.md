@@ -100,6 +100,26 @@ DEV_MODE=1      #disables host verification
 PYDEVD_USE_CYTHON=NO // disables Cython speedup extension
 ```
 
+#### Progress Bar (tqdm) Toggling
+
+Progress bars are automatically enabled in interactive terminals and disabled in
+non-interactive environments (production containers, CI pipelines). This behaviour
+is controlled by the `TQDM_DISABLE` environment variable:
+
+| Value | Effect |
+|-------|--------|
+| *(unset)* | Auto-detect: enabled when stderr is a TTY, disabled otherwise |
+| `0` | Force-enable progress bars regardless of TTY detection |
+| `1` | Force-disable progress bars regardless of TTY detection |
+
+```bash
+# Force-disable all progress bars (e.g. to keep production logs clean)
+export TQDM_DISABLE=1
+
+# Force-enable all progress bars even in a non-interactive environment
+export TQDM_DISABLE=0
+```
+
 With `--legacy-sync` option, the "registry" alias mapping all the discipline nodes indexes is required.
 
 Use the connection aliases found in the 'Connections' tab of the Engineering Node OpenSearch Domain on AWS.

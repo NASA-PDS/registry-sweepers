@@ -322,6 +322,9 @@ def run(
     sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
     total_outstanding_doc_count = get_updated_hits_count()
 
+    # disable=None auto-detects TTY: progress bar is shown in interactive terminals and suppressed
+    # in non-interactive (production/CI) environments. Override with env var TQDM_DISABLE=1 to
+    # force-disable or TQDM_DISABLE=0 to force-enable regardless of TTY detection.
     with tqdm(
         total=total_outstanding_doc_count,
         desc="Reindexer sweeper progress",

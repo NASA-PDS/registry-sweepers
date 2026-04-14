@@ -170,6 +170,9 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
 
     lids = {bucket["key"] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
 
+    # disable=None auto-detects TTY: progress bar is shown in interactive terminals and suppressed
+    # in non-interactive (production/CI) environments. Override with env var TQDM_DISABLE=1 to
+    # force-disable or TQDM_DISABLE=0 to force-enable regardless of TTY detection.
     with tqdm(desc="Provenance sweeper progress (approximate)", total=response["hits"]["total"]["value"], disable=None) as pbar:
         while len(lids) > 0:
             new_lids_count = 0
