@@ -15,6 +15,7 @@ from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import get_ids_list_str
+from pds.registrysweepers.utils.misc import get_progress_bar_disable_arg
 from pds.registrysweepers.utils.misc import get_random_hex_id
 from pds.registrysweepers.utils.misc import limit_log_length
 from retry import retry
@@ -169,10 +170,9 @@ def query_registry_db_with_search_after(
         limit_log_length(f"Query {query_id} returns {total_hits} total hits{limit_log_msg_part}: {json.dumps(query)}")
     )
 
-    # disable=None auto-detects TTY: progress bar is shown in interactive terminals and suppressed
-    # in non-interactive (production/CI) environments. Override with env var TQDM_DISABLE=1 to
-    # force-disable or TQDM_DISABLE=0 to force-enable regardless of TTY detection.
-    with tqdm(total=expected_hits, desc=f"Query {query_id}", disable=None) as pbar:
+    # Set QUIET_PROGRESS=1 to force-disable progress bars (e.g. in production/CI environments),
+    # QUIET_PROGRESS=0 to force-enable, or leave unset for auto-detection (shown in TTY, hidden otherwise).
+    with tqdm(total=expected_hits, desc=f"Query {query_id}", disable=get_progress_bar_disable_arg()) as pbar:
         while more_data_exists:
             # Manually set sort - this is required for subsequent calls, despite being passed in fetch_func's call to
             # client.search as sort kwarg.

@@ -100,11 +100,11 @@ DEV_MODE=1      #disables host verification
 PYDEVD_USE_CYTHON=NO // disables Cython speedup extension
 ```
 
-#### Progress Bar (tqdm) Toggling
+#### Progress Bar Toggling
 
 Progress bars are automatically enabled in interactive terminals and disabled in
 non-interactive environments (production containers, CI pipelines). This behaviour
-is controlled by the `TQDM_DISABLE` environment variable:
+is controlled by the `QUIET_PROGRESS` environment variable:
 
 | Value | Effect |
 |-------|--------|
@@ -114,10 +114,10 @@ is controlled by the `TQDM_DISABLE` environment variable:
 
 ```bash
 # Force-disable all progress bars (e.g. to keep production logs clean)
-export TQDM_DISABLE=1
+export QUIET_PROGRESS=1
 
 # Force-enable all progress bars even in a non-interactive environment
-export TQDM_DISABLE=0
+export QUIET_PROGRESS=0
 ```
 
 With `--legacy-sync` option, the "registry" alias mapping all the discipline nodes indexes is required.

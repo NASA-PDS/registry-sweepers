@@ -19,6 +19,19 @@ from pds.registrysweepers.utils.productidentifiers.pdsproductidentifier import P
 log = logging.getLogger(__name__)
 
 
+def get_progress_bar_disable_arg() -> bool | None:
+    """Return the appropriate ``disable`` argument for tqdm based on the ``QUIET_PROGRESS`` env var.
+
+    - ``QUIET_PROGRESS=1``: force-disable progress bars (useful in production/CI environments)
+    - ``QUIET_PROGRESS=0``: force-enable progress bars regardless of TTY detection
+    - unset (default): auto-detect — progress bars are shown when stderr is a TTY and suppressed otherwise
+    """
+    val = os.environ.get("QUIET_PROGRESS")
+    if val is None:
+        return None  # tqdm auto-detects TTY
+    return val.strip() != "0"
+
+
 T = TypeVar("T")
 K = TypeVar("K")
 V = TypeVar("V")

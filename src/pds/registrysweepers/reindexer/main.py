@@ -21,6 +21,7 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import get_progress_bar_disable_arg
 from pds.registrysweepers.utils.misc import limit_log_length
 from tqdm import tqdm
 
@@ -322,13 +323,12 @@ def run(
     sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
     total_outstanding_doc_count = get_updated_hits_count()
 
-    # disable=None auto-detects TTY: progress bar is shown in interactive terminals and suppressed
-    # in non-interactive (production/CI) environments. Override with env var TQDM_DISABLE=1 to
-    # force-disable or TQDM_DISABLE=0 to force-enable regardless of TTY detection.
+    # Set QUIET_PROGRESS=1 to force-disable progress bars (e.g. in production/CI environments),
+    # QUIET_PROGRESS=0 to force-enable, or leave unset for auto-detection (shown in TTY, hidden otherwise).
     with tqdm(
         total=total_outstanding_doc_count,
         desc="Reindexer sweeper progress",
-        disable=None,
+        disable=get_progress_bar_disable_arg(),
     ) as pbar:
         current_batch_size = min(batch_size_limit, total_outstanding_doc_count)
         final_batch_is_processed = False
