@@ -67,7 +67,6 @@ from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import chunked
 from pds.registrysweepers.utils.misc import get_ids_list_str
-from pds.registrysweepers.utils.misc import get_progress_bar_disable_arg
 from pds.registrysweepers.utils.misc import group_by_key
 from pds.registrysweepers.utils.misc import limit_log_length
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
@@ -171,9 +170,9 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
 
     lids = {bucket["key"] for bucket in response["aggregations"]["unique_lids"]["buckets"]}
 
-    # Set QUIET_PROGRESS=1 to force-disable progress bars (e.g. in production/CI environments),
-    # QUIET_PROGRESS=0 to force-enable, or leave unset for auto-detection (shown in TTY, hidden otherwise).
-    with tqdm(desc="Provenance sweeper progress (approximate)", total=response["hits"]["total"]["value"], disable=get_progress_bar_disable_arg()) as pbar:
+    # disable=None enables auto-detection: progress bar is shown in interactive terminals (TTY)
+    # and suppressed automatically in non-interactive environments (production containers, CI pipelines).
+    with tqdm(desc="Provenance sweeper progress (approximate)", total=response["hits"]["total"]["value"], disable=None) as pbar:
         while len(lids) > 0:
             new_lids_count = 0
             for bucket in response["aggregations"]["unique_lids"]["buckets"]:
