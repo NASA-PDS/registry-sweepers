@@ -39,7 +39,7 @@ def get_online_resources() -> Dict[str, str]:
     rows = 2000
     start = 0
     while True:
-        log.info("pull online resource from solr, starting at %i", start)
+        log.debug("pull online resource from solr, starting at %i", start)
         response = requests.get(
             f"https://pds.nasa.gov/services/search/search?q=data_class:Resource&wt=json&qt=all&rows={rows}&start={start}"
         )
@@ -236,7 +236,7 @@ def dry_run(
             stats["seen_node_ids"].update(wrapper._seen_node_ids)
 
             if i % 1000 == 0 and i > 0:
-                log.info("Processed %d documents...", i)
+                log.debug("Processed %d documents...", i)
 
     except StopIteration:
         log.info("Finished processing all documents from Solr")

@@ -77,7 +77,7 @@ log = logging.getLogger(__name__)
 
 def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterable[ProvenanceRecord]:
     ids_str = get_ids_list_str(lids, 3)  # type: ignore
-    log.info(limit_log_length(f"Fetching docs and generating records for {len(lids)} LIDs: {ids_str}"))
+    log.debug(limit_log_length(f"Fetching docs and generating records for {len(lids)} LIDs: {ids_str}"))
 
     query = {
         "query": {
