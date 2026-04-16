@@ -199,7 +199,7 @@ def accumulate_missing_mappings(
 
             if mapping_missing and property_name not in missing_mapping_updates:
                 if canonical_type_is_defined:
-                    log.info(
+                    log.debug(
                         limit_log_length(
                             f'Property {property_name} will be updated to type "{canonical_type}" from data dictionary'
                         )
@@ -347,7 +347,7 @@ def run(
                 ),
             )
             for property, mapping_typename in missing_mappings.items():
-                log.info(
+                log.debug(
                     limit_log_length(
                         f"Updating index {products_index_name} with missing mapping ({property}, {mapping_typename})"
                     )
