@@ -322,9 +322,12 @@ def run(
     sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
     total_outstanding_doc_count = get_updated_hits_count()
 
+    # disable=None enables auto-detection: progress bar is shown in interactive terminals (TTY)
+    # and suppressed automatically in non-interactive environments (production containers, CI pipelines).
     with tqdm(
         total=total_outstanding_doc_count,
         desc="Reindexer sweeper progress",
+        disable=None,
     ) as pbar:
         current_batch_size = min(batch_size_limit, total_outstanding_doc_count)
         final_batch_is_processed = False
