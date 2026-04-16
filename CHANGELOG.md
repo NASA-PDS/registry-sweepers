@@ -1,6 +1,6 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-03-25)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-04-16)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...«unknown»)
 
@@ -8,6 +8,10 @@
 
 - Legacy registry sync node assignment does not use registry API metadata, causing incorrect node assignments [\#212](https://github.com/NASA-PDS/registry-sweepers/issues/212) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 - Legacy registry sync reconciliation report incorrectly flags bundles as missing from registry [\#209](https://github.com/NASA-PDS/registry-sweepers/issues/209) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
+
+**Other closed issues:**
+
+- Fix way-too-verbose logging [\#207](https://github.com/NASA-PDS/registry-sweepers/issues/207)
 
 ## [v1.6.2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.6.2) (2026-01-08)
 
