@@ -1,6 +1,6 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-04-16)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-04-22)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...«unknown»)
 
@@ -11,6 +11,7 @@
 
 **Other closed issues:**
 
+- Fix per-request/per-batch log.info calls that still clutter logs [\#217](https://github.com/NASA-PDS/registry-sweepers/issues/217)
 - Fix way-too-verbose logging [\#207](https://github.com/NASA-PDS/registry-sweepers/issues/207)
 
 ## [v1.6.2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.6.2) (2026-01-08)
