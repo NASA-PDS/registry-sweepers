@@ -1,3 +1,6 @@
+# N.B: This README may be partially or wholly obsolete, and requires review - edunn 20260423
+
+
 # Deploying Registry-Sweepers ECS Tasks
 
 ## Setting Up SSH Authentication for a Private Terraform Module Repository
