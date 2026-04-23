@@ -1,25 +1,22 @@
-variable "aws_region" {
-  description = "AWS Region"
-  type        = string
-  default     = "us-west-2"
+venue              = "prod"
+aoss_endpoint      = "https://..."
+aoss_collection_id = "..."
+image_uri          = "123456789012.dkr.ecr.us-west-2.amazonaws.com/pds-registry-sweepers:latest"
+
+permissions_boundary_policy_name = "..."
+
+# ECS resource allocations for each node
+nodes = {
+  "exampleNode" = { cpu = 1024, memory = 4096 }
 }
 
-variable "config_file" {
-  description = "Path for the environment-specific YAML task definition file"
-  type        = string
-}
-
-variable "create_service" {
-  description = "Flag to control where the ECS service should be created or not"
-  type        = bool
-  default     = true
-}
-variable "project" {
-  description = "Tag value for project. Abbreviated project name."
-  type        = string
-}
-
-variable "cicd" {
-  description = "Tag value for CICD deployment method"
-  type        = string
-}
+#### N.B. The following must be incorporated appropriately into the new terraform - edunn 20260423
+# variable "project" {
+#   description = "Tag value for project. Abbreviated project name."
+#   type        = string
+# }
+#
+# variable "cicd" {
+#   description = "Tag value for CICD deployment method"
+#   type        = string
+# }
