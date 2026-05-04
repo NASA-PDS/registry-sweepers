@@ -69,6 +69,8 @@ resource "aws_iam_role" "task_role" {
       }
     ]
   })
+
+  tags = local.tags
 }
 
 resource "aws_iam_role" "execution_role" {
@@ -91,6 +93,9 @@ resource "aws_iam_role" "execution_role" {
       }
     ]
   })
+
+  tags = local.tags
+
 }
 
 # ------------------------------------------------------------------------------

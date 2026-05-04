@@ -8,63 +8,39 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# ------------------------------------------------------------------------------
-# Variables
-# ------------------------------------------------------------------------------
+locals {
 
-variable "venue" {
-  type        = string
-  description = "Deployment venue (e.g. prod, uat)"
-}
-
-variable "aoss_endpoint" {
-  type        = string
-  description = "Registry AOSS endpoint url"
-}
-
-variable "aoss_collection_id" {
-  type        = string
-  description = "Registry AOSS collection ID"
-}
-
-variable "image_uri" {
-  type        = string
-  description = "registry-sweepers ECR image URI"
-}
-
-variable "permissions_boundary_policy_name" {
-  type        = string
-  description = "Name of the IAM policy to use as the permissions boundary for ECS roles"
-}
-
-variable "nodes" {
-  type = map(object({
-    cpu    = number
-    memory = number
-  }))
-  description = "Map of node IDs to their ECS resource allocations"
+  tags = {
+    cicd    = "iac"
+    project = "pds-registry-sweepers"
+    component = "registry"
+    managedby = var.managedby
+    venue     = var.venue
+    tenant    = "en"
+  }
 }
 
 # ------------------------------------------------------------------------------
 # ECR Repository
 # ------------------------------------------------------------------------------
-resource "aws_ecr_repository" "registry_sweepers" {
-  name                 = "pds-registry-sweepers"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = false
-  }
-
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-
-  tags = {
-    cicd    = "pds-github"
-    project = "pds-registry-sweepers"
-  }
-}
+# TL: commented out as the repository already exsits and we don't want to loose of the same image in it
+# resource "aws_ecr_repository" "registry_sweepers" {
+#   name                 = "pds-registry-sweepers"
+#   image_tag_mutability = "MUTABLE"
+#
+#   image_scanning_configuration {
+#     scan_on_push = false
+#   }
+#
+#   encryption_configuration {
+#     encryption_type = "AES256"
+#   }
+#
+#   tags = local.tags
+#
+#
+#   }
+# }
 
 # ------------------------------------------------------------------------------
 # ECS Task Definitions (one per node)
@@ -129,8 +105,5 @@ resource "aws_ecs_task_definition" "registry_sweepers" {
     }
   ])
 
-  tags = {
-    cicd    = "pds-github"
-    project = "pds-${each.key}"
-  }
+  tags = local.tags
 }

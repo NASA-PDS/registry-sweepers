@@ -1,22 +1,46 @@
-venue              = "prod"
-aoss_endpoint      = "https://..."
-aoss_collection_id = "..."
-image_uri          = "123456789012.dkr.ecr.us-west-2.amazonaws.com/pds-registry-sweepers:latest"
+# ------------------------------------------------------------------------------
+# Variables
+# ------------------------------------------------------------------------------
 
-permissions_boundary_policy_name = "..."
-
-# ECS resource allocations for each node
-nodes = {
-  "exampleNode" = { cpu = 1024, memory = 4096 }
+variable "venue" {
+  type        = string
+  description = "Deployment venue (e.g. prod, uat)"
 }
 
-#### N.B. The following must be incorporated appropriately into the new terraform - edunn 20260423
-# variable "project" {
-#   description = "Tag value for project. Abbreviated project name."
-#   type        = string
-# }
-#
-# variable "cicd" {
-#   description = "Tag value for CICD deployment method"
-#   type        = string
-# }
+variable "managedby" {
+  type        = string
+  description = "Person or system doing the deployment."
+}
+
+variable "aws_region" {
+  type        = string
+  description = "AWS Region of the deployment."
+}
+
+variable "aoss_endpoint" {
+  type        = string
+  description = "Registry AOSS endpoint url"
+}
+
+variable "aoss_collection_id" {
+  type        = string
+  description = "Registry AOSS collection ID"
+}
+
+variable "image_uri" {
+  type        = string
+  description = "registry-sweepers ECR image URI"
+}
+
+variable "permissions_boundary_policy_name" {
+  type        = string
+  description = "Name of the IAM policy to use as the permissions boundary for ECS roles"
+}
+
+variable "nodes" {
+  type = map(object({
+    cpu    = number
+    memory = number
+  }))
+  description = "Map of node IDs to their ECS resource allocations"
+}
