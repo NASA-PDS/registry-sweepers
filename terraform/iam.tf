@@ -74,7 +74,7 @@ resource "aws_iam_role" "task_role" {
 }
 
 resource "aws_iam_role" "execution_role" {
-  name                 = "pds-registry-task-execution-role"
+  name                 = "pds-registry-sweeper-task-execution-role"
   max_session_duration = 3600
   permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.permissions_boundary_policy_name}"
 
@@ -96,6 +96,61 @@ resource "aws_iam_role" "execution_role" {
 
   tags = local.tags
 
+}
+
+# Allow sweeper to write cloudwatch logs
+resource "aws_iam_policy" "write_cloudwatch_logs" {
+  name = "registry-sweeeper-cloudwatch-logs-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+            "logs:PutLogEvents",
+            "logs:DescribeLogStreams",
+            "logs:CreateLogStream",
+            "logs:CreateLogGroup",
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_role_write_cloudwatch" {
+  role       = aws_iam_role.task_role.name
+  policy_arn = aws_iam_policy.write_cloudwatch_logs.arn
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_write_cloudwatch" {
+  role       = aws_iam_role.execution_role.name
+  policy_arn = aws_iam_policy.write_cloudwatch_logs.arn
+}
+
+# Allow the MWAA execution role to pass the ECS roles when calling RunTask
+resource "aws_iam_policy" "mwaa_ecs_passrole_policy" {
+  name = "pds-registry-sweeper-mwaa-ecs-passrole-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "iam:PassRole"
+        Resource = [
+          aws_iam_role.task_role.arn,
+          aws_iam_role.execution_role.arn,
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "mwaa_ecs_passrole" {
+  role       = var.mwaa_execution_role_name
+  policy_arn = aws_iam_policy.mwaa_ecs_passrole_policy.arn
 }
 
 # ------------------------------------------------------------------------------

@@ -43,13 +43,25 @@ locals {
 # }
 
 # ------------------------------------------------------------------------------
+# CloudWatch Log Groups (one per node)
+# ------------------------------------------------------------------------------
+resource "aws_cloudwatch_log_group" "registry_sweepers" {
+  for_each = var.nodes
+
+  name              = "/ecs/pds-registry-sweepers-${each.key}-task"
+  retention_in_days = 90
+
+  tags = local.tags
+}
+
+# ------------------------------------------------------------------------------
 # ECS Task Definitions (one per node)
 # See iam.tf for the task_role and execution_role referenced below.
 # ------------------------------------------------------------------------------
 resource "aws_ecs_task_definition" "registry_sweepers" {
   for_each = var.nodes
 
-  family                   = "pds-${each.key}-${var.venue}-registry-sweepers"
+  family                   = "pds-registry-sweepers-${each.key}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = each.value.cpu
@@ -64,7 +76,7 @@ resource "aws_ecs_task_definition" "registry_sweepers" {
 
   container_definitions = jsonencode([
     {
-      name      = "pds-${each.key}-${var.venue}-registry-sweepers-container"
+      name      = "pds-registry-sweepers-${each.key}-container"
       image     = var.image_uri
       cpu       = 0
       essential = true
@@ -88,7 +100,7 @@ resource "aws_ecs_task_definition" "registry_sweepers" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "/ecs/pds-${each.key}-${var.venue}-registry-sweepers-task"
+          "awslogs-group"         = "/ecs/pds-registry-sweepers-${each.key}-task"
           "awslogs-create-group"  = "true"
           "awslogs-region"        = data.aws_region.current.name
           "awslogs-stream-prefix" = "ecs"

@@ -35,7 +35,7 @@ Copy it:
 And update the values.
 
 
-Run the terraform scripts:
+Run the terraform scripts to create the task definition to run the sweepers for each node:
 
 
 
@@ -45,3 +45,17 @@ Run the terraform scripts:
     terraform plan
     terraform apply
 ```
+
+# Generate the DAG files
+
+The sweepers are runs as DAG (worfklows) in Airflow. The following step generate the python DAG file for each node:
+
+First set your venue environment:
+
+    cp generate_dags.env.example generate_dags.env
+
+Update the copied file with your environment.
+
+Generate the DAG file:
+
+    python generate_dags.py
