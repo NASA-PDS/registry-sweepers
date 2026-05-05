@@ -59,3 +59,5 @@ Update the copied file with your environment.
 Generate the DAG file:
 
     python generate_dags.py
+
+Push the generated DAG python files on the Airflow S3 bucket.
