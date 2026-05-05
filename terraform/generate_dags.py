@@ -41,7 +41,6 @@ def get_terraform_output() -> dict:
 def generate_dag(node_name: str, task_arn: str, env: dict) -> str:
     node_upper = node_name.upper()
     node_lower = node_name.lower()
-    venue = env["VENUE"].lower()
     cluster = env["ECS_CLUSTER_NAME"]
     subnets = json.loads(env["ECS_SUBNETS"])
     security_groups = json.loads(env["ECS_SECURITY_GROUPS"])
@@ -107,8 +106,8 @@ registry_sweeper = EcsRunTaskOperator(
         }},
     }},
     overrides={{}},
-    awslogs_group="/ecs/pds-{node_lower}-{venue}-registry-sweepers-task",
-    awslogs_stream_prefix="ecs/pds-{node_lower}-{venue}-registry-sweepers-container",
+    awslogs_group="/ecs/pds-registry-sweepers-{node_lower}-task",
+    awslogs_stream_prefix="ecs/pds-registry-sweepers-{node_lower}-container",
 )
 
 print_end_time = BashOperator(
@@ -129,7 +128,7 @@ def main():
 
     env = load_env_file(ENV_FILE)
 
-    required = {"ECS_CLUSTER_NAME", "ECS_SUBNETS", "ECS_SECURITY_GROUPS", "VENUE"}
+    required = {"ECS_CLUSTER_NAME", "ECS_SUBNETS", "ECS_SECURITY_GROUPS"}
     missing = required - env.keys()
     if missing:
         print(f"Error: missing keys in {ENV_FILE}: {', '.join(sorted(missing))}", file=sys.stderr)

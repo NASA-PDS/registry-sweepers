@@ -148,9 +148,36 @@ resource "aws_iam_policy" "mwaa_ecs_passrole_policy" {
   })
 }
 
+
+
 resource "aws_iam_role_policy_attachment" "mwaa_ecs_passrole" {
   role       = var.mwaa_execution_role_name
   policy_arn = aws_iam_policy.mwaa_ecs_passrole_policy.arn
+}
+
+resource "aws_iam_policy" "opensearch_api_only_access" {
+  name        = "aoss-${var.aoss_collection_id}-limited-writer-access"
+  description = "IAM policy for OpenSearch Serverless writer access, to be used by nodes through their Cognito user groups"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "aoss:APIAccessAll",
+        ]
+        Resource = "arn:aws:aoss:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:collection/${var.aoss_collection_id}"
+      }
+    ]
+  })
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "opensearch_task_role_policy" {
+  role       = aws_iam_role.task_role.name
+  policy_arn = aws_iam_policy.opensearch_api_only_access.arn
 }
 
 # ------------------------------------------------------------------------------
