@@ -35,7 +35,7 @@ def _check_mapping(client: OpenSearch, index_name: str, property_name: str, expe
     Checks whether the mapping for a given property has propagated with the expected type.
     - Returns silently if the mapping is present and correct.
     - Raises UnexpectedMappingTypeError if the type is wrong.
-    - Raises MissingMappingError if the mapping does not yet exist..
+    - Raises MissingMappingError if the mapping does not yet exist.
     """
     existing_type = _get_existing_mapping_type(client, index_name, property_name)
 
@@ -75,7 +75,7 @@ def ensure_index_mapping(client: OpenSearch, index_name: str, property_name: str
         return
     except MissingMappingError:
         logger.info(
-            f"Mapping for '{property_name}' not yet present in index '{index_name}' - creating mapping with type {property_type}.",
+            f"Mapping for '{property_name}' not yet present in index '{index_name}' - creating mapping with type {property_type}."
         )
         client.indices.put_mapping(
             index=index_name,
