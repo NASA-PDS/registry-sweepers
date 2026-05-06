@@ -1,11 +1,12 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-04-22)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-05-06)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...«unknown»)
 
 **Defects:**
 
+- Race condition exists when sweepers ensures index mappings and writes document updates very soon after [\#220](https://github.com/NASA-PDS/registry-sweepers/issues/220)
 - Legacy registry sync node assignment does not use registry API metadata, causing incorrect node assignments [\#212](https://github.com/NASA-PDS/registry-sweepers/issues/212) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 - Legacy registry sync reconciliation report incorrectly flags bundles as missing from registry [\#209](https://github.com/NASA-PDS/registry-sweepers/issues/209) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
 
