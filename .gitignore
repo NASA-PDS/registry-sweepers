@@ -95,6 +95,7 @@ bin/
 .*.swp
 typescript
 .env
+terraform/generate_dags.env
 
 # OS-specific artifacts
 .DS_Store

@@ -1,0 +1,23 @@
+venue              = "prod"
+aoss_endpoint      = "https://..."
+aoss_collection_id = "..."
+image_uri          = "123456789012.dkr.ecr.us-west-2.amazonaws.com/pds-registry-sweepers:latest"
+
+permissions_boundary_policy_name = "mcp-tenantOperator-APIG"
+
+mwaa_execution_role_name=<role name used by Airflow for DAG execution>
+
+# ECS resource allocations for each node
+# Currently using placeholder values - these will need to be tuned
+nodes = {
+  "en" = { cpu = 1024, memory = 4096 },
+  "geo" = { cpu = 1024, memory = 4096 },
+  "atm" = { cpu = 1024, memory = 4096 },
+  "ppi" = { cpu = 1024, memory = 4096 },
+  "img" = { cpu = 1024, memory = 4096 },
+  "naif" = { cpu = 1024, memory = 4096 },
+  "psa" = { cpu = 1024, memory = 4096 },
+  "rms" = { cpu = 1024, memory = 4096 },
+  "sbnpsi" = { cpu = 1024, memory = 4096 },
+  "sbnumd" = { cpu = 1024, memory = 4096 }
+}

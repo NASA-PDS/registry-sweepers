@@ -105,6 +105,7 @@ def run(
     # i.e. ATM and GEO
     index_name = resolve_multitenant_index_name(client, "registry")
     update_max_chunk_size = 20000
+    # todo: implement max_retries and/or comparison of count between loops to detect stalls or other problems
     while get_query_hits_count(client, index_name, get_unprocessed_docs_query()) > 0:
         all_docs = query_registry_db_with_search_after(
             client,
