@@ -156,7 +156,7 @@ resource "aws_iam_role_policy_attachment" "mwaa_ecs_passrole" {
 }
 
 resource "aws_iam_policy" "opensearch_api_only_access" {
-  name        = "aoss-${var.aoss_collection_id}-limited-writer-access"
+  name        = "aoss-${var.aoss_collection_id}-api-access"
   description = "IAM policy for OpenSearch Serverless writer access, to be used by nodes through their Cognito user groups"
 
   policy = jsonencode({
