@@ -8,7 +8,6 @@ be modules with this executable package.
 import collections
 import logging
 import re
-from time import sleep
 from typing import Dict
 from typing import Iterable
 from typing import Union
@@ -130,10 +129,6 @@ def run(
             index_name=resolve_multitenant_index_name(client, "registry"),
             bulk_chunk_max_update_count=update_max_chunk_size,
         )
-
-    #     dev sleep to discover test-ism - edunn 20260508
-        log.info('TEMPORARY: Sleeping five seconds to allow index to catch up')
-        sleep(5)
 
     log.info(limit_log_length("Repairkit sweeper processing complete!"))
 
