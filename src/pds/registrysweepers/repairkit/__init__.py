@@ -106,6 +106,13 @@ def run(
     index_name = resolve_multitenant_index_name(client, "registry")
     update_max_chunk_size = 20000
 
+    ensure_index_mapping(
+        client,
+        resolve_multitenant_index_name(client, "registry"),
+        SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY,
+        "integer",
+    )
+
     #  TODO: Dev note edunn 20260508: Previously, the update generation would loop until fresh queries got no hits.
     #   This has been disabled as it was causing a race condition with test-scale data (68 documents)
     #   If it is desirable to avoid missing last-minute-loaded stragglers until the next sweepers run, this must be
@@ -121,12 +128,7 @@ def run(
         request_timeout_seconds=180,
     )
     updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
-    ensure_index_mapping(
-        client,
-        resolve_multitenant_index_name(client, "registry"),
-        SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY,
-        "integer",
-    )
+
     write_updated_docs(
         client,
         updates,
