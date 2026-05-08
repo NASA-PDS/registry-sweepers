@@ -106,30 +106,36 @@ def run(
     # i.e. ATM and GEO
     index_name = resolve_multitenant_index_name(client, "registry")
     update_max_chunk_size = 20000
-    # todo: implement max_retries and/or comparison of count between loops to detect stalls or other problems
-    while get_query_hits_count(client, index_name, get_unprocessed_docs_query()) > 0:
-        all_docs = query_registry_db_with_search_after(
-            client,
-            index_name,
-            get_unprocessed_docs_query(),
-            {},
-            page_size=500,
-            limit=update_max_chunk_size,
-            request_timeout_seconds=180,
-        )
-        updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
-        ensure_index_mapping(
-            client,
-            resolve_multitenant_index_name(client, "registry"),
-            SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY,
-            "integer",
-        )
-        write_updated_docs(
-            client,
-            updates,
-            index_name=resolve_multitenant_index_name(client, "registry"),
-            bulk_chunk_max_update_count=update_max_chunk_size,
-        )
+
+    ensure_index_mapping(
+        client,
+        resolve_multitenant_index_name(client, "registry"),
+        SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY,
+        "integer",
+    )
+
+    #  TODO: Dev note edunn 20260508: Previously, the update generation would loop until fresh queries got no hits.
+    #   This has been disabled as it was causing a race condition with test-scale data (68 documents)
+    #   If it is desirable to avoid missing last-minute-loaded stragglers until the next sweepers run, this must be
+    #   reimplemented
+
+    all_docs = query_registry_db_with_search_after(
+        client,
+        index_name,
+        get_unprocessed_docs_query(),
+        {},
+        page_size=500,
+        limit=update_max_chunk_size,
+        request_timeout_seconds=180,
+    )
+    updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
+
+    write_updated_docs(
+        client,
+        updates,
+        index_name=resolve_multitenant_index_name(client, "registry"),
+        bulk_chunk_max_update_count=update_max_chunk_size,
+    )
 
     #     dev sleep to discover test-ism - edunn 20260508
         log.info('TEMPORARY: Sleeping five seconds to allow index to catch up')
