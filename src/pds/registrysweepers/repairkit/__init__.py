@@ -137,10 +137,6 @@ def run(
         bulk_chunk_max_update_count=update_max_chunk_size,
     )
 
-    #     dev sleep to discover test-ism - edunn 20260508
-        log.info('TEMPORARY: Sleeping five seconds to allow index to catch up')
-        sleep(5)
-
     log.info(limit_log_length("Repairkit sweeper processing complete!"))
 
 
