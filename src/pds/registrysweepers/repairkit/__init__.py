@@ -57,7 +57,7 @@ log = logging.getLogger(__name__)
 
 
 def generate_updates(
-    docs: Iterable[Dict], repairkit_version_metadata_key: str, repairkit_version: int
+        docs: Iterable[Dict], repairkit_version_metadata_key: str, repairkit_version: int
 ) -> Iterable[Update]:
     """Lazily generate necessary Update objects for a collection of db documents"""
     repair_already_logged_to_error = False
@@ -84,9 +84,9 @@ def generate_updates(
 
 
 def run(
-    client: OpenSearch,
-    log_filepath: Union[str, None] = None,
-    log_level: int = logging.INFO,
+        client: OpenSearch,
+        log_filepath: Union[str, None] = None,
+        log_level: int = logging.INFO,
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
     log.info(limit_log_length(f"Starting repairkit v{SWEEPERS_REPAIRKIT_VERSION} sweeper processing..."))
