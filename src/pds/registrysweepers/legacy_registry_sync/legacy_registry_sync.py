@@ -14,6 +14,7 @@ from opensearchpy import OpenSearch
 from pds.registrysweepers.legacy_registry_sync.opensearch_loaded_product import get_already_loaded_lidvids
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
 from pds.registrysweepers.utils import configure_logging
+from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.misc import is_dev_mode
 from pds.registrysweepers.utils.misc import limit_log_length
 from solr_to_es.solrSource import SlowSolrDocs  # type: ignore
@@ -316,6 +317,11 @@ Examples:
   # Dry run with more sample documents
   %(prog)s --dry-run --max-docs 20 --sample-size 10
   %(prog)s --dry-run --max-docs 100 --output-file /tmp/payload.jsonl
+
+  # Full sync to OpenSearch
+  %(prog)s
+  %(prog)s --force
+  %(prog)s --force --log-file sync.log
         """,
     )
 
@@ -369,25 +375,17 @@ Examples:
 
     args = parser.parse_args()
 
-    # Check if dry-run flag is provided
-    if not args.dry_run:
-        print("PDS Legacy Registry Sync")
-        print("=" * 40)
-        print("ERROR: This console script currently only supports dry-run mode.")
-        print("")
-        print("To test Solr data retrieval, please use:")
-        print("  %s --dry-run [options]" % sys.argv[0])
-        print("")
-        print("Full end-to-end OpenSearch synchronization via console script")
-        print("has not been implemented yet. Use the run() function directly")
-        print("in your Python code for full synchronization.")
-        print("")
-        print("For help with dry-run options:")
-        print("  %s --dry-run --help" % sys.argv[0])
-        sys.exit(1)
-
     # Convert log level string to integer
     log_level = getattr(logging, args.log_level)
+
+    if not args.dry_run:
+        try:
+            client = get_opensearch_client_from_environment(verify_certs=not is_dev_mode())
+            run(client=client, log_filepath=args.log_file, log_level=log_level, force=args.force)
+        except KeyboardInterrupt:
+            print("\nSync interrupted by user")
+            sys.exit(1)
+        return
 
     # Run dry-run mode
     try:

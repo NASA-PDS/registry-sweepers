@@ -1,9 +1,7 @@
 import unittest
 
-from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import (
-    SolrOsWrapperIter,
-    UNKNOWN_NODE,
-)
+from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
+from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import UNKNOWN_NODE
 
 TEST_INDEX = "test-legacy-registry"
 
