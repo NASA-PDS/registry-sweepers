@@ -73,6 +73,7 @@ def run(
     client: OpenSearch,
     log_filepath: Optional[str] = None,
     log_level: int = logging.INFO,
+    force: bool = False,
 ) -> None:
     """
     Runs the Solr Legacy Registry synchronization with OpenSearch.
@@ -95,7 +96,7 @@ def run(
 
     online_resources = get_online_resources()
 
-    es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids, online_resources=online_resources)
+    es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids, online_resources=online_resources, force=force)
     dev_mode = is_dev_mode()
 
     for operation_successful, operation_info in opensearchpy.helpers.streaming_bulk(
@@ -118,6 +119,7 @@ def dry_run(
     show_sample_docs: bool = True,
     sample_size: int = 5,
     output_file: Optional[str] = None,
+    force: bool = False,
 ) -> Dict[str, Any]:
     """
     Performs a dry run of the Solr Legacy Registry synchronization without interacting with OpenSearch.
@@ -162,7 +164,7 @@ def dry_run(
 
     # Use the existing SolrOsWrapperIter to analyze documents without OpenSearch
     # We pass empty found_ids since we're not checking against OpenSearch
-    wrapper = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids={}, online_resources=online_resources)
+    wrapper = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids={}, online_resources=online_resources, force=force)
 
     output_fh: Optional[IO] = None
     if output_file:
@@ -324,6 +326,12 @@ Examples:
         help="Perform dry run - only interact with Solr, no OpenSearch operations",
     )
 
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite the node for documents that already have one set in the registry",
+    )
+
     # Logging arguments
     parser.add_argument(
         "--log-file",
@@ -395,6 +403,7 @@ Examples:
             show_sample_docs=not args.no_samples,
             sample_size=args.sample_size,
             output_file=args.output_file,
+            force=args.force,
         )
 
         print("\n" + "=" * 60)

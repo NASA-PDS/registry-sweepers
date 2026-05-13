@@ -164,6 +164,7 @@ class SolrOsWrapperIter:
         es_index: str,
         found_ids: Optional[Dict[str, Optional[str]]] = None,
         online_resources: Optional[Dict[str, str]] = None,
+        force: bool = False,
     ):
         """
         Iterable on the Solr legacy registry documents returning the migrated document for each iteration (next).
@@ -182,6 +183,7 @@ class SolrOsWrapperIter:
         self.id_field_fun = pds4_id_field_fun
         self.found_ids = found_ids
         self.online_resources = online_resources
+        self.force = force
         self._solr_itr = iter(solr_itr)
         self._seen_domains: Set[str] = set()
         self._seen_node_ids: Set[str] = set()
@@ -192,7 +194,7 @@ class SolrOsWrapperIter:
     def _get_node(self, doc: dict) -> str:
         """Infer the node from the url resource's DNS"""
 
-        if "lidvid" in doc and self.found_ids is not None:
+        if not self.force and "lidvid" in doc and self.found_ids is not None:
             registry_node = self.found_ids.get(doc["lidvid"])
             if registry_node:
                 return registry_node
