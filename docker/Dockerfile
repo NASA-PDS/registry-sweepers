@@ -61,4 +61,4 @@ RUN apt-get autoremove && \
 RUN useradd --create-home --shell /bin/bash sweeper
 USER sweeper
 
-CMD ["/usr/local/bin/sweepers_driver.py"]
+ENTRYPOINT ["/usr/local/bin/sweepers_driver.py"]
