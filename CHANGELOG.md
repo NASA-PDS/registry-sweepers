@@ -1,8 +1,12 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-05-08)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-05-26)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...«unknown»)
+
+**Requirements:**
+
+- As a user, I want a --force flag for legacy registry sync to overwrite existing node assignments [\#225](https://github.com/NASA-PDS/registry-sweepers/issues/225)
 
 **Defects:**
 
