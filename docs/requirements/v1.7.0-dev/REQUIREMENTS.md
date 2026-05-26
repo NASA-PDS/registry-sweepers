@@ -48,3 +48,31 @@ This requirement is not impacted by the current version
 
 
 This requirement is not impacted by the current version
+## As a user, I want a --force flag for legacy registry sync to overwrite existing node assignments ([#225](https://github.com/NASA-PDS/registry-sweepers/issues/225)) 
+
+
+This requirement is not impacted by the current version
+## Add --force flag to legacy registry sync to overwrite existing node assignments ([#226](https://github.com/NASA-PDS/registry-sweepers/issues/226)) 
+
+
+This requirement is not impacted by the current version
+## As a node operator, I want to run any individual sweeper by name from the command line ([#228](https://github.com/NASA-PDS/registry-sweepers/issues/228)) 
+
+
+This requirement is not impacted by the current version
+## As a node operator, I want `pds-registry-sweepers` available as an installed CLI command ([#229](https://github.com/NASA-PDS/registry-sweepers/issues/229)) 
+
+
+This requirement is not impacted by the current version
+## As a node operator, I want to specify the target OpenSearch endpoint and credentials as CLI arguments ([#230](https://github.com/NASA-PDS/registry-sweepers/issues/230)) 
+
+
+This requirement is not impacted by the current version
+## As a data user, I want to know when a bundle's member collections are all registered and linked ([#232](https://github.com/NASA-PDS/registry-sweepers/issues/232)) 
+
+
+This requirement is not impacted by the current version
+## As a data user, I want to know when a collection's member products are all registered and linked ([#233](https://github.com/NASA-PDS/registry-sweepers/issues/233)) 
+
+
+This requirement is not impacted by the current version
