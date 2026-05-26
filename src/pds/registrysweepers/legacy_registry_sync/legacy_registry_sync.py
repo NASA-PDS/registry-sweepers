@@ -14,6 +14,7 @@ from opensearchpy import OpenSearch
 from pds.registrysweepers.legacy_registry_sync.opensearch_loaded_product import get_already_loaded_lidvids
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
 from pds.registrysweepers.utils import configure_logging
+from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.misc import is_dev_mode
 from pds.registrysweepers.utils.misc import limit_log_length
 from solr_to_es.solrSource import SlowSolrDocs  # type: ignore
@@ -73,6 +74,7 @@ def run(
     client: OpenSearch,
     log_filepath: Optional[str] = None,
     log_level: int = logging.INFO,
+    force: bool = False,
 ) -> None:
     """
     Runs the Solr Legacy Registry synchronization with OpenSearch.
@@ -95,7 +97,7 @@ def run(
 
     online_resources = get_online_resources()
 
-    es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids, online_resources=online_resources)
+    es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids, online_resources=online_resources, force=force)
     dev_mode = is_dev_mode()
 
     for operation_successful, operation_info in opensearchpy.helpers.streaming_bulk(
@@ -118,6 +120,7 @@ def dry_run(
     show_sample_docs: bool = True,
     sample_size: int = 5,
     output_file: Optional[str] = None,
+    force: bool = False,
 ) -> Dict[str, Any]:
     """
     Performs a dry run of the Solr Legacy Registry synchronization without interacting with OpenSearch.
@@ -162,7 +165,7 @@ def dry_run(
 
     # Use the existing SolrOsWrapperIter to analyze documents without OpenSearch
     # We pass empty found_ids since we're not checking against OpenSearch
-    wrapper = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids={}, online_resources=online_resources)
+    wrapper = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids={}, online_resources=online_resources, force=force)
 
     output_fh: Optional[IO] = None
     if output_file:
@@ -314,6 +317,11 @@ Examples:
   # Dry run with more sample documents
   %(prog)s --dry-run --max-docs 20 --sample-size 10
   %(prog)s --dry-run --max-docs 100 --output-file /tmp/payload.jsonl
+
+  # Full sync to OpenSearch
+  %(prog)s
+  %(prog)s --force
+  %(prog)s --force --log-file sync.log
         """,
     )
 
@@ -322,6 +330,12 @@ Examples:
         "--dry-run",
         action="store_true",
         help="Perform dry run - only interact with Solr, no OpenSearch operations",
+    )
+
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite the node for documents that already have one set in the registry",
     )
 
     # Logging arguments
@@ -361,25 +375,17 @@ Examples:
 
     args = parser.parse_args()
 
-    # Check if dry-run flag is provided
-    if not args.dry_run:
-        print("PDS Legacy Registry Sync")
-        print("=" * 40)
-        print("ERROR: This console script currently only supports dry-run mode.")
-        print("")
-        print("To test Solr data retrieval, please use:")
-        print("  %s --dry-run [options]" % sys.argv[0])
-        print("")
-        print("Full end-to-end OpenSearch synchronization via console script")
-        print("has not been implemented yet. Use the run() function directly")
-        print("in your Python code for full synchronization.")
-        print("")
-        print("For help with dry-run options:")
-        print("  %s --dry-run --help" % sys.argv[0])
-        sys.exit(1)
-
     # Convert log level string to integer
     log_level = getattr(logging, args.log_level)
+
+    if not args.dry_run:
+        try:
+            client = get_opensearch_client_from_environment(verify_certs=not is_dev_mode())
+            run(client=client, log_filepath=args.log_file, log_level=log_level, force=args.force)
+        except KeyboardInterrupt:
+            print("\nSync interrupted by user")
+            sys.exit(1)
+        return
 
     # Run dry-run mode
     try:
@@ -395,6 +401,7 @@ Examples:
             show_sample_docs=not args.no_samples,
             sample_size=args.sample_size,
             output_file=args.output_file,
+            force=args.force,
         )
 
         print("\n" + "=" * 60)
