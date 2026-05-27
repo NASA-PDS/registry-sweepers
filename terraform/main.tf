@@ -80,7 +80,7 @@ resource "aws_ecs_task_definition" "registry_sweepers" {
       image     = var.image_uri
       cpu       = 0
       essential = true
-      command   = each.value.cmd != null ? [each.value.cmd] : null
+      command   = each.value.ecs_task_cmd != null ? [each.value.ecs_task_cmd] : null
 
       portMappings   = []
       mountPoints    = []

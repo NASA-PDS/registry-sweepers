@@ -46,7 +46,7 @@ variable "nodes" {
   type = map(object({
     cpu    = number
     memory = number
-    cmd    = optional(string)
+    ecs_task_cmd    = optional(string)
   }))
-  description = "Map of node IDs to their ECS resource allocations. Optional 'cmd' overrides the container command."
+  description = "Map of node IDs to their ECS resource allocations. Optional 'ecs_task_cmd' overrides the container command."
 }
