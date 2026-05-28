@@ -212,6 +212,20 @@ def limit_log_length(log_msg: str, max_str_length: int = 5012) -> str:
         return log_msg
 
 
+def has_nested_attr(source: Dict[str, Any], path: str) -> bool:
+    """
+    Return True if the given /-separated path exists in source, False otherwise.
+    Correctly distinguishes a key that is present with a None value from an absent key.
+    """
+    parent, _, remaining = path.partition("/")
+    if not remaining:
+        return parent in source
+    child_obj = source.get(parent)
+    if not isinstance(child_obj, dict):
+        return False
+    return has_nested_attr(child_obj, remaining)
+
+
 def get_nested_attr(source: Dict[str, Any], path: str, default: Any = None) -> Any:
     """
     Get a value from a (possibly nested) dict using a /-separated path.

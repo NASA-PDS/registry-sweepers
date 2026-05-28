@@ -6,6 +6,8 @@ from typing import Optional
 from pds.registrysweepers.provenance.constants import METADATA_SUCCESSOR_KEY
 from pds.registrysweepers.provenance.versioning import SWEEPERS_PROVENANCE_VERSION
 from pds.registrysweepers.provenance.versioning import SWEEPERS_PROVENANCE_VERSION_METADATA_KEY
+from pds.registrysweepers.utils.misc import get_nested_attr
+from pds.registrysweepers.utils.misc import has_nested_attr
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 
@@ -30,8 +32,8 @@ class ProvenanceRecord:
 
     @staticmethod
     def from_source(_source: Dict) -> ProvenanceRecord:
-        successor_exists_in_doc = METADATA_SUCCESSOR_KEY in _source
-        successor = _source.get(METADATA_SUCCESSOR_KEY)
+        successor_exists_in_doc = has_nested_attr(_source, METADATA_SUCCESSOR_KEY)
+        successor = get_nested_attr(_source, METADATA_SUCCESSOR_KEY)
 
         # It is assumed prima facie that any document processed with an up-to-date version of the sweeper is up-to-date.
         # If the value of successor is changed, this assumption is invalidated in the setter.
@@ -39,7 +41,7 @@ class ProvenanceRecord:
         # but can stay for the moment
         skip_write = (
             successor_exists_in_doc
-            and _source.get(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
+            and get_nested_attr(_source, SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
         )
 
         return ProvenanceRecord(

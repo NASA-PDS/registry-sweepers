@@ -5,6 +5,7 @@ from pds.registrysweepers.utils.misc import build_nested_update
 from pds.registrysweepers.utils.misc import coerce_list_type
 from pds.registrysweepers.utils.misc import coerce_non_list_type
 from pds.registrysweepers.utils.misc import get_nested_attr
+from pds.registrysweepers.utils.misc import has_nested_attr
 from pds.registrysweepers.utils.misc import iterate_pages_of_size
 
 
@@ -73,6 +74,32 @@ class BinElementsTestCase(unittest.TestCase):
         self.assertSetEqual({"here"}, set(strings_by_first_letter["h"]))
         self.assertSetEqual({"are"}, set(strings_by_first_letter["a"]))
         self.assertSetEqual({"some", "strings"}, set(strings_by_first_letter["s"]))
+
+
+class HasNestedAttrTestCase(unittest.TestCase):
+    def test_flat_key_present(self):
+        self.assertTrue(has_nested_attr({"k": "v"}, "k"))
+
+    def test_flat_key_absent(self):
+        self.assertFalse(has_nested_attr({}, "k"))
+
+    def test_nested_key_present(self):
+        src = {"ops:Provenance": {"ops:superseded_by": None}}
+        self.assertTrue(has_nested_attr(src, "ops:Provenance/ops:superseded_by"))
+
+    def test_nested_key_present_with_none_value(self):
+        # Must return True even when the value is None — distinguishes "set to None" from "absent"
+        src = {"ops:Provenance": {"ops:superseded_by": None}}
+        self.assertTrue(has_nested_attr(src, "ops:Provenance/ops:superseded_by"))
+
+    def test_nested_key_absent_parent_missing(self):
+        self.assertFalse(has_nested_attr({}, "ops:Provenance/ops:superseded_by"))
+
+    def test_nested_key_absent_child_missing(self):
+        self.assertFalse(has_nested_attr({"ops:Provenance": {}}, "ops:Provenance/ops:superseded_by"))
+
+    def test_non_dict_parent_returns_false(self):
+        self.assertFalse(has_nested_attr({"ops:Provenance": "not-a-dict"}, "ops:Provenance/ops:superseded_by"))
 
 
 class GetNestedAttrTestCase(unittest.TestCase):

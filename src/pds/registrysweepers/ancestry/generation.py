@@ -17,6 +17,7 @@ from pds.registrysweepers.ancestry.queries import query_for_pending_collections
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.misc import coerce_list_type
+from pds.registrysweepers.utils.misc import get_nested_attr
 from pds.registrysweepers.utils.misc import limit_log_length
 from pds.registrysweepers.utils.productidentifiers.factory import PdsProductIdentifierFactory
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
@@ -154,7 +155,7 @@ def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpd
     """
     for doc in docs:
         try:
-            sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
+            sweeper_version_in_doc = get_nested_attr(doc["_source"], SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
             skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
             yield ProductUpdateRecord(product=PdsLidVid.from_string(doc["_source"]["lidvid"]),
                                       skip_write=skip_write)

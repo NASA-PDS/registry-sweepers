@@ -21,6 +21,7 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import get_nested_attr
 from pds.registrysweepers.utils.misc import limit_log_length
 from tqdm import tqdm
 
@@ -173,7 +174,7 @@ def accumulate_missing_mappings(
             if (mapping_missing or mapping_is_bad) and not problem_detected_in_document_already:
                 problem_detected_in_document_already = True
                 problem_docs_count += 1
-                attr_value = doc["_source"].get("ops:Harvest_Info/ops:harvest_date_time", None)
+                attr_value = get_nested_attr(doc["_source"], "ops:Harvest_Info/ops:harvest_date_time")
                 try:
                     doc_harvest_time = dateutil.parser.isoparse(attr_value[0]).astimezone(timezone.utc)
 
@@ -190,12 +191,9 @@ def accumulate_missing_mappings(
                         )
                     )
 
-                try:
-                    problematic_harvest_versions.update(doc["_source"]["ops:Harvest_Info/ops:harvest_version"])
-                except KeyError as err:
-                    # Noisy log temporarily disabled but may be re-enabled at jpadams' discretion
-                    # log.warning(limit_log_length(f'Unable to extract harvest version from document {doc["_id"]}: {err}'))
-                    pass
+                harvest_version = get_nested_attr(doc["_source"], "ops:Harvest_Info/ops:harvest_version")
+                if harvest_version is not None:
+                    problematic_harvest_versions.update(harvest_version)
 
             if mapping_missing and property_name not in missing_mapping_updates:
                 if canonical_type_is_defined:
