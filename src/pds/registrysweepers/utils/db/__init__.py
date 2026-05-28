@@ -15,6 +15,7 @@ from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import get_ids_list_str
+from pds.registrysweepers.utils.misc import get_nested_attr
 from pds.registrysweepers.utils.misc import get_random_hex_id
 from pds.registrysweepers.utils.misc import limit_log_length
 from retry import retry
@@ -228,7 +229,7 @@ def query_registry_db_with_search_after(
                     return
 
                 # simpler to set the value after every hit than worry about OBO errors detecting the last hit in the page
-                search_after_values = [hit["_source"].get(field) for field in sort_fields]
+                search_after_values = [get_nested_attr(hit["_source"], field) for field in sort_fields]
 
             # Flatten single-element search-after-values.  Attempting to sort/search-after on MCP AOSS by
             # ops:Harvest_Info/ops:harvest_date_time is throwing
