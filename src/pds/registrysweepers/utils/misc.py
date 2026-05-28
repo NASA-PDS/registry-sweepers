@@ -210,3 +210,37 @@ def limit_log_length(log_msg: str, max_str_length: int = 5012) -> str:
         return log_msg[:max_str_length] + " ... <TRUNCATED>"
     else:
         return log_msg
+
+
+def get_nested_attr(source: Dict[str, Any], path: str, default: Any = None) -> Any:
+    """
+    Get a value from a (possibly nested) dict using a /-separated path.
+    Single-component paths resolve directly; multi-component paths traverse nested dicts.
+    Returns default if any component in the path is absent or not a dict.
+    """
+    parent, _, remaining = path.partition("/")
+    if not remaining:
+        return source.get(parent, default)
+    child_obj = source.get(parent)
+    if not isinstance(child_obj, dict):
+        return default
+    return get_nested_attr(child_obj, remaining, default)
+
+
+def build_nested_update(flat_updates: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert a flat dict of /-separated path→value pairs into a nested dict
+    suitable for use as the content of an OpenSearch partial update.
+    Paths that share a common parent are merged under that parent key.
+    Flat (no-/) paths are included as-is.
+    """
+    result: Dict[str, Any] = {}
+    for path, value in flat_updates.items():
+        parent, _, child = path.partition("/")
+        if not child:
+            result[parent] = value
+        else:
+            if parent not in result:
+                result[parent] = {}
+            result[parent][child] = value
+    return result
