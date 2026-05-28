@@ -10,7 +10,7 @@ mwaa_execution_role_name=<role name used by Airflow for DAG execution>
 # ECS resource allocations for each node
 # Currently using placeholder values - these will need to be tuned
 nodes = {
-  "en" = { cpu = 1024, memory = 4096 },
+  "en" = { cpu = 1024, memory = 4096, ecs_task_cmd="--legacy-sync" },
   "geo" = { cpu = 1024, memory = 4096 },
   "atm" = { cpu = 1024, memory = 4096 },
   "ppi" = { cpu = 1024, memory = 4096 },
