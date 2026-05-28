@@ -77,7 +77,7 @@ def fetch_dd_field_types(client: OpenSearch) -> Dict[str, str]:
 
 def get_mapping_field_types_by_field_name(client: OpenSearch, index_name: str) -> Dict[str, str]:
     return {
-        k: v["type"] for k, v in client.indices.get_mapping(index_name)[index_name]["mappings"]["properties"].items()  # type: ignore
+        k: v.get("type") for k, v in client.indices.get_mapping(index_name)[index_name]["mappings"]["properties"].items()  # type: ignore
     }
 
 
@@ -137,6 +137,8 @@ def accumulate_missing_mappings(
         total_docs_count += 1
 
         for property_name, value in doc["_source"].items():
+            if isinstance(value, dict):
+                continue  # nested objects are managed at the schema level, not by per-field iteration
             # Resolve canonical type from data dictionary or - failing that - from the hardcoded types
             canonical_type = dd_field_types_by_name.get(property_name) or special_case_property_types_by_name.get(
                 property_name

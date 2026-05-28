@@ -20,14 +20,19 @@ class MissingMappingError(RuntimeError):
 def _get_existing_mapping_type(client: OpenSearch, index_name: str, property_name: str) -> str | None:
     """
     Returns the current mapped type for a given property, or None if the mapping does not yet exist.
+    Supports nested paths using '/' as separator (e.g. 'ops:Provenance/ops:reindexed_at').
     """
     response = client.indices.get_mapping(index=index_name)
-    existing_properties = (
+    properties = (
         response.get(index_name, {})
         .get("mappings", {})
         .get("properties", {})
     )
-    return existing_properties.get(property_name, {}).get("type")
+    parent, _, child = property_name.partition("/")
+    if not child:
+        return properties.get(parent, {}).get("type")
+    nested_properties = properties.get(parent, {}).get("properties", {})
+    return nested_properties.get(child, {}).get("type")
 
 
 def _check_mapping(client: OpenSearch, index_name: str, property_name: str, expected_property_type: str) -> None:
@@ -77,9 +82,11 @@ def ensure_index_mapping(client: OpenSearch, index_name: str, property_name: str
         logger.info(
             f"Mapping for '{property_name}' not yet present in index '{index_name}' - creating mapping with type {property_type}."
         )
-        client.indices.put_mapping(
-            index=index_name,
-            body={"properties": {property_name: {"type": property_type}}},
-        )
+        parent, _, child = property_name.partition("/")
+        if child:
+            mapping_body = {"properties": {parent: {"properties": {child: {"type": property_type}}}}}
+        else:
+            mapping_body = {"properties": {parent: {"type": property_type}}}
+        client.indices.put_mapping(index=index_name, body=mapping_body)
 
     _await_mapping_creation(client, index_name, property_name, property_type)
