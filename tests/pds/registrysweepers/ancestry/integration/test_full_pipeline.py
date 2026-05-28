@@ -5,6 +5,8 @@ import pytest
 from pds.registrysweepers.ancestry import main
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.utils.misc import get_nested_attr
+from pds.registrysweepers.utils.misc import has_nested_attr
 
 from ..builders import build_bundle
 from ..builders import build_collection
@@ -51,7 +53,7 @@ class TestFullPipeline:
         collection_id = "urn:nasa:pds:test_collection::1.0"
         assert collection_id in updates_by_id
         collection_update = updates_by_id[collection_id]
-        assert 'ops:Provenance/ops:ancestor_refs' in collection_update.content
+        assert has_nested_attr(collection_update.content, 'ops:Provenance/ops:ancestor_refs')
 
         # Verify products have collection as ancestor
         product_ids = [
@@ -61,7 +63,7 @@ class TestFullPipeline:
         for product_id in product_ids:
             if product_id in updates_by_id:
                 product_update = updates_by_id[product_id]
-                refs = product_update.content.get('ops:Provenance/ops:ancestor_refs', [])
+                refs = get_nested_attr(product_update.content, 'ops:Provenance/ops:ancestor_refs', [])
                 # Should reference collection
                 assert any('test_collection' in str(ref) for ref in refs)
 
@@ -135,8 +137,8 @@ class TestFullPipeline:
 
         # Verify all updates have version stamp
         for update in bulk_updates:
-            assert SWEEPERS_ANCESTRY_VERSION_METADATA_KEY in update.content
-            assert update.content[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY] == SWEEPERS_ANCESTRY_VERSION
+            assert has_nested_attr(update.content, SWEEPERS_ANCESTRY_VERSION_METADATA_KEY)
+            assert get_nested_attr(update.content, SWEEPERS_ANCESTRY_VERSION_METADATA_KEY) == SWEEPERS_ANCESTRY_VERSION
 
     def test_deduplication_script_included(self, mock_opensearch_client, simple_collection_hierarchy):
         """All updates should include deduplication script"""

@@ -19,6 +19,7 @@ from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTyp
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import Update
+from pds.registrysweepers.utils.misc import build_nested_update
 from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
@@ -93,9 +94,9 @@ def gb_mem_to_size(desired_mem_usage_gb) -> int:
 
 def update_from_record(record: ProductUpdateRecord) -> Update:
     doc_id = str(record.product)
-    content = {
+    content = build_nested_update({
         ANCESTRY_REFS_METADATA_KEY: [str(id) for id in record.direct_ancestor_refs],
         SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: int(SWEEPERS_ANCESTRY_VERSION),
-    }
+    })
 
     return Update(id=doc_id, content=content, inline_script_content=ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED)

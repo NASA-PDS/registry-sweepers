@@ -65,6 +65,7 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import build_nested_update
 from pds.registrysweepers.utils.misc import chunked
 from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import group_by_key
@@ -285,11 +286,11 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
     update_count = 0
     skippable_count = 0
     for record in records:
-        update_content = {
+        update_content = build_nested_update({
             METADATA_SUCCESSOR_KEY: str(record.successor) if record.successor else None,
             SWEEPERS_PROVENANCE_VERSION_METADATA_KEY: SWEEPERS_PROVENANCE_VERSION,
             SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY: None,  # see comment in versioning.py for context - edunn
-        }
+        })
 
         if record.skip_write:
             skippable_count += 1

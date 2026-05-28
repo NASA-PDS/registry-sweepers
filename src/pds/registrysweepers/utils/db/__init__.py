@@ -383,7 +383,7 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
                 "source": update.inline_script_content,
                 "lang": "painless",
                 "params": {
-                    "new_items": update.content.get(ANCESTRY_REFS_METADATA_KEY, []),
+                    "new_items": get_nested_attr(update.content, ANCESTRY_REFS_METADATA_KEY, []),
                 },
             }
 

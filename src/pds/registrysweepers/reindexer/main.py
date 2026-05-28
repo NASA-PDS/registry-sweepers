@@ -21,6 +21,7 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import build_nested_update
 from pds.registrysweepers.utils.misc import get_nested_attr
 from pds.registrysweepers.utils.misc import limit_log_length
 from tqdm import tqdm
@@ -274,7 +275,7 @@ def generate_updates(
                 f"Missing mappings {document_fields_missing_from_mappings} detected when attempting to create Update for doc with id {id} - skipping"
             )
 
-        yield Update(id=id, content={REINDEXER_FLAG_METADATA_KEY: timestamp.isoformat()})
+        yield Update(id=id, content=build_nested_update({REINDEXER_FLAG_METADATA_KEY: timestamp.isoformat()}))
 
 
 def format_hits_count(count: int) -> str:

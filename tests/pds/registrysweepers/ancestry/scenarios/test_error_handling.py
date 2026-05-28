@@ -1,6 +1,7 @@
 """Error handling and robustness tests for ancestry module"""
 import pytest
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
+from pds.registrysweepers.utils.misc import get_nested_attr
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
@@ -74,7 +75,7 @@ class TestTypeCoercion:
         record.add_direct_ancestor_ref(lidvid_ancestor)
 
         update = update_from_record(record)
-        refs = update.content['ops:Provenance/ops:ancestor_refs']
+        refs = get_nested_attr(update.content, 'ops:Provenance/ops:ancestor_refs')
 
         # All refs should be strings
         for ref in refs:
@@ -89,7 +90,7 @@ class TestTypeCoercion:
         record = ProductUpdateRecord(product)
 
         update = update_from_record(record)
-        version = update.content[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]
+        version = get_nested_attr(update.content, SWEEPERS_ANCESTRY_VERSION_METADATA_KEY)
 
         assert isinstance(version, int)
 

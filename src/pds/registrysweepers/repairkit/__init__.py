@@ -26,6 +26,7 @@ from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
+from pds.registrysweepers.utils.misc import build_nested_update
 from pds.registrysweepers.utils.misc import limit_log_length
 
 """
@@ -80,7 +81,7 @@ def generate_updates(
                 )
             )
             repair_already_logged_to_error = True
-        yield Update(id=id, content=repairs)
+        yield Update(id=id, content=build_nested_update(repairs))
 
 
 def run(

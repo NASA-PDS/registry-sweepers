@@ -9,6 +9,7 @@ from pds.registrysweepers.provenance import SWEEPERS_PROVENANCE_VERSION
 from pds.registrysweepers.provenance import SWEEPERS_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.provenance.versioning import SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import Update
+from pds.registrysweepers.utils.misc import build_nested_update
 
 
 class ProvenanceBasicFunctionalTestCase(unittest.TestCase):
@@ -52,11 +53,11 @@ class ProvenanceBasicFunctionalTestCase(unittest.TestCase):
         expected_updates = [
             Update(
                 id=k,
-                content={
+                content=build_nested_update({
                     "ops:Provenance/ops:superseded_by": v,
                     SWEEPERS_PROVENANCE_VERSION_METADATA_KEY: SWEEPERS_PROVENANCE_VERSION,
                     SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY: None,
-                },
+                }),
             )
             for k, v in expected_provenance.items()
         ]

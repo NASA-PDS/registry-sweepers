@@ -8,6 +8,8 @@ from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecor
 from pds.registrysweepers.ancestry.utils import update_from_record
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.utils.misc import get_nested_attr
+from pds.registrysweepers.utils.misc import has_nested_attr
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
@@ -32,8 +34,8 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        assert ANCESTRY_REFS_METADATA_KEY in update.content
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        assert has_nested_attr(update.content, ANCESTRY_REFS_METADATA_KEY)
+        refs = get_nested_attr(update.content, ANCESTRY_REFS_METADATA_KEY)
         assert isinstance(refs, list)
         assert "urn:nasa:pds:collection::1.0" in refs
 
@@ -44,8 +46,8 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        assert SWEEPERS_ANCESTRY_VERSION_METADATA_KEY in update.content
-        version = update.content[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]
+        assert has_nested_attr(update.content, SWEEPERS_ANCESTRY_VERSION_METADATA_KEY)
+        version = get_nested_attr(update.content, SWEEPERS_ANCESTRY_VERSION_METADATA_KEY)
         assert version == SWEEPERS_ANCESTRY_VERSION
         assert isinstance(version, int)
 
@@ -73,7 +75,7 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        refs = get_nested_attr(update.content, ANCESTRY_REFS_METADATA_KEY)
         assert len(refs) == 6
         for ancestor in ancestors:
             assert str(ancestor) in refs
@@ -91,7 +93,7 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        refs = get_nested_attr(update.content, ANCESTRY_REFS_METADATA_KEY)
         # Should contain both references (as strings)
         assert len(refs) >= 2
         assert any("bundle" in ref for ref in refs)
@@ -104,7 +106,7 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        refs = get_nested_attr(update.content, ANCESTRY_REFS_METADATA_KEY)
         assert isinstance(refs, list)
         assert len(refs) == 0
 
@@ -116,6 +118,6 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        refs = get_nested_attr(update.content, ANCESTRY_REFS_METADATA_KEY)
         for ref in refs:
             assert isinstance(ref, str)
