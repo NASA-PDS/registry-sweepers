@@ -68,6 +68,8 @@ def generate_updates(
         src = document["_source"]
         repairs = {repairkit_version_metadata_key: int(repairkit_version)}
         for fieldname, data in src.items():
+            if isinstance(data, dict):
+                continue  # nested objects are not subject to flat-field repair
             for regex, funcs in REPAIR_TOOLS.items():
                 if regex(fieldname):
                     for func in funcs:
