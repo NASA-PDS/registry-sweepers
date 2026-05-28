@@ -9,6 +9,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+
 
 @dataclass
 class ProductDocumentBuilder:
@@ -107,7 +109,8 @@ class ProductDocumentBuilder:
         }
 
         if self.ops_ancestry_version is not None:
-            source["ops:Sweepers/ops:ancestry_version"] = self.ops_ancestry_version
+            _parent, _, _child = SWEEPERS_ANCESTRY_VERSION_METADATA_KEY.partition("/")
+            source.setdefault(_parent, {})[_child] = self.ops_ancestry_version
 
         if self.ref_lid_collection:
             source["ref_lid_collection"] = self.ref_lid_collection
