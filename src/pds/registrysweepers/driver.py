@@ -114,7 +114,9 @@ def run():
 
     # Define default sweepers to be run here, in order of execution
     default_sweepers = [
-        repairkit.run,
+        # todo: edunn 20260528 it is assumed that structured metadata will break repairkit, but that repairkit is also
+        #  no longer a necessary step.  To be confirmed with jpadams.
+        # repairkit.run,
         provenance.run,
         ancestry.run,
         reindexer.run,
