@@ -48,7 +48,7 @@ locals {
 resource "aws_cloudwatch_log_group" "registry_sweepers" {
   for_each = var.nodes
 
-  name              = "/ecs/pds-registry-sweepers-${each.key}-task"
+  name              = "/pds/ecs/pds-registry-sweepers-${each.key}-task"
   retention_in_days = 90
 
   tags = local.tags
