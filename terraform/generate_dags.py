@@ -27,18 +27,26 @@ def load_env_file(path: Path) -> dict:
     return env
 
 
-def get_terraform_output() -> dict:
-    result = subprocess.run(
+def get_terraform_output() -> tuple[dict, dict]:
+    """Returns (task_arns, log_group_names) from terraform outputs."""
+    task_arns_result = subprocess.run(
         ["terraform", "output", "-json", "task_definition_arns"],
         cwd=TERRAFORM_DIR,
         capture_output=True,
         text=True,
         check=True,
     )
-    return json.loads(result.stdout)
+    log_groups_result = subprocess.run(
+        ["terraform", "output", "-json", "log_group_names"],
+        cwd=TERRAFORM_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(task_arns_result.stdout), json.loads(log_groups_result.stdout)
 
 
-def generate_dag(node_name: str, task_arn: str, env: dict) -> str:
+def generate_dag(node_name: str, task_arn: str, log_group: str, env: dict) -> str:
     node_upper = node_name.upper()
     node_lower = node_name.lower()
     cluster = env["ECS_CLUSTER_NAME"]
@@ -106,7 +114,7 @@ registry_sweeper = EcsRunTaskOperator(
         }},
     }},
     overrides={{}},
-    awslogs_group="/ecs/pds-registry-sweepers-{node_lower}-task",
+    awslogs_group="{log_group}",
     awslogs_stream_prefix="ecs/pds-registry-sweepers-{node_lower}-container",
 )
 
@@ -135,7 +143,7 @@ def main():
         sys.exit(1)
 
     try:
-        task_arns = get_terraform_output()
+        task_arns, log_group_names = get_terraform_output()
     except subprocess.CalledProcessError as e:
         print(f"Error running terraform output: {e.stderr}", file=sys.stderr)
         sys.exit(1)
@@ -144,7 +152,8 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for node_name, task_arn in task_arns.items():
-        content = generate_dag(node_name, task_arn, env)
+        log_group = log_group_names[node_name]
+        content = generate_dag(node_name, task_arn, log_group, env)
         out_path = output_dir / f"PDS_{node_name.upper()}-sweeper.py"
         out_path.write_text(content)
         print(f"Generated {out_path}")
