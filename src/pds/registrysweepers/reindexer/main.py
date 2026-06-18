@@ -107,6 +107,8 @@ def accumulate_missing_mappings(
         "ref_lid_associate": "keyword",
         "ref_lid_collection": "keyword",
         "ref_lid_collection_secondary": "keyword",
+        "ref_lidvid_collection": "keyword",
+        "ref_lidvid_collection_secondary": "keyword",
         "ref_lid_data": "keyword",
         "ref_lid_document": "keyword",
         "ref_lid_facility": "keyword",
