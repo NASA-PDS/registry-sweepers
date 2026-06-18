@@ -1,6 +1,6 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-05-28)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-06-18)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...«unknown»)
 
@@ -13,9 +13,11 @@
 - Race condition exists when sweepers ensures index mappings and writes document updates very soon after [\#220](https://github.com/NASA-PDS/registry-sweepers/issues/220) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 - Legacy registry sync node assignment does not use registry API metadata, causing incorrect node assignments [\#212](https://github.com/NASA-PDS/registry-sweepers/issues/212) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 - Legacy registry sync reconciliation report incorrectly flags bundles as missing from registry [\#209](https://github.com/NASA-PDS/registry-sweepers/issues/209) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
+- legacy-sync sweeper does not run in DEV venue on EN node via airflow. [\#208](https://github.com/NASA-PDS/registry-sweepers/issues/208) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 
 **Other closed issues:**
 
+- Update cloudwatch log group to match Airflow Role [\#237](https://github.com/NASA-PDS/registry-sweepers/issues/237)
 - Fix per-request/per-batch log.info calls that still clutter logs [\#217](https://github.com/NASA-PDS/registry-sweepers/issues/217)
 - Fix way-too-verbose logging [\#207](https://github.com/NASA-PDS/registry-sweepers/issues/207)
 
