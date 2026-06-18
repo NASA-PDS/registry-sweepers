@@ -36,7 +36,7 @@ def get_already_loaded_lidvids(
             dict(match_phrase={prod_class_prop: prod_class}) for prod_class in product_classes
         ]
 
-    sort_field = "ops:Harvest_Info/ops:harvest_date_time"
+    sort_field = "ops:Harvest_Info.ops:harvest_date_time"
     assert es_conn is not None, "es_conn must be provided"
     prod_id_resp: Iterable[Dict[str, Any]] = query_registry_db_with_search_after(
         es_conn,

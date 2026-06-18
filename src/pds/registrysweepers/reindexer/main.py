@@ -47,7 +47,7 @@ def get_docs_query(filter_to_harvested_before: datetime):
                 "must_not": [{"exists": {"field": REINDEXER_FLAG_METADATA_KEY}}],
                 "must": {
                     "range": {
-                        "ops:Harvest_Info/ops:harvest_date_time": {
+                        "ops:Harvest_Info.ops:harvest_date_time": {
                             "lt": filter_to_harvested_before.astimezone(timezone.utc).isoformat()
                         }
                     }
@@ -320,7 +320,7 @@ def run(
     # within generate_updates() to ensure that the second stage (update generation) hasn't picked up any products which
     # weren't processed in the first stage (missing mapping accumulation)
     batch_size_limit = 100000
-    sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
+    sort_fields = ["ops:Harvest_Info.ops:harvest_date_time"]
     total_outstanding_doc_count = get_updated_hits_count()
 
     # disable=None enables auto-detection: progress bar is shown in interactive terminals (TTY)
