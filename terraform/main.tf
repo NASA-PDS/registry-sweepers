@@ -48,7 +48,7 @@ locals {
 resource "aws_cloudwatch_log_group" "registry_sweepers" {
   for_each = var.nodes
 
-  name              = "/ecs/pds-registry-sweepers-${each.key}-task"
+  name              = "/pds/ecs/pds-registry-sweepers-${each.key}-task"
   retention_in_days = 90
 
   tags = local.tags
@@ -101,8 +101,7 @@ resource "aws_ecs_task_definition" "registry_sweepers" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "/ecs/pds-registry-sweepers-${each.key}-task"
-          "awslogs-create-group"  = "true"
+          "awslogs-group"         = aws_cloudwatch_log_group.registry_sweepers[each.key].name
           "awslogs-region"        = data.aws_region.current.name
           "awslogs-stream-prefix" = "ecs"
         }
