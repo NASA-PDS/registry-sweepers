@@ -84,7 +84,7 @@ def ensure_index_mapping(client: OpenSearch, index_name: str, property_name: str
         )
         parent, _, child = property_name.partition("/")
         if child:
-            mapping_body = {"properties": {parent: {"properties": {child: {"type": property_type}}}}}
+            mapping_body: dict = {"properties": {parent: {"properties": {child: {"type": property_type}}}}}
         else:
             mapping_body = {"properties": {parent: {"type": property_type}}}
         client.indices.put_mapping(index=index_name, body=mapping_body)
