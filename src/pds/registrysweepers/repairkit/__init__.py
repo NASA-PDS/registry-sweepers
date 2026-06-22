@@ -40,6 +40,8 @@ and the return an empty {} if no changes and {fieldname:new_value} for repairs
 
 Examples
 
+N.B. slash-separation is no longer relevant - properties are dot-separated. edunn 20260623
+
 re.compile("^ops:Info/.+").match("ops:Info/ops:filesize")->match object
 re.compile("^ops:Info/.+").fullmatch("ops:Info/ops:filesize")->match object
 re.compile("^ops:Info/").match("ops:Info/ops:filesize")->match object
@@ -96,7 +98,7 @@ def run(
             "query": {
                 "bool": {
                     "must_not": [
-                        {"range": {SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY: {"gte": SWEEPERS_REPAIRKIT_VERSION}}}
+                        {"range": {str(SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY): {"gte": SWEEPERS_REPAIRKIT_VERSION}}}
                     ]
                 }
             }
@@ -128,7 +130,7 @@ def run(
         limit=update_max_chunk_size,
         request_timeout_seconds=180,
     )
-    updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
+    updates = generate_updates(all_docs, str(SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY), SWEEPERS_REPAIRKIT_VERSION)
 
     write_updated_docs(
         client,
