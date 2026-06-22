@@ -87,7 +87,7 @@ def auto_raise_for_status(f: Callable) -> Callable:
 
 
 def get_sweeper_version_metadata_key(sweeper_name: str) -> str:
-    return f"ops:Provenance/ops:registry_sweepers_{sweeper_name}_version"
+    return f"ops:Registry_Sweepers.ops:{sweeper_name}_software_version"
 
 
 def iterate_pages_of_size(page_size: int, iterable: Iterable[T]) -> Iterable[List[T]]:
