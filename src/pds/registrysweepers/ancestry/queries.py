@@ -5,13 +5,11 @@ from typing import Dict
 from typing import Iterable
 
 from opensearchpy import OpenSearch
-from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import get_query_hits_count
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
-from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 log = logging.getLogger(__name__)

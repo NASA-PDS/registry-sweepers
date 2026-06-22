@@ -148,8 +148,8 @@ class TestQueryForPendingCollections:
                 break
 
         assert version_filter is not None
-        assert SWEEPERS_ANCESTRY_VERSION_METADATA_KEY in version_filter["range"]
-        assert version_filter["range"][SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]["gte"] == SWEEPERS_ANCESTRY_VERSION
+        assert str(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY) in version_filter["range"]
+        assert version_filter["range"][str(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY)]["gte"] == SWEEPERS_ANCESTRY_VERSION
 
     def test_source_fields_include_lidvid_and_version(self, mock_opensearch_client):
         """Verify query requests lidvid and version fields"""
@@ -169,7 +169,7 @@ class TestQueryForPendingCollections:
         actual_query_call = [c for c in mock_opensearch_client.search_calls if c['kwargs'].get('size', 0) > 0][0]
         includes = actual_query_call['kwargs']['_source_includes']
         assert 'lidvid' in includes
-        assert SWEEPERS_ANCESTRY_VERSION_METADATA_KEY in includes
+        assert str(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY) in includes
 
     def test_uses_registry_index(self, mock_opensearch_client):
         """Verify query targets the registry index"""

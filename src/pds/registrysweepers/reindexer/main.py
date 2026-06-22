@@ -12,6 +12,7 @@ from typing import Union
 import dateutil.parser
 from opensearchpy import OpenSearch
 from pds.registrysweepers.reindexer.constants import REINDEXER_FLAG_METADATA_KEY
+from pds.registrysweepers.reindexer.utils import flatten_mappings
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_args
 from pds.registrysweepers.utils.db import get_query_hits_count
@@ -45,7 +46,7 @@ def get_docs_query(filter_to_harvested_before: datetime):
                 "must_not": [{"exists": {"field": REINDEXER_FLAG_METADATA_KEY}}],
                 "must": {
                     "range": {
-                        "ops:Harvest_Info/ops:harvest_date_time": {
+                        "ops:Harvest_Info.ops:harvest_date_time": {
                             "lt": filter_to_harvested_before.astimezone(timezone.utc).isoformat()
                         }
                     }
@@ -74,9 +75,9 @@ def fetch_dd_field_types(client: OpenSearch) -> Dict[str, str]:
 
 
 def get_mapping_field_types_by_field_name(client: OpenSearch, index_name: str) -> Dict[str, str]:
-    return {
-        k: v["type"] for k, v in client.indices.get_mapping(index_name)[index_name]["mappings"]["properties"].items()  # type: ignore
-    }
+    mappings = client.indices.get_mapping(index_name)[index_name]["mappings"]
+    flattened_mappings = flatten_mappings(mappings)
+    return flattened_mappings
 
 
 def accumulate_missing_mappings(
@@ -92,7 +93,7 @@ def accumulate_missing_mappings(
 
     # Static mappings for fields not defined in the data dictionaries
     # NoneType indicates that the property is to be excluded.
-    # Anything with prefix 'ops:Provenance' is excluded, as these properties are the responsibility of their
+    # Anything with prefix 'ops:Registry_Sweepers' is excluded, as these properties are the responsibility of their
     #  respective sweepers.
     special_case_property_types_by_name = {
         "@timestamp": None,
@@ -101,8 +102,8 @@ def accumulate_missing_mappings(
         "description": "text",
         "lid": "keyword",
         "lidvid": "keyword",
-        "ops:Harvest_Info/ops:harvest_date_time": "date",
-        "ops:Label_File_Info/ops:json_blob": None,
+        "ops:Harvest_Info.ops:harvest_date_time": "date",
+        "ops:Label_File_Info.ops:json_blob": None,
         "product_class": "keyword",
         "ref_lid_associate": "keyword",
         "ref_lid_collection": "keyword",
@@ -154,7 +155,7 @@ def accumulate_missing_mappings(
             if (
                 not canonical_type_is_defined
                 and property_name not in special_case_property_types_by_name
-                and not property_name.startswith("ops:Provenance")
+                and not property_name.startswith("ops:Registry_Sweepers")
                 and property_name not in canonical_type_undefined_property_names
             ):
                 log.warning(
@@ -175,7 +176,7 @@ def accumulate_missing_mappings(
             if (mapping_missing or mapping_is_bad) and not problem_detected_in_document_already:
                 problem_detected_in_document_already = True
                 problem_docs_count += 1
-                attr_value = doc["_source"].get("ops:Harvest_Info/ops:harvest_date_time", None)
+                attr_value = doc["_source"].get("ops:Harvest_Info", {}).get("ops:harvest_date_time", None)
                 try:
                     doc_harvest_time = dateutil.parser.isoparse(attr_value[0]).astimezone(timezone.utc)
 
@@ -188,7 +189,7 @@ def accumulate_missing_mappings(
                 except (KeyError, ValueError) as err:
                     log.warning(
                         limit_log_length(
-                            f'Unable to parse first element of "ops:Harvest_Info/ops:harvest_date_time" as ISO-formatted date from document {doc["_id"]}: {attr_value} ({err})'
+                            f'Unable to parse first element of "ops:Harvest_Info.ops:harvest_date_time" as ISO-formatted date from document {doc["_id"]}: {attr_value} ({err})'
                         )
                     )
 
@@ -208,7 +209,7 @@ def accumulate_missing_mappings(
                     )
                     missing_mapping_updates[property_name] = canonical_type  # type: ignore
                 elif property_name.startswith(
-                    "ops:Provenance"
+                    "ops:Registry_Sweepers"
                 ):  # TODO: extract this to a constant, used by all metadata key definitions
                     # mappings for registry-sweepers are the responsibility of their respective sweepers and should not
                     # be touched by the reindexer sweeper
@@ -321,7 +322,7 @@ def run(
     # within generate_updates() to ensure that the second stage (update generation) hasn't picked up any products which
     # weren't processed in the first stage (missing mapping accumulation)
     batch_size_limit = 100000
-    sort_fields = ["ops:Harvest_Info/ops:harvest_date_time"]
+    sort_fields = ["ops:Harvest_Info.ops:harvest_date_time"]
     total_outstanding_doc_count = get_updated_hits_count()
 
     # disable=None enables auto-detection: progress bar is shown in interactive terminals (TTY)
