@@ -1,1 +1,1 @@
-METADATA_SUCCESSOR_KEY = "ops:Provenance/ops:superseded_by"
+METADATA_SUCCESSOR_KEY = "ops:Registry_Sweepers.ops:superseded_by"

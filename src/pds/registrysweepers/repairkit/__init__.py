@@ -40,6 +40,8 @@ and the return an empty {} if no changes and {fieldname:new_value} for repairs
 
 Examples
 
+N.B. slash-separation is no longer relevant - properties are dot-separated. edunn 20260623
+
 re.compile("^ops:Info/.+").match("ops:Info/ops:filesize")->match object
 re.compile("^ops:Info/.+").fullmatch("ops:Info/ops:filesize")->match object
 re.compile("^ops:Info/").match("ops:Info/ops:filesize")->match object

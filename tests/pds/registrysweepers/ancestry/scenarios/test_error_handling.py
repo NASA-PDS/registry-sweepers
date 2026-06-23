@@ -74,7 +74,7 @@ class TestTypeCoercion:
         record.add_direct_ancestor_ref(lidvid_ancestor)
 
         update = update_from_record(record)
-        refs = update.content['ops:Provenance/ops:ancestor_refs']
+        refs = update.content['ops:Registry_Sweepers.ops:ancestor_refs']
 
         # All refs should be strings
         for ref in refs:

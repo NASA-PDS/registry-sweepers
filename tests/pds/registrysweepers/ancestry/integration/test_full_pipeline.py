@@ -51,7 +51,7 @@ class TestFullPipeline:
         collection_id = "urn:nasa:pds:test_collection::1.0"
         assert collection_id in updates_by_id
         collection_update = updates_by_id[collection_id]
-        assert 'ops:Provenance/ops:ancestor_refs' in collection_update.content
+        assert 'ops:Registry_Sweepers.ops:ancestor_refs' in collection_update.content
 
         # Verify products have collection as ancestor
         product_ids = [
@@ -61,7 +61,7 @@ class TestFullPipeline:
         for product_id in product_ids:
             if product_id in updates_by_id:
                 product_update = updates_by_id[product_id]
-                refs = product_update.content.get('ops:Provenance/ops:ancestor_refs', [])
+                refs = product_update.content.get('ops:Registry_Sweepers.ops:ancestor_refs', [])
                 # Should reference collection
                 assert any('test_collection' in str(ref) for ref in refs)
 

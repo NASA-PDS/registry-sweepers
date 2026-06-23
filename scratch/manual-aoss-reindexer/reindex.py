@@ -16,7 +16,7 @@ from pds.registrysweepers.utils.misc import get_human_readable_elapsed_since
 # Baseline mappings which are required to facilitate successful execution before any data is copied
 necessary_mappings = {
     'lidvid': 'keyword',
-    'ops:Harvest_Info/ops:harvest_date_time': 'date'
+    'ops:Harvest_Info.ops:harvest_date_time': 'date'
 }
 
 

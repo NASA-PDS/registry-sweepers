@@ -7,7 +7,6 @@ from pds.registrysweepers import provenance
 from pds.registrysweepers.provenance import ProvenanceRecord
 from pds.registrysweepers.provenance import SWEEPERS_PROVENANCE_VERSION
 from pds.registrysweepers.provenance import SWEEPERS_PROVENANCE_VERSION_METADATA_KEY
-from pds.registrysweepers.provenance.versioning import SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import Update
 
 
@@ -53,9 +52,8 @@ class ProvenanceBasicFunctionalTestCase(unittest.TestCase):
             Update(
                 id=k,
                 content={
-                    "ops:Provenance/ops:superseded_by": v,
+                    "ops:Registry_Sweepers.ops:superseded_by": v,
                     SWEEPERS_PROVENANCE_VERSION_METADATA_KEY: SWEEPERS_PROVENANCE_VERSION,
-                    SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY: None,
                 },
             )
             for k, v in expected_provenance.items()
