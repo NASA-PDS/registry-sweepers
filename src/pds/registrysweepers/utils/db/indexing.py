@@ -1,11 +1,7 @@
-import json
 import logging
-from typing import Union
 
 import retry
 from opensearchpy import OpenSearch
-
-from pds.registrysweepers.utils.db.pathedkey import PathedKey
 
 logger = logging.getLogger(__name__)
 
