@@ -1,8 +1,8 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-06-18)
+## [release/1.7.0](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.7.0) (2026-06-18)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...«unknown»)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...release/1.7.0)
 
 **Requirements:**
 
