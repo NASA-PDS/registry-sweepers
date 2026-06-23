@@ -38,8 +38,8 @@ class ProvenanceRecord:
         # The check that a (null or non-null) successor value is explicitly defined in the doc is probably redundant,
         # but can stay for the moment
         skip_write = (
-                successor_exists_in_doc
-                and _source.get(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
+            successor_exists_in_doc
+            and _source.get(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
         )
 
         return ProvenanceRecord(
