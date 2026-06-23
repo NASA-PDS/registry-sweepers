@@ -98,7 +98,7 @@ def run(
             "query": {
                 "bool": {
                     "must_not": [
-                        {"range": {str(SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY): {"gte": SWEEPERS_REPAIRKIT_VERSION}}}
+                        {"range": {SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY: {"gte": SWEEPERS_REPAIRKIT_VERSION}}}
                     ]
                 }
             }
@@ -130,7 +130,7 @@ def run(
         limit=update_max_chunk_size,
         request_timeout_seconds=180,
     )
-    updates = generate_updates(all_docs, str(SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY), SWEEPERS_REPAIRKIT_VERSION)
+    updates = generate_updates(all_docs, SWEEPERS_REPAIRKIT_VERSION_METADATA_KEY, SWEEPERS_REPAIRKIT_VERSION)
 
     write_updated_docs(
         client,

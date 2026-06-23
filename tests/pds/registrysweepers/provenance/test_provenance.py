@@ -53,7 +53,7 @@ class ProvenanceBasicFunctionalTestCase(unittest.TestCase):
                 id=k,
                 content={
                     "ops:Registry_Sweepers.ops:superseded_by": v,
-                    str(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY): SWEEPERS_PROVENANCE_VERSION,
+                    SWEEPERS_PROVENANCE_VERSION_METADATA_KEY: SWEEPERS_PROVENANCE_VERSION,
                 },
             )
             for k, v in expected_provenance.items()
