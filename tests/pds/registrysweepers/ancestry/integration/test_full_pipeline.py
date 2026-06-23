@@ -135,8 +135,8 @@ class TestFullPipeline:
 
         # Verify all updates have version stamp
         for update in bulk_updates:
-            assert str(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY) in update.content
-            assert update.content[str(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY)] == SWEEPERS_ANCESTRY_VERSION
+            assert SWEEPERS_ANCESTRY_VERSION_METADATA_KEY in update.content
+            assert update.content[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY] == SWEEPERS_ANCESTRY_VERSION
 
     def test_deduplication_script_included(self, mock_opensearch_client, simple_collection_hierarchy):
         """All updates should include deduplication script"""

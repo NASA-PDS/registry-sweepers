@@ -32,8 +32,8 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        assert str(ANCESTRY_REFS_METADATA_KEY) in update.content
-        refs = update.content[str(ANCESTRY_REFS_METADATA_KEY)]
+        assert ANCESTRY_REFS_METADATA_KEY in update.content
+        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
         assert isinstance(refs, list)
         assert "urn:nasa:pds:collection::1.0" in refs
 
@@ -44,8 +44,8 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        assert str(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY) in update.content
-        version = update.content[str(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY)]
+        assert SWEEPERS_ANCESTRY_VERSION_METADATA_KEY in update.content
+        version = update.content[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]
         assert version == SWEEPERS_ANCESTRY_VERSION
         assert isinstance(version, int)
 
@@ -73,7 +73,7 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[str(ANCESTRY_REFS_METADATA_KEY)]
+        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
         assert len(refs) == 6
         for ancestor in ancestors:
             assert str(ancestor) in refs
@@ -91,7 +91,7 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[str(ANCESTRY_REFS_METADATA_KEY)]
+        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
         # Should contain both references (as strings)
         assert len(refs) >= 2
         assert any("bundle" in ref for ref in refs)
@@ -104,7 +104,7 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[str(ANCESTRY_REFS_METADATA_KEY)]
+        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
         assert isinstance(refs, list)
         assert len(refs) == 0
 
@@ -116,6 +116,6 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[str(ANCESTRY_REFS_METADATA_KEY)]
+        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
         for ref in refs:
             assert isinstance(ref, str)
