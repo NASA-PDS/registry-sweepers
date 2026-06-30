@@ -61,34 +61,6 @@ def query_for_pending_collections(client: OpenSearch) -> Iterable[Dict]:
     return docs
 
 
-def get_nonaggregate_ancestry_records_query(client: OpenSearch) -> Iterable[Dict]:
-    # Query the registry-refs index for the contents of all collections
-    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
-
-    query: Dict = {
-        "query": {
-            "bool": {
-                "must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]
-            }
-        },
-        "seq_no_primary_term": True,
-    }
-    _source = {"includes": ["collection_lidvid", "batch_id", "product_lidvid"]}
-
-    # each document will have many product lidvids, so a smaller page size is warranted here
-    docs = query_registry_db_with_search_after(
-        client,
-        resolve_multitenant_index_name(client, "registry-refs"),
-        query,
-        _source,
-        page_size=AncestryRuntimeConstants.nonaggregate_ancestry_records_query_page_size,
-        request_timeout_seconds=30,
-        sort_fields=["collection_lidvid", "batch_id"],
-    )
-
-    return docs
-
-
 def query_for_collection_nonaggregate_refs(
     client: OpenSearch, collection_lidvid: PdsLidVid
 ) -> Iterable[PdsLidVid]:
