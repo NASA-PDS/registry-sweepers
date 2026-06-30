@@ -51,8 +51,6 @@ def run(
         product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
     )
 
-    # TODO: BOOKMARK LMAO - CONTINUE WORK HERE VVV
-
     if bulk_updates_sink is None:
         log.info("Ensuring metadata keys are present in database index...")
         for metadata_key in [
@@ -64,6 +62,7 @@ def run(
         for metadata_key in [
             # TODO: need to check whether values for these are actually updated for the refs docs, and whether they
             #  should even be - edunn 20251112
+            #  Update: appears not to be, but no time to confirm right now - edunn 20260630
             SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
         ]:
             ensure_index_mapping(
