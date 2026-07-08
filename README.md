@@ -66,6 +66,58 @@ The tool provides comprehensive statistics including:
 
 **Full synchronization** (Solr + OpenSearch) is available programmatically via the `run()` function but is not yet implemented as a console script option.
 
+## On-Demand Execution
+
+Use `pds-registry-sweepers` to run the sweepers from the command line.
+
+```bash
+# Run the full default suite
+pds-registry-sweepers
+
+# Run a single sweeper
+pds-registry-sweepers --only --repairkit
+
+# Run multiple specific sweepers
+pds-registry-sweepers --only --ancestry --provenance
+
+# Override the target endpoint for a specific run
+pds-registry-sweepers --only --ancestry --endpoint https://your-domain.us-west-2.es.amazonaws.com
+```
+
+### How `--only` works
+
+- Without `--only`, the default sweepers run.
+- With `--only`, default sweepers are skipped and only explicitly flagged sweepers run.
+
+### Authentication and required environment variables
+
+#### EC2 instance profile / IAM (AWS OpenSearch Service)
+
+Use this flow when running from an EC2 instance with an IAM profile attached.
+
+```bash
+export PROV_ENDPOINT=https://your-domain.us-west-2.es.amazonaws.com
+unset PROV_CREDENTIALS
+```
+
+- `PROV_ENDPOINT` is required.
+- Do not set `PROV_CREDENTIALS` for IAM auth.
+- Ensure the EC2 instance profile has permissions to access the target OpenSearch domain.
+
+#### Username/password auth (non-IAM OpenSearch)
+
+```bash
+export PROV_ENDPOINT=https://localhost:9200
+export PROV_CREDENTIALS='{"admin":"admin"}'
+```
+
+- `PROV_ENDPOINT` is required.
+- `PROV_CREDENTIALS` is required for this flow and must be a JSON object containing one username/password pair.
+
+### Non-production TLS usage
+
+For non-production environments with self-signed certificates, use `--insecure` to skip certificate verification.
+
 ## Developer Quickstart
 
 ### Prerequisites
