@@ -103,12 +103,22 @@ def run():
 
     # define optional sweepers
     parser.add_argument("--legacy-sync", action="store_true")
+    parser.add_argument("--repairkit", action="store_true")
+    parser.add_argument("--provenance", action="store_true")
+    parser.add_argument("--ancestry", action="store_true")
+    parser.add_argument("--reindexer", action="store_true")
     parser.add_argument(
         "--only",
         action="store_true",
         help="Only run sweepers explicitly enabled via flags, skipping the default sweepers",
     )
-    optional_sweepers = {"legacy_sync": legacy_registry_sync.run}
+    additional_optional_sweepers = {"legacy_sync": legacy_registry_sync.run}
+    named_default_sweepers = {
+        "repairkit": repairkit.run,
+        "provenance": provenance.run,
+        "ancestry": ancestry.run,
+        "reindexer": reindexer.run,
+    }
 
     args = parser.parse_args()
 
@@ -122,7 +132,12 @@ def run():
 
     sweepers = [] if args.only else list(default_sweepers)
 
-    for option, sweeper in optional_sweepers.items():
+    if args.only:
+        for option, sweeper in named_default_sweepers.items():
+            if getattr(args, option):
+                sweepers.append(sweeper)
+
+    for option, sweeper in additional_optional_sweepers.items():
         if getattr(args, option):
             sweepers.append(sweeper)
 
