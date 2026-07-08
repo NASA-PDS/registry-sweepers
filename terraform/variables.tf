@@ -40,6 +40,7 @@ variable "permissions_boundary_policy_name" {
 variable "mwaa_execution_role_name" {
   type        = string
   description = "Name of the MWAA execution role that needs iam:PassRole to launch ECS tasks"
+  default = ""
 }
 
 variable "nodes" {

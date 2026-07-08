@@ -151,6 +151,7 @@ resource "aws_iam_policy" "mwaa_ecs_passrole_policy" {
 
 
 resource "aws_iam_role_policy_attachment" "mwaa_ecs_passrole" {
+  count      = var.mwaa_execution_role_name != "" ? 1 : 0
   role       = var.mwaa_execution_role_name
   policy_arn = aws_iam_policy.mwaa_ecs_passrole_policy.arn
 }
