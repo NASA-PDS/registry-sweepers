@@ -121,17 +121,24 @@ def run():
     args = parser.parse_args()
 
     # Define default sweepers to be run here, in order of execution
+    # NOTE: repairkit is excluded - not compatible with current registry, requires refactoring
     default_sweepers = [
         provenance.run,
         ancestry.run,
         reindexer.run,
     ]
 
+    if args.repairkit:
+        log.warning(
+            "RepairKit sweeper is not compatible with the current registry and requires refactoring before it can be "
+            "executed - skipping"
+        )
+
     sweepers = [] if args.only else list(default_sweepers)
 
     if args.only:
         for option, sweeper in named_default_sweepers.items():
-            if getattr(args, option):
+            if getattr(args, option) and sweeper is not repairkit.run:
                 sweepers.append(sweeper)
 
     for option, sweeper in additional_optional_sweepers.items():
