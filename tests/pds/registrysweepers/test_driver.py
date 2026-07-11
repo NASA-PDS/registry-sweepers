@@ -35,16 +35,28 @@ def _run_driver_with_args(monkeypatch, args):
 def test_run_with_no_flags_runs_default_sweepers(monkeypatch):
     sweeper_calls = _run_driver_with_args(monkeypatch, [])
 
-    assert sweeper_calls == ["repairkit", "provenance", "ancestry", "reindexer"]
+    assert sweeper_calls == ["provenance", "ancestry", "reindexer"]
 
 
-def test_run_with_only_and_named_flag_runs_only_selected_default_sweeper(monkeypatch):
-    sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "--repairkit"])
+def test_run_with_named_flag_runs_only_that_sweeper(monkeypatch):
+    sweeper_calls = _run_driver_with_args(monkeypatch, ["--ancestry"])
 
-    assert sweeper_calls == ["repairkit"]
+    assert sweeper_calls == ["ancestry"]
 
 
-def test_run_with_only_and_multiple_named_flags_runs_all_selected_default_sweepers(monkeypatch):
-    sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "--ancestry", "--provenance"])
+def test_run_with_multiple_named_flags_runs_only_those_sweepers(monkeypatch):
+    sweeper_calls = _run_driver_with_args(monkeypatch, ["--ancestry", "--provenance"])
 
     assert sweeper_calls == ["provenance", "ancestry"]
+
+
+def test_run_with_repairkit_flag_skips_it(monkeypatch):
+    sweeper_calls = _run_driver_with_args(monkeypatch, ["--repairkit"])
+
+    assert sweeper_calls == []
+
+
+def test_run_with_legacy_sync_flag_runs_it(monkeypatch):
+    sweeper_calls = _run_driver_with_args(monkeypatch, ["--legacy-sync"])
+
+    assert sweeper_calls == ["legacy_sync"]

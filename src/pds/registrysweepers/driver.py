@@ -99,34 +99,28 @@ def run():
         description="sweeps the PDS registry with different routines meant to run regularly on the database",
     )
 
-    # define optional sweepers
     parser.add_argument("--legacy-sync", action="store_true")
     parser.add_argument("--repairkit", action="store_true")
     parser.add_argument("--provenance", action="store_true")
     parser.add_argument("--ancestry", action="store_true")
     parser.add_argument("--reindexer", action="store_true")
-    parser.add_argument(
-        "--only",
-        action="store_true",
-        help="Only run sweepers explicitly enabled via flags, skipping the default sweepers",
-    )
-    additional_optional_sweepers = {"legacy_sync": legacy_registry_sync.run}
-    named_default_sweepers = {
-        "repairkit": repairkit.run,
+
+    # Ordered map of flag name → sweeper function; repairkit excluded (requires refactoring for current registry)
+    selectable_sweepers = {
         "provenance": provenance.run,
         "ancestry": ancestry.run,
         "reindexer": reindexer.run,
+        "legacy_sync": legacy_registry_sync.run,
     }
 
-    args = parser.parse_args()
-
-    # Define default sweepers to be run here, in order of execution
-    # NOTE: repairkit is excluded - not compatible with current registry, requires refactoring
+    # Default execution order when no flags are provided
     default_sweepers = [
         provenance.run,
         ancestry.run,
         reindexer.run,
     ]
+
+    args = parser.parse_args()
 
     if args.repairkit:
         log.warning(
@@ -134,16 +128,9 @@ def run():
             "executed - skipping"
         )
 
-    sweepers = [] if args.only else list(default_sweepers)
-
-    if args.only:
-        for option, sweeper in named_default_sweepers.items():
-            if getattr(args, option) and sweeper is not repairkit.run:
-                sweepers.append(sweeper)
-
-    for option, sweeper in additional_optional_sweepers.items():
-        if getattr(args, option):
-            sweepers.append(sweeper)
+    any_flag_provided = args.repairkit or any(getattr(args, flag) for flag in selectable_sweepers)
+    explicit = [sweeper for flag, sweeper in selectable_sweepers.items() if getattr(args, flag)]
+    sweepers = explicit if any_flag_provided else default_sweepers
 
     sweeper_descriptions = [inspect.getmodule(f).__name__ for f in sweepers]
     log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
