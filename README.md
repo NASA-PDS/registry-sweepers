@@ -7,6 +7,8 @@ This package provides supplementary metadata generation for registry documents, 
 #### [RepairKit](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/repairkit/__init__.py)
 The repairkit sweeper applies idempotent transformations to targeted subsets of properties, for example ensuring that all properties expected to have array-like values are in fact arrays (as opposed to single-element arrays being flattened to strings during harvest).  Documents are processed based on whether their `ops:Provenance/ops:registry_sweepers_repairkit_version` metadata value is up-to-date relative to the sweeper codebase.
 
+> **Note:** RepairKit is currently disabled. It is not compatible with the current registry and requires refactoring before it can be executed. Passing `--repairkit` on the CLI will log a warning and skip it.
+
 #### [Provenance](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/provenance.py)
 The provenance sweeper generates metadata for linking each version-superseded product with the versioned product which supersedes it.  The value of the successor is stored in the `ops:Provenance/ops:superseded_by` property.  This property will not be set for the latest version of any product. All documents are processed, but db writes are optimised based on whether their `ops:Provenance/ops:registry_sweepers_provenance_version` metadata value is up-to-date relative to the sweeper codebase.
 
@@ -75,19 +77,19 @@ Use `pds-registry-sweepers` to run the sweepers from the command line.
 pds-registry-sweepers
 
 # Run a single sweeper
-pds-registry-sweepers --only --repairkit
+pds-registry-sweepers --ancestry
 
 # Run multiple specific sweepers
-pds-registry-sweepers --only --ancestry --provenance
+pds-registry-sweepers --ancestry --provenance
 
 # Override the target endpoint for a specific run
-pds-registry-sweepers --only --ancestry --endpoint https://your-domain.us-west-2.es.amazonaws.com
+pds-registry-sweepers --ancestry --endpoint https://your-domain.us-west-2.es.amazonaws.com
 ```
 
-### How `--only` works
+### Sweeper selection
 
-- Without `--only`, the default sweepers run.
-- With `--only`, default sweepers are skipped and only explicitly flagged sweepers run.
+- With no flags, the full default suite runs (provenance, ancestry, reindexer).
+- With one or more sweeper flags, only those sweepers run.
 
 ### Authentication and required environment variables
 
