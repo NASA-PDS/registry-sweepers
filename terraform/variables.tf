@@ -40,14 +40,14 @@ variable "permissions_boundary_policy_name" {
 variable "mwaa_execution_role_name" {
   type        = string
   description = "Name of the MWAA execution role that needs iam:PassRole to launch ECS tasks"
-  default = ""
+  default     = ""
 }
 
 variable "nodes" {
   type = map(object({
-    cpu    = number
-    memory = number
-    additional_args    = optional(string)
+    cpu             = number
+    memory          = number
+    additional_args = optional(string)
   }))
   description = "Map of node IDs to their ECS resource allocations. Optional 'ecs_task_cmd' overrides the container command."
 }
