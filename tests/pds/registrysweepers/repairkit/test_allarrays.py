@@ -22,10 +22,10 @@ class AllArrays(unittest.TestCase):
             "title": "Clementine LWIR brightness temperature flat field product: ff034ag.img",
             "product_class": "Product_Observational",
             "_package_id": "c0491371-49f8-4e34-9d1c-f94ef1217b57",
-            "ops:Registry_Sweepers/ops:parent_collection_identifier": ["urn:nasa:pds:clementine_lwir_bt:data_flatfield::1.0"],
-            "ops:Registry_Sweepers/ops:parent_bundle_identifier": ["urn:nasa:pds:clementine_lwir_bt::1.0"],
-            "ops:Registry_Sweepers/ops:registry_sweepers_repairkit_version": 2,
-            "ops:Registry_Sweepers/someStringTypedProp": "someValue",
+            "ops:Registry_Sweepers.ops:parent_collection_identifier": ["urn:nasa:pds:clementine_lwir_bt:data_flatfield::1.0"],
+            "ops:Registry_Sweepers.ops:parent_bundle_identifier": ["urn:nasa:pds:clementine_lwir_bt::1.0"],
+            "ops:Registry_Sweepers.ops:registry_sweepers_repairkit_version": 2,
+            "ops:Registry_Sweepers.someStringTypedProp": "someValue",
         }
 
         repairs = {}
