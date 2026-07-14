@@ -1,3 +1,7 @@
+locals {
+  enable_mwaa_passrole = var.mwaa_execution_role_name != ""
+}
+
 # ------------------------------------------------------------------------------
 # IAM Policies
 # ------------------------------------------------------------------------------
@@ -108,10 +112,10 @@ resource "aws_iam_policy" "write_cloudwatch_logs" {
       {
         Effect = "Allow"
         Action = [
-            "logs:PutLogEvents",
-            "logs:DescribeLogStreams",
-            "logs:CreateLogStream",
-            "logs:CreateLogGroup",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+          "logs:CreateLogStream",
+          "logs:CreateLogGroup",
         ]
         Resource = "arn:aws:logs:*:*:*"
       }
@@ -131,7 +135,8 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_write_cloudwa
 
 # Allow the MWAA execution role to pass the ECS roles when calling RunTask
 resource "aws_iam_policy" "mwaa_ecs_passrole_policy" {
-  name = "pds-registry-sweeper-mwaa-ecs-passrole-policy"
+  count = local.enable_mwaa_passrole ? 1 : 0
+  name  = "pds-registry-sweeper-mwaa-ecs-passrole-policy"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -151,8 +156,9 @@ resource "aws_iam_policy" "mwaa_ecs_passrole_policy" {
 
 
 resource "aws_iam_role_policy_attachment" "mwaa_ecs_passrole" {
+  count      = local.enable_mwaa_passrole ? 1 : 0
   role       = var.mwaa_execution_role_name
-  policy_arn = aws_iam_policy.mwaa_ecs_passrole_policy.arn
+  policy_arn = aws_iam_policy.mwaa_ecs_passrole_policy[0].arn
 }
 
 resource "aws_iam_policy" "opensearch_api_only_access" {

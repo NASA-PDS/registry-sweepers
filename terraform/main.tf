@@ -11,8 +11,8 @@ data "aws_region" "current" {}
 locals {
 
   tags = {
-    cicd    = "iac"
-    project = "pds-registry-sweepers"
+    cicd      = "iac"
+    project   = "pds-registry-sweepers"
     component = "registry"
     managedby = var.managedby
     venue     = var.venue
