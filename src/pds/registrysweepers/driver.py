@@ -55,7 +55,6 @@
 import argparse
 import functools
 import inspect
-import json
 import logging
 import os
 from datetime import datetime
@@ -63,7 +62,6 @@ from typing import Callable
 
 from pds.registrysweepers import legacy_registry_sync
 from pds.registrysweepers import provenance
-from pds.registrysweepers import repairkit
 from pds.registrysweepers.ancestry import main as ancestry
 from pds.registrysweepers.reindexer import main as reindexer
 from pds.registrysweepers.utils import configure_logging
@@ -114,9 +112,6 @@ def run():
 
     # Define default sweepers to be run here, in order of execution
     default_sweepers = [
-        # todo: edunn 20260528 it is assumed that structured metadata will break repairkit, but that repairkit is also
-        #  no longer a necessary step.  To be confirmed with jpadams.
-        # repairkit.run,
         provenance.run,
         ancestry.run,
         reindexer.run,
