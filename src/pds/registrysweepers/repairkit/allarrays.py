@@ -19,6 +19,8 @@ EXCLUDED_PROPERTIES = {
 
 
 def repair(document: Dict, fieldname: str) -> Dict:
+    raise NotImplementedError('The repairkit sweeper is deprecated and must be updated/tested for structured-property '
+                              'compatibility before use')
     # don't touch the enumerated exclusions, or any registry-sweepers metadata property
     if fieldname in EXCLUDED_PROPERTIES or fieldname.startswith("ops:Registry_Sweepers"):
         return {}
