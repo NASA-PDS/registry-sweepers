@@ -7,6 +7,7 @@ from typing import Optional
 import opensearchpy  # type: ignore
 from opensearchpy import OpenSearch
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 
 # Optional Environment variable  used for the Cross Cluster Search
 # connections aliases. Each element is separated by a ","
@@ -40,7 +41,7 @@ def get_already_loaded_lidvids(
     assert es_conn is not None, "es_conn must be provided"
     prod_id_resp: Iterable[Dict[str, Any]] = query_registry_db_with_search_after(
         es_conn,
-        "registry",
+        resolve_multitenant_index_name(es_conn, "registry"),
         _source={"includes": ["_id", sort_field, node_name_field], "excludes": []},
         query=query,
         sort_fields=[sort_field],
