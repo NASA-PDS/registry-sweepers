@@ -93,6 +93,9 @@ def run(
     configure_logging(filepath=log_filepath, log_level=log_level)
     log.info(limit_log_length(f"Starting repairkit v{SWEEPERS_REPAIRKIT_VERSION} sweeper processing..."))
 
+    raise NotImplementedError('The repairkit sweeper is deprecated and must be updated/tested for structured-property '
+                              'compatibility before use')
+
     def get_unprocessed_docs_query():
         return {
             "query": {
@@ -143,6 +146,9 @@ def run(
 
 
 if __name__ == "__main__":
+    raise NotImplementedError('The repairkit sweeper is deprecated and must be updated/tested for structured-property '
+                              'compatibility before use')
+
     args = parse_args(description="sweep through the registry documents and fix common errors")
     client = get_userpass_opensearch_client(
         endpoint_url=args.base_URL, username=args.username, password=args.password, verify_certs=not args.insecure
