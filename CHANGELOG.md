@@ -1,5 +1,14 @@
 # Changelog
 
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-07-14)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.0...«unknown»)
+
+**Requirements:**
+
+- As a PDS cloud operator, I want to automatically deploy sweepers with specific docker commands [\#211](https://github.com/NASA-PDS/registry-sweepers/issues/211)
+- As a registry administrator, I want the system to enforce that only one sweeper can operate on a single node concurrently [\#203](https://github.com/NASA-PDS/registry-sweepers/issues/203)
+
 ## [v1.7.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.0) (2026-06-23)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...v1.7.0)
