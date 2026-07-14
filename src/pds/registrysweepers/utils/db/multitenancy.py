@@ -17,10 +17,14 @@ def resolve_multitenant_index_name(client: Union[OpenSearch, None], index_type: 
     elif index_type not in supported_index_types:
         raise ValueError(f'index_type "{index_type}" not supported (expected one of {supported_index_types})')
     else:
-        # todo: determine whether or not this is an intended/permanent change - edunn 20260617
-        post_structured_index_type_name = index_type.replace('registry', 'registry-structured')
+        # N.B. this replacement reflects a permanent name change for indices as part of the switch to structured
+        # (dot-nested) properties. It is included for explicitness' sake and for ease of initial migration but may be
+        # replaced with updates to the hard-coded index type strings at a later date (post-migration) if desired - edunn
 
-        return resolve_index_name_if_aliased(client, f"{node_id}-{post_structured_index_type_name}")
+        if not index_type.startswith('registry-structured'):
+            index_type = index_type.replace('registry', 'registry-structured')
+
+        return resolve_index_name_if_aliased(client, f"{node_id}-{index_type}")
 
 
 def index_exists(client: OpenSearch, index_or_alias_name: str) -> bool:
