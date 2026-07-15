@@ -92,7 +92,11 @@ def _run_sweepers(sweepers: list):
             log_level=log_level,
         )
 
-    sweeper_descriptions = [inspect.getmodule(f).__name__ for f in sweepers]
+    def module_name(f: Callable) -> str:
+        mod = inspect.getmodule(f)
+        return mod.__name__ if mod is not None else repr(f)
+
+    sweeper_descriptions = [module_name(f) for f in sweepers]
     log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
 
     total_execution_begin = datetime.now()
@@ -101,7 +105,7 @@ def _run_sweepers(sweepers: list):
     for sweeper in sweepers:
         sweeper_execution_begin = datetime.now()
         run_factory(sweeper)()
-        sweeper_name = inspect.getmodule(sweeper).__name__
+        sweeper_name = module_name(sweeper)
         sweeper_execution_duration_strs.append(
             f"{sweeper_name}: {get_human_readable_elapsed_since(sweeper_execution_begin)}"
         )
