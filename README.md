@@ -73,23 +73,23 @@ The tool provides comprehensive statistics including:
 Use `pds-registry-sweepers` to run the sweepers from the command line.
 
 ```bash
-# Run the full default suite
+# Run the full default suite (provenance, ancestry, reindexer)
 pds-registry-sweepers
 
 # Run a single sweeper
-pds-registry-sweepers --ancestry
+pds-registry-sweepers --only ancestry
 
 # Run multiple specific sweepers
-pds-registry-sweepers --ancestry --provenance
+pds-registry-sweepers --only ancestry provenance
 
-# Override the target endpoint for a specific run
-pds-registry-sweepers --ancestry --endpoint https://your-domain.us-west-2.es.amazonaws.com
+# Run the legacy registry sync sweeper
+pds-registry-sweepers --only legacy-sync
 ```
 
 ### Sweeper selection
 
 - With no flags, the full default suite runs (provenance, ancestry, reindexer).
-- With one or more sweeper flags, only those sweepers run.
+- With `--only <name> [name ...]`, only the named sweeper(s) run. Available names: `provenance`, `ancestry`, `reindexer`, `legacy-sync`.
 
 ### Authentication and required environment variables
 

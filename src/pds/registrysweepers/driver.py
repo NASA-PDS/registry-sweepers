@@ -72,7 +72,7 @@ from pds.registrysweepers.utils.misc import is_dev_mode
 from pds.registrysweepers.utils.misc import limit_log_length
 
 
-def run():
+def _run_sweepers(sweepers: list):
     configure_logging(filepath=None, log_level=logging.INFO)
     log = logging.getLogger(__name__)
 
@@ -89,62 +89,18 @@ def run():
         return functools.partial(
             sweeper_f,
             client=get_opensearch_client_from_environment(verify_certs=True if not dev_mode else False),
-            # enable for development if required - not necessary in production
-            # log_filepath='registry-sweepers.log',
             log_level=log_level,
         )
-
-    parser = argparse.ArgumentParser(
-        prog="registry-sweepers",
-        description="sweeps the PDS registry with different routines meant to run regularly on the database",
-    )
-
-    parser.add_argument("--legacy-sync", action="store_true")
-    parser.add_argument("--repairkit", action="store_true")
-    parser.add_argument("--provenance", action="store_true")
-    parser.add_argument("--ancestry", action="store_true")
-    parser.add_argument("--reindexer", action="store_true")
-
-    # Ordered map of flag name → sweeper function; repairkit excluded (requires refactoring for current registry)
-    selectable_sweepers = {
-        "provenance": provenance.run,
-        "ancestry": ancestry.run,
-        "reindexer": reindexer.run,
-        "legacy_sync": legacy_registry_sync.run,
-    }
-
-    # Default execution order when no flags are provided
-    default_sweepers = [
-        provenance.run,
-        ancestry.run,
-        reindexer.run,
-    ]
-
-    args = parser.parse_args()
-
-    if args.repairkit:
-        log.warning(
-            "RepairKit sweeper is not compatible with the current registry and requires refactoring before it can be "
-            "executed - skipping"
-        )
-
-    any_flag_provided = args.repairkit or any(getattr(args, flag) for flag in selectable_sweepers)
-    explicit = [sweeper for flag, sweeper in selectable_sweepers.items() if getattr(args, flag)]
-    sweepers = explicit if any_flag_provided else default_sweepers
 
     sweeper_descriptions = [inspect.getmodule(f).__name__ for f in sweepers]
     log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
 
     total_execution_begin = datetime.now()
-
     sweeper_execution_duration_strs = []
 
     for sweeper in sweepers:
         sweeper_execution_begin = datetime.now()
-        run_sweeper_f = run_factory(sweeper)
-
-        run_sweeper_f()
-
+        run_factory(sweeper)()
         sweeper_name = inspect.getmodule(sweeper).__name__
         sweeper_execution_duration_strs.append(
             f"{sweeper_name}: {get_human_readable_elapsed_since(sweeper_execution_begin)}"
@@ -156,3 +112,31 @@ def run():
             + "\n   ".join(sweeper_execution_duration_strs)
         )
     )
+
+
+SWEEPER_REGISTRY = {
+    "provenance": provenance.run,
+    "ancestry": ancestry.run,
+    "reindexer": reindexer.run,
+    "legacy-sync": legacy_registry_sync.run,
+}
+
+DEFAULT_SWEEPERS = ["provenance", "ancestry", "reindexer"]
+
+
+def run():
+    parser = argparse.ArgumentParser(
+        prog="registry-sweepers",
+        description="sweeps the PDS registry with different routines meant to run regularly on the database",
+    )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        metavar="SWEEPER",
+        choices=SWEEPER_REGISTRY.keys(),
+        help=f"Only run the specified sweeper(s). Choices: {', '.join(SWEEPER_REGISTRY.keys())}",
+    )
+    args = parser.parse_args()
+
+    names = args.only if args.only else DEFAULT_SWEEPERS
+    _run_sweepers([SWEEPER_REGISTRY[name] for name in names])

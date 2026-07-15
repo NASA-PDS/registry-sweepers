@@ -20,11 +20,10 @@ def _run_driver_with_args(monkeypatch, args):
     monkeypatch.setattr(driver, "get_human_readable_elapsed_since", lambda *_: "0s")
     monkeypatch.setattr(driver, "limit_log_length", lambda text: text)
 
-    monkeypatch.setattr(driver.repairkit, "run", _make_sweeper("repairkit"))
-    monkeypatch.setattr(driver.provenance, "run", _make_sweeper("provenance"))
-    monkeypatch.setattr(driver.ancestry, "run", _make_sweeper("ancestry"))
-    monkeypatch.setattr(driver.reindexer, "run", _make_sweeper("reindexer"))
-    monkeypatch.setattr(driver.legacy_registry_sync, "run", _make_sweeper("legacy_sync"))
+    monkeypatch.setitem(driver.SWEEPER_REGISTRY, "provenance", _make_sweeper("provenance"))
+    monkeypatch.setitem(driver.SWEEPER_REGISTRY, "ancestry", _make_sweeper("ancestry"))
+    monkeypatch.setitem(driver.SWEEPER_REGISTRY, "reindexer", _make_sweeper("reindexer"))
+    monkeypatch.setitem(driver.SWEEPER_REGISTRY, "legacy-sync", _make_sweeper("legacy-sync"))
 
     monkeypatch.setattr(sys, "argv", ["registry-sweepers", *args])
     driver.run()
@@ -38,25 +37,19 @@ def test_run_with_no_flags_runs_default_sweepers(monkeypatch):
     assert sweeper_calls == ["provenance", "ancestry", "reindexer"]
 
 
-def test_run_with_named_flag_runs_only_that_sweeper(monkeypatch):
-    sweeper_calls = _run_driver_with_args(monkeypatch, ["--ancestry"])
+def test_run_only_single_sweeper(monkeypatch):
+    sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "ancestry"])
 
     assert sweeper_calls == ["ancestry"]
 
 
-def test_run_with_multiple_named_flags_runs_only_those_sweepers(monkeypatch):
-    sweeper_calls = _run_driver_with_args(monkeypatch, ["--ancestry", "--provenance"])
+def test_run_only_multiple_sweepers(monkeypatch):
+    sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "ancestry", "provenance"])
 
-    assert sweeper_calls == ["provenance", "ancestry"]
-
-
-def test_run_with_repairkit_flag_skips_it(monkeypatch):
-    sweeper_calls = _run_driver_with_args(monkeypatch, ["--repairkit"])
-
-    assert sweeper_calls == []
+    assert sweeper_calls == ["ancestry", "provenance"]
 
 
-def test_run_with_legacy_sync_flag_runs_it(monkeypatch):
-    sweeper_calls = _run_driver_with_args(monkeypatch, ["--legacy-sync"])
+def test_run_only_legacy_sync(monkeypatch):
+    sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "legacy-sync"])
 
-    assert sweeper_calls == ["legacy_sync"]
+    assert sweeper_calls == ["legacy-sync"]
