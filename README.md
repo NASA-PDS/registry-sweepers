@@ -118,7 +118,12 @@ export PROV_CREDENTIALS='{"admin":"admin"}'
 
 ### Non-production TLS usage
 
-For non-production environments with self-signed certificates, use `--insecure` to skip certificate verification.
+For non-production environments with self-signed certificates, set `DEV_MODE=1` to skip certificate verification.
+
+```bash
+export DEV_MODE=1
+pds-registry-sweepers
+```
 
 ## Developer Quickstart
 
