@@ -72,6 +72,16 @@ from pds.registrysweepers.utils.misc import is_dev_mode
 from pds.registrysweepers.utils.misc import limit_log_length
 
 
+SWEEPER_REGISTRY = {
+    "provenance": provenance.run,
+    "ancestry": ancestry.run,
+    "reindexer": reindexer.run,
+    "legacy-sync": legacy_registry_sync.run,
+}
+
+DEFAULT_SWEEPERS = ["provenance", "ancestry", "reindexer"]
+
+
 def run():
     configure_logging(filepath=None, log_level=logging.INFO)
     log = logging.getLogger(__name__)
@@ -94,36 +104,28 @@ def run():
             log_level=log_level,
         )
 
+    def module_name(f: Callable) -> str:
+        mod = inspect.getmodule(f)
+        return mod.__name__ if mod is not None else repr(f)
+
     parser = argparse.ArgumentParser(
         prog="registry-sweepers",
         description="sweeps the PDS registry with different routines meant to run regularly on the database",
     )
-
-    # define optional sweepers
-    parser.add_argument("--legacy-sync", action="store_true")
     parser.add_argument(
         "--only",
-        action="store_true",
-        help="Only run sweepers explicitly enabled via flags, skipping the default sweepers",
+        nargs="+",
+        metavar="SWEEPER",
+        choices=SWEEPER_REGISTRY.keys(),
+        help=f"Only run the specified sweeper(s). Choices: {', '.join(SWEEPER_REGISTRY.keys())}",
     )
-    optional_sweepers = {"legacy_sync": legacy_registry_sync.run}
 
     args = parser.parse_args()
 
-    # Define default sweepers to be run here, in order of execution
-    default_sweepers = [
-        provenance.run,
-        ancestry.run,
-        reindexer.run,
-    ]
+    names = args.only if args.only else DEFAULT_SWEEPERS
+    sweepers = [SWEEPER_REGISTRY[name] for name in names]
 
-    sweepers = [] if args.only else list(default_sweepers)
-
-    for option, sweeper in optional_sweepers.items():
-        if getattr(args, option):
-            sweepers.append(sweeper)
-
-    sweeper_descriptions = [inspect.getmodule(f).__name__ for f in sweepers]
+    sweeper_descriptions = [module_name(f) for f in sweepers]
     log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
 
     total_execution_begin = datetime.now()
@@ -136,9 +138,8 @@ def run():
 
         run_sweeper_f()
 
-        sweeper_name = inspect.getmodule(sweeper).__name__
         sweeper_execution_duration_strs.append(
-            f"{sweeper_name}: {get_human_readable_elapsed_since(sweeper_execution_begin)}"
+            f"{module_name(sweeper)}: {get_human_readable_elapsed_since(sweeper_execution_begin)}"
         )
 
     log.info(
