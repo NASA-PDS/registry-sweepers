@@ -91,8 +91,12 @@ def run(
 
     create_legacy_registry_index(es_conn=client)
 
-    prod_ids = get_already_loaded_lidvids(
-        product_classes=["Product_Context", "Product_Collection", "Product_Bundle"], es_conn=client
+    prod_ids = (
+        {}
+        if force
+        else get_already_loaded_lidvids(
+            product_classes=["Product_Context", "Product_Collection", "Product_Bundle"], es_conn=client
+        )
     )
 
     online_resources = get_online_resources()
