@@ -386,6 +386,7 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
                 "source": update.inline_script_content,
                 "lang": "painless",
                 "params": {
+                    # TODO: pull this out of the generic update_as_statements() - it's ancestry-specific
                     "new_items": update.content.get(ANCESTRY_REFS_METADATA_KEY, []),
                 },
             }
