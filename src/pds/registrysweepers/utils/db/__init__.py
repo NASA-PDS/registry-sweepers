@@ -367,22 +367,19 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
         metadata_statement["if_seq_no"] = update.seq_no
 
     # Presumably, upsert is incompatible with inline scripts - edunn 20251111
-    conflict = update.inline_script_content is not None and as_upsert
-    if conflict:
+    script_and_upsert_conflict = update.inline_script_content is not None and as_upsert
+    if script_and_upsert_conflict:
         raise ValueError("Cannot specify both inline_script_content and as_upsert=True for the same Update")
 
     if update.inline_script_content is None:
         content_statement = {"doc": update.content, "doc_as_upsert": as_upsert}
     else:
-        if not update.content:
-            return []
-
         content_statement = {
             "script": {
                 "source": update.inline_script_content,
                 "lang": "painless",
                 "params": {
-                    "new_items": update.content.get(ANCESTRY_REFS_METADATA_KEY, []),
+                    "new_items": list(update.inline_script_new_items),
                 },
             }
 
