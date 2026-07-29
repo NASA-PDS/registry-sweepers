@@ -366,9 +366,13 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
         metadata_statement["if_primary_term"] = update.primary_term
         metadata_statement["if_seq_no"] = update.seq_no
 
+    doc_and_script_conflict = update.inline_script_content is not None and update.content is not None
+    if doc_and_script_conflict:
+        raise ValueError("Cannot specify both doc update content and inline_script_content for the same Update")
+
     # Presumably, upsert is incompatible with inline scripts - edunn 20251111
-    conflict = update.inline_script_content is not None and as_upsert
-    if conflict:
+    script_and_upsert_conflict = update.inline_script_content is not None and as_upsert
+    if script_and_upsert_conflict:
         raise ValueError("Cannot specify both inline_script_content and as_upsert=True for the same Update")
 
     if update.inline_script_content is None:
