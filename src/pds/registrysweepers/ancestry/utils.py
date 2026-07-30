@@ -95,4 +95,4 @@ def update_from_record(record: ProductUpdateRecord) -> Update:
     doc_id = str(record.product)
     new_ancestry_refs = [str(ref) for ref in record.direct_ancestor_refs]
 
-    return Update(id=doc_id, content=content, inline_script_content=ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED, inline_script_new_items=new_ancestry_refs)
+    return Update(id=doc_id, inline_script_content=ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED, inline_script_new_items=new_ancestry_refs)
