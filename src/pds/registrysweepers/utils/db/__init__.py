@@ -374,9 +374,6 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
     if update.inline_script_content is None:
         content_statement = {"doc": update.content, "doc_as_upsert": as_upsert}
     else:
-        if not update.content:
-            return []
-
         content_statement = {
             "script": {
                 "source": update.inline_script_content,
