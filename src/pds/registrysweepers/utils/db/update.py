@@ -33,3 +33,10 @@ class Update:
             raise ValueError("if either of primary_term, seq_no is provided, both must be provided")
 
         return has_both
+
+    def __post_init__(self):
+        if not (self.content or self.inline_script_content):
+            raise ValueError("either content or inline_script_content must be provided")
+
+        if self.content and self.inline_script_content:
+            raise ValueError("only one of content or inline_script_content may be provided in a single update")
