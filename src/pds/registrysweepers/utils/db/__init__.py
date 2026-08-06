@@ -295,7 +295,11 @@ def write_updated_docs(
     index_name: str,
     bulk_chunk_max_update_count: Union[int, None] = None,
     as_upsert: bool = False,
+    defer_if_not_exists = False
 ):
+    if as_upsert and defer_if_not_exists:
+        raise RuntimeError('"as_upsert" and "defer_if_not_exists" may not both be set as they are mutually-exclusive')
+
     log.info(limit_log_length("Writing document updates..."))
     buffered_updates_count = 0
     updated_doc_count = 0
