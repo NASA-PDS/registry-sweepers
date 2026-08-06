@@ -334,7 +334,7 @@ def write_updated_docs(
                     f"Bulk update buffer has reached {threshold_log_str} threshold - writing {buffered_updates_count} document updates to db..."
                 )
             )
-            _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
+            response_content = _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
             bulk_updates_buffer = []
             bulk_buffer_size_mb = 0.0
             writes_skipped_since_flush = 0
@@ -351,7 +351,7 @@ def write_updated_docs(
         log.debug(
             limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
         )
-        _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
+        response_content = _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
 
     log.info(
         limit_log_length(
@@ -394,9 +394,19 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
 
 
 @retry(tries=6, delay=15, backoff=2, logger=log)
-def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]):
+def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]) -> Dict:
+    """
+    TODO: Flesh out function docs
+    Now returns response content from opensearch
+    """
     if len(bulk_updates) == 0:
         log.debug(limit_log_length("_write_bulk_updates_chunk received empty arg bulk_updates - skipping"))
+        noop_response_mock = {
+            'took': 0,
+            'errors': False,
+            'items': []
+        }
+        return noop_response_mock
 
     bulk_data = "\n".join(bulk_updates) + "\n"
 
@@ -446,6 +456,8 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                     )
     else:
         log.debug(limit_log_length("Successfully wrote bulk update chunk"))
+
+    return response_content
 
 
 def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str, List[str]]]:
