@@ -13,6 +13,7 @@ from typing import Union
 
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
+from pds.registrysweepers.ancestry.updatedeferraltracker import UpdateDeferralTracker
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import get_random_hex_id
@@ -394,10 +395,9 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
 
 
 @retry(tries=6, delay=15, backoff=2, logger=log)
-def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]) -> Dict:
+def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str], update_deferral_tracker: Optional[UpdateDeferralTracker] = None) -> Dict:
     """
     TODO: Flesh out function docs
-    Now returns response content from opensearch
     """
     if len(bulk_updates) == 0:
         log.debug(limit_log_length("_write_bulk_updates_chunk received empty arg bulk_updates - skipping"))
@@ -413,11 +413,15 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
     request_timeout = 180
     response_content = client.bulk(index=index_name, body=bulk_data, request_timeout=request_timeout)
 
+    if update_deferral_tracker is not None:
+        successful_updates = [item["update"] for item in response_content["items"] if "error" not in item["update"]]:
+        for update in successful_updates:
+            update_deferral_tracker.discard(update["_id"])
+        update_deferral_tracker.lock_in_deferrals()
+
+
     if response_content.get("errors"):
-        warn_types = {
-            "document_missing_exception",
-            "document_missing_in_index_exception",
-        }  # these types represent bad data, not bad sweepers behaviour
+        warn_types = {}  # these types represent bad data, not bad sweepers behaviour
         items_with_problems = [item for item in response_content["items"] if "error" in item["update"]]
         if any(
             item["update"]["status"] == 429 and item["update"]["error"]["type"] == "circuit_breaking_exception"
@@ -456,8 +460,6 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                     )
     else:
         log.debug(limit_log_length("Successfully wrote bulk update chunk"))
-
-    return response_content
 
 
 def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str, List[str]]]:
