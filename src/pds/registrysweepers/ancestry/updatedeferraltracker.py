@@ -1,9 +1,6 @@
 from collections.abc import Iterator
-from collections import defaultdict
-from typing import Dict
 from typing import List
 from pds.registrysweepers.utils.db import Update
-from typing import Iterable
 
 
 class UpdateDeferralTracker:
@@ -23,7 +20,7 @@ class UpdateDeferralTracker:
 
            In this case, it is necessary to avoid releasing the earlier update as it has not been written successfully.
 
-
+        N.B. Not thread safe
     """
     _source: Iterator[Update]
     _temp_store: Dict[str, List[Update]] = defaultdict(list)
@@ -54,3 +51,13 @@ class UpdateDeferralTracker:
 
         # reset temp_store
         self._temp_store = {}
+
+    def flush(self) -> Iterable[Update]:
+        """
+            Flush the content of the store for processing
+        """
+        self.lock_in_deferrals()
+        stored_ids = list(self._store.keys())
+        for id in stored_ids:
+            yield self._store.pop(id)
+
