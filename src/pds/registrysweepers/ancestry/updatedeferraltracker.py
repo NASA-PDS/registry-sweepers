@@ -33,7 +33,7 @@ class UpdateDeferralTracker:
         self._source = source
 
     def __iter__(self):
-        return self._store.values()
+        return self
 
     def __next__(self):
         next_update = self._source.next()
