@@ -1,4 +1,4 @@
-ANCESTRY_REFS_METADATA_KEY = "ops:Provenance/ops:ancestor_refs"
+ANCESTRY_REFS_METADATA_KEY = "ops:Registry_Sweepers.ops:ancestor_refs"
 
 # this placeholder exists to provide interpolation of the key without needing to escape special characters in the painless script
 KEY_PLACEHOLDER = "ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER"
