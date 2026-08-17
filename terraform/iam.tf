@@ -2,58 +2,6 @@ locals {
   enable_mwaa_passrole = var.mwaa_execution_role_name != ""
 }
 
-# ------------------------------------------------------------------------------
-# IAM Policies
-# ------------------------------------------------------------------------------
-resource "aws_iam_policy" "task_role_policy" {
-  name = "pds-registry-sweeper-ecs-task-role-policy"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "aoss:Get*",
-          "aoss:List*",
-          "aoss:Batch*",
-          "aoss:APIAccessAll"
-        ]
-        Resource = "arn:aws:aoss:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:collection/${var.aoss_collection_id}"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:PutLogEvents",
-          "logs:DescribeLogStreams",
-          "logs:CreateLogStream",
-          "logs:CreateLogGroup"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_policy" "execution_role_policy" {
-  name = "pds-registry-task-execution-role-policy"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = "ssm:GetParameters"
-        Resource = "*"
-      },
-      {
-        Effect   = "Allow"
-        Action   = "logs:CreateLogGroup"
-        Resource = "*"
-      }
-    ]
-  })
-}
 
 # ------------------------------------------------------------------------------
 # IAM Roles
@@ -102,6 +50,11 @@ resource "aws_iam_role" "execution_role" {
 
 }
 
+# ------------------------------------------------------------------------------
+# IAM Policies
+# ------------------------------------------------------------------------------
+
+
 # Allow sweeper to write cloudwatch logs
 resource "aws_iam_policy" "write_cloudwatch_logs" {
   name = "registry-sweeeper-cloudwatch-logs-policy"
@@ -117,20 +70,30 @@ resource "aws_iam_policy" "write_cloudwatch_logs" {
           "logs:CreateLogStream",
           "logs:CreateLogGroup",
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_task_role_write_cloudwatch" {
-  role       = aws_iam_role.task_role.name
-  policy_arn = aws_iam_policy.write_cloudwatch_logs.arn
-}
+resource "aws_iam_policy" "opensearch_api_only_access" {
+  name        = "aoss-${var.aoss_collection_id}-api-access"
+  description = "IAM policy for OpenSearch Serverless writer access, to be used by nodes through their Cognito user groups"
 
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_write_cloudwatch" {
-  role       = aws_iam_role.execution_role.name
-  policy_arn = aws_iam_policy.write_cloudwatch_logs.arn
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "aoss:APIAccessAll",
+        ]
+        Resource = "arn:aws:aoss:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:collection/${var.aoss_collection_id}"
+      }
+    ]
+  })
+
+  tags = local.tags
 }
 
 # Allow the MWAA execution role to pass the ECS roles when calling RunTask
@@ -154,31 +117,13 @@ resource "aws_iam_policy" "mwaa_ecs_passrole_policy" {
 }
 
 
-
-resource "aws_iam_role_policy_attachment" "mwaa_ecs_passrole" {
-  count      = local.enable_mwaa_passrole ? 1 : 0
-  role       = var.mwaa_execution_role_name
-  policy_arn = aws_iam_policy.mwaa_ecs_passrole_policy[0].arn
-}
-
-resource "aws_iam_policy" "opensearch_api_only_access" {
-  name        = "aoss-${var.aoss_collection_id}-api-access"
-  description = "IAM policy for OpenSearch Serverless writer access, to be used by nodes through their Cognito user groups"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "aoss:APIAccessAll",
-        ]
-        Resource = "arn:aws:aoss:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:collection/${var.aoss_collection_id}"
-      }
-    ]
-  })
-
-  tags = local.tags
+# ------------------------------------------------------------------------------
+# IAM Role Policy Attachments
+# ------------------------------------------------------------------------------
+# Task role
+resource "aws_iam_role_policy_attachment" "ecs_task_role_write_cloudwatch" {
+  role       = aws_iam_role.task_role.name
+  policy_arn = aws_iam_policy.write_cloudwatch_logs.arn
 }
 
 resource "aws_iam_role_policy_attachment" "opensearch_task_role_policy" {
@@ -186,17 +131,16 @@ resource "aws_iam_role_policy_attachment" "opensearch_task_role_policy" {
   policy_arn = aws_iam_policy.opensearch_api_only_access.arn
 }
 
-# ------------------------------------------------------------------------------
-# IAM Role Policy Attachments
-# ------------------------------------------------------------------------------
-resource "aws_iam_role_policy_attachment" "task_role_policy" {
-  role       = aws_iam_role.task_role.name
-  policy_arn = aws_iam_policy.task_role_policy.arn
+# Execution role
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_write_cloudwatch" {
+  role       = aws_iam_role.execution_role.name
+  policy_arn = aws_iam_policy.write_cloudwatch_logs.arn
 }
 
-resource "aws_iam_role_policy_attachment" "execution_role_policy" {
-  role       = aws_iam_role.execution_role.name
-  policy_arn = aws_iam_policy.execution_role_policy.arn
+resource "aws_iam_role_policy_attachment" "mwaa_ecs_passrole" {
+  count      = local.enable_mwaa_passrole ? 1 : 0
+  role       = var.mwaa_execution_role_name
+  policy_arn = aws_iam_policy.mwaa_ecs_passrole_policy[0].arn
 }
 
 resource "aws_iam_role_policy_attachment" "execution_role_aws_managed" {
