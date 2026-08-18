@@ -1,6 +1,8 @@
 from collections.abc import Iterator
+from collections.abc import Iterable
+from collections import defaultdict
 from typing import List
-from pds.registrysweepers.utils.db import Update
+from pds.registrysweepers.utils.db.update import Update
 
 
 class UpdateDeferralTracker:
@@ -23,8 +25,8 @@ class UpdateDeferralTracker:
         N.B. Not thread safe
     """
     _source: Iterator[Update]
-    _temp_store: Dict[str, List[Update]] = defaultdict(list)
-    _store: Dict[str, List[Update]] = defaultdict(list)
+    _temp_store: dict[str, List[Update]] = defaultdict(list)
+    _store: dict[str, List[Update]] = defaultdict(list)
 
     def __init__(self, source: Iterator[Update]):
         self._source = source
@@ -33,14 +35,14 @@ class UpdateDeferralTracker:
         return self
 
     def __next__(self):
-        next_update = self._source.next()
+        next_update = next(self._source)
         stored_updates: List[Update] = self._temp_store.setdefault(next_update.id, [])
         stored_updates.append(next_update)
         return next_update
 
     def discard(self, update_id: str):
-        # intentionally non-safe as key should always exist
-        del self._temp_store[update_id]
+        # will trigger once per Update for a given key
+        self._temp_store.pop(update_id, None)
 
     def lock_in_deferrals(self):
         # merge everything from temp_store into store
@@ -59,5 +61,5 @@ class UpdateDeferralTracker:
         self.lock_in_deferrals()
         stored_ids = list(self._store.keys())
         for id in stored_ids:
-            yield self._store.pop(id)
+            yield from self._store.pop(id)
 

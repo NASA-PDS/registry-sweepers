@@ -18,7 +18,7 @@ from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecor
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
-from pds.registrysweepers.utils.db import Update
+from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
