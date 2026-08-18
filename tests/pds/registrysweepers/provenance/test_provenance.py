@@ -7,7 +7,7 @@ from pds.registrysweepers import provenance
 from pds.registrysweepers.provenance import ProvenanceRecord
 from pds.registrysweepers.provenance import SWEEPERS_PROVENANCE_VERSION
 from pds.registrysweepers.provenance import SWEEPERS_PROVENANCE_VERSION_METADATA_KEY
-from pds.registrysweepers.utils.db import Update
+from pds.registrysweepers.utils.db.update import Update
 
 
 class ProvenanceBasicFunctionalTestCase(unittest.TestCase):
