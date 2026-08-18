@@ -354,7 +354,7 @@ def write_updated_docs(
             )
             _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer, update_deferral_tracker=update_deferral_tracker)
 
-            # TODO: eliminate duplication - it's already proven brittle - edunn 20260818
+            # TODO: eliminate duplication of this block - it's already proven brittle - edunn 20260818
             if update_deferral_tracker is not None:
                 deferred_updates = list(update_deferral_tracker.flush())
                 total_deferred_update_count += len(deferred_updates)
@@ -380,6 +380,8 @@ def write_updated_docs(
             limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
         )
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer, update_deferral_tracker=update_deferral_tracker)
+
+        # this duplicates earlier implementation - refactor at some point - edunn 20260918
         if update_deferral_tracker is not None:
             deferred_updates = list(update_deferral_tracker.flush())
             total_deferred_update_count += len(deferred_updates)
