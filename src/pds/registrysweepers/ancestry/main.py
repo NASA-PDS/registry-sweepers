@@ -74,6 +74,7 @@ def run(
             client,
             updates,
             index_name=resolve_multitenant_index_name(client, "registry"),
+            defer_on_missing_document=True,
         )
 
     else:
