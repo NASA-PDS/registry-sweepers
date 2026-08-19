@@ -430,8 +430,7 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
     updates_strs = [json.dumps(obj) for obj in update_objs]
     return updates_strs
 
-# TODO: revert
-# @retry(tries=6, delay=15, backoff=2, logger=log)
+@retry(tries=6, delay=15, backoff=2, logger=log)
 def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str], update_deferral_tracker: Optional[UpdateDeferralTracker] = None) -> Dict:
     """
     TODO: Flesh out function docs
