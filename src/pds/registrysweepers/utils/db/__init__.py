@@ -13,6 +13,7 @@ from typing import Optional
 from typing import Union
 
 from opensearchpy import OpenSearch
+from opensearchpy.helpers import bulk
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.updatedeferraltracker import UpdateDeferralTracker
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
@@ -390,11 +391,13 @@ def write_updated_docs(
                                           for statement in update_as_statements(deferred_update, as_upsert=True)]
             _write_bulk_updates_chunk(client, deferred_index_name, deferred_update_statements)
 
-    log.info(
-        limit_log_length(
-            f"Wrote {total_update_count} doc updates, deferred {total_deferred_update_count} doc updates, and skipped {total_writes_skipped} doc updates"
-        )
-    )
+
+    log_msg = f"Wrote {total_update_count} doc updates"
+    if total_update_count > 0:
+        log_msg += f" ({total_deferred_update_count} deferred)"
+    if total_writes_skipped > 0:
+        log_msg += f" and skipped {total_writes_skipped} doc updates"
+    log.info(limit_log_length(log_msg))
 
 
 def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[str]:
@@ -531,3 +534,31 @@ def get_query_hits_count(client: OpenSearch, index_name: str, query: Dict) -> in
     response = client.search(index=index_name, body=query, size=0, _source_includes=[], track_total_hits=True)
 
     return response["hits"]["total"]["value"]
+
+def bulk_delete_documents(
+        client: OpenSearch,
+        index: str,
+        doc_ids: Iterable[str],
+        chunk_size: int = 1000,
+) -> None:
+
+        def _generate_delete_actions():
+            for doc_id in doc_ids:
+                yield {
+                    "_op_type": "delete",
+                    "_index": index,
+                    "_id": doc_id,
+                }
+
+        success_count, errors = bulk(
+            client,
+            _generate_delete_actions(),
+            chunk_size=chunk_size,
+            raise_on_error=False,
+            raise_on_exception=True,
+            max_retries=3,
+        )
+
+        non_404_errors = [e.get("delete", {}).get("status") != 404 for e in errors]
+        if non_404_errors:
+            raise RuntimeError(f'Some deletions have failed on index {index}: {", ".join(non_404_errors)}')
