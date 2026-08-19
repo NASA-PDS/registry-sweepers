@@ -2,6 +2,7 @@ import json
 import logging
 import math
 import sys
+from itertools import chain
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -12,7 +13,10 @@ from typing import Optional
 from typing import Union
 
 from opensearchpy import OpenSearch
+from opensearchpy.helpers import bulk
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
+from pds.registrysweepers.ancestry.updatedeferraltracker import UpdateDeferralTracker
+from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import get_random_hex_id
@@ -20,6 +24,7 @@ from pds.registrysweepers.utils.misc import limit_log_length
 from retry import retry
 from retry.api import retry_call
 from tqdm import tqdm
+from pds.registrysweepers.utils.db.multitenancy import index_exists
 
 log = logging.getLogger(__name__)
 
@@ -295,11 +300,29 @@ def write_updated_docs(
     index_name: str,
     bulk_chunk_max_update_count: Union[int, None] = None,
     as_upsert: bool = False,
+    defer_on_missing_document = False
 ):
+    if as_upsert and defer_on_missing_document:
+        raise RuntimeError('"as_upsert" and "defer_if_not_exists" may not both be set as they are mutually-exclusive')
+
     log.info(limit_log_length("Writing document updates..."))
     buffered_updates_count = 0
-    updated_doc_count = 0
+    total_update_count = 0
+    total_deferred_update_count = 0
     total_writes_skipped = 0
+
+    if defer_on_missing_document:
+        deferred_index_name = f"{index_name}-deferred-updates"
+        if not index_exists(client, deferred_index_name):
+            raise RuntimeError(f"index '{deferred_index_name}' does not exist and must be created before "
+                               f"running sweepers'")
+
+        # no index mappings should be necessary, as deferred updates will only be accessed by _id
+
+        update_deferral_tracker = UpdateDeferralTracker(updates)
+        updates = iter(update_deferral_tracker)
+    else:
+        update_deferral_tracker = None
 
     bulk_buffer_max_size_mb = 30.0
     bulk_buffer_size_mb = 0.0
@@ -330,7 +353,17 @@ def write_updated_docs(
                     f"Bulk update buffer has reached {threshold_log_str} threshold - writing {buffered_updates_count} document updates to db..."
                 )
             )
-            _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
+            _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer, update_deferral_tracker=update_deferral_tracker)
+
+            # TODO: eliminate duplication of this block - it's already proven brittle - edunn 20260818
+            if update_deferral_tracker is not None:
+                deferred_updates = list(update_deferral_tracker.flush())
+                total_deferred_update_count += len(deferred_updates)
+                deferred_update_statements = [statement
+                                              for deferred_update in deferred_updates
+                                              for statement in update_as_statements(deferred_update, as_upsert=True)]
+                _write_bulk_updates_chunk(client, deferred_index_name, deferred_update_statements)
+
             bulk_updates_buffer = []
             bulk_buffer_size_mb = 0.0
             writes_skipped_since_flush = 0
@@ -341,19 +374,30 @@ def write_updated_docs(
             bulk_buffer_size_mb += sys.getsizeof(s) / 1024**2
 
         bulk_updates_buffer.extend(update_statement_strs)
-        updated_doc_count += 1
+        total_update_count += 1
 
     if buffered_updates_count > 0:
         log.debug(
             limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
         )
-        _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
+        _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer, update_deferral_tracker=update_deferral_tracker)
 
-    log.info(
-        limit_log_length(
-            f"Wrote document updates for {updated_doc_count} products and skipped {total_writes_skipped} doc updates"
-        )
-    )
+        # this duplicates earlier implementation - refactor at some point - edunn 20260918
+        if update_deferral_tracker is not None:
+            deferred_updates = list(update_deferral_tracker.flush())
+            total_deferred_update_count += len(deferred_updates)
+            deferred_update_statements = [statement
+                                          for deferred_update in deferred_updates
+                                          for statement in update_as_statements(deferred_update, as_upsert=True)]
+            _write_bulk_updates_chunk(client, deferred_index_name, deferred_update_statements)
+
+
+    log_msg = f"Wrote {total_update_count} doc updates"
+    if total_update_count > 0:
+        log_msg += f" ({total_deferred_update_count} deferred)"
+    if total_writes_skipped > 0:
+        log_msg += f" and skipped {total_writes_skipped} doc updates"
+    log.info(limit_log_length(log_msg))
 
 
 def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[str]:
@@ -366,47 +410,62 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
         metadata_statement["if_primary_term"] = update.primary_term
         metadata_statement["if_seq_no"] = update.seq_no
 
-    # Presumably, upsert is incompatible with inline scripts - edunn 20251111
-    conflict = update.inline_script_content is not None and as_upsert
-    if conflict:
-        raise ValueError("Cannot specify both inline_script_content and as_upsert=True for the same Update")
-
     if update.inline_script_content is None:
         content_statement = {"doc": update.content, "doc_as_upsert": as_upsert}
     else:
-        if not update.content:
-            return []
-
         content_statement = {
             "script": {
                 "source": update.inline_script_content,
                 "lang": "painless",
                 "params": {
-                    "new_items": update.content.get(ANCESTRY_REFS_METADATA_KEY, []),
+                    "new_items": list(update.inline_script_new_items),
                 },
-            }
-
+            },
         }
+
+        if as_upsert:
+            content_statement.update({
+                "upsert": {},
+                "scripted_upsert": True
+            })
+
     update_objs = [metadata_statement, content_statement]
     updates_strs = [json.dumps(obj) for obj in update_objs]
     return updates_strs
 
-
 @retry(tries=6, delay=15, backoff=2, logger=log)
-def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]):
+def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str], update_deferral_tracker: Optional[UpdateDeferralTracker] = None) -> Dict:
+    """
+    TODO: Flesh out function docs
+    """
     if len(bulk_updates) == 0:
         log.debug(limit_log_length("_write_bulk_updates_chunk received empty arg bulk_updates - skipping"))
+        noop_response_mock = {
+            'took': 0,
+            'errors': False,
+            'items': []
+        }
+        return noop_response_mock
 
     bulk_data = "\n".join(bulk_updates) + "\n"
 
     request_timeout = 180
     response_content = client.bulk(index=index_name, body=bulk_data, request_timeout=request_timeout)
 
+    deferring_updates_to_missing_docs = update_deferral_tracker is not None
+    if deferring_updates_to_missing_docs:
+        successful_updates = [item["update"] for item in response_content["items"] if "error" not in item["update"]]
+        for update in successful_updates:
+            update_deferral_tracker.discard(update["_id"])
+        update_deferral_tracker.lock_in_deferrals()
+
+
     if response_content.get("errors"):
-        warn_types = {
+        deferral_types = {
             "document_missing_exception",
             "document_missing_in_index_exception",
-        }  # these types represent bad data, not bad sweepers behaviour
+        } if deferring_updates_to_missing_docs else set()  # these types are handled by deferral, if enabled
+        warn_types = set()  # these types represent bad data, not bad sweepers behaviour
         items_with_problems = [item for item in response_content["items"] if "error" in item["update"]]
         if any(
             item["update"]["status"] == 429 and item["update"]["error"]["type"] == "circuit_breaking_exception"
@@ -432,7 +491,7 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
 
         if log.isEnabledFor(logging.ERROR):
             items_with_errors = [
-                item for item in items_with_problems if item["update"]["error"]["type"] not in warn_types
+                item for item in items_with_problems if item["update"]["error"]["type"] not in (warn_types | deferral_types)
             ]
             error_aggregates = aggregate_update_error_types(items_with_errors)
             for error_type, reason_aggregate in error_aggregates.items():
@@ -475,3 +534,31 @@ def get_query_hits_count(client: OpenSearch, index_name: str, query: Dict) -> in
     response = client.search(index=index_name, body=query, size=0, _source_includes=[], track_total_hits=True)
 
     return response["hits"]["total"]["value"]
+
+def bulk_delete_documents(
+        client: OpenSearch,
+        index: str,
+        doc_ids: Iterable[str],
+        chunk_size: int = 1000,
+) -> None:
+
+        def _generate_delete_actions():
+            for doc_id in doc_ids:
+                yield {
+                    "_op_type": "delete",
+                    "_index": index,
+                    "_id": doc_id,
+                }
+
+        success_count, errors = bulk(
+            client,
+            _generate_delete_actions(),
+            chunk_size=chunk_size,
+            raise_on_error=False,
+            raise_on_exception=True,
+            max_retries=3,
+        )
+
+        non_404_errors = [e.get("delete", {}).get("status") != 404 for e in errors]
+        if non_404_errors:
+            raise RuntimeError(f'Some deletions have failed on index {index}: {", ".join(non_404_errors)}')
