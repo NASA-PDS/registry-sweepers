@@ -11,6 +11,7 @@ from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_M
 from pds.registrysweepers.utils.db import get_query_hits_count
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
+from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 
 log = logging.getLogger(__name__)
 
@@ -102,15 +103,9 @@ _orphaned_docs_query = {
 def get_orphaned_documents(client: OpenSearch, index_name: str) -> Iterable[Dict]:
     # Query an index for documents without an up-to-date ancestry version reference - this would indicate a product
     # which is orphaned and is getting missed in processing
-    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 
     _source: Dict = {"includes": []}
-
-    sort_fields_override = (
-        ["collection_lidvid", "batch_id"] if "registry-refs" in index_name else None
-    )  # use default for registry
-
-    docs = query_registry_db_with_search_after(client, index_name, _orphaned_docs_query, _source, sort_fields=sort_fields_override)
+    docs = query_registry_db_with_search_after(client, index_name, _orphaned_docs_query, _source)
 
     return docs
 
@@ -119,3 +114,12 @@ def get_orphaned_documents_count(client: OpenSearch, index_name: str) -> int:
     # Query an index documents without an up-to-date ancestry version reference - this would indicate a product which is
     # orphaned and is getting missed in processing
     return get_query_hits_count(client, index_name, _orphaned_docs_query)
+
+def get_deferred_update_documents(client: OpenSearch, index_name: str) -> Iterable[Dict]:
+    deferred_updates_index_name = f"{index_name}-deferred-updates"
+    query = {"query": {"match_all": {}}}
+    source: Dict = {"includes": []}
+
+    docs = query_registry_db_with_search_after(client, index_name, query, source, sort_fields=["_id"])
+
+    return docs
