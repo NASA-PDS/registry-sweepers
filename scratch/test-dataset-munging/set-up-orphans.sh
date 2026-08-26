@@ -15,4 +15,3 @@ bash ./nuke_sweepers_metadata.sh
 
 # delete orphan non-aggs
 bash ./delete-specific-nonaggs.sh
-
