@@ -10,6 +10,7 @@ from typing import Iterable
 from typing import List
 from typing import Mapping
 from typing import Optional
+from typing import Set
 from typing import Union
 
 from opensearchpy import OpenSearch
@@ -17,6 +18,7 @@ from opensearchpy.helpers import bulk
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.updatedeferraltracker import UpdateDeferralTracker
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
+from pds.registrysweepers.utils.db.multitenancy import index_exists
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import get_ids_list_str
 from pds.registrysweepers.utils.misc import get_random_hex_id
@@ -24,19 +26,18 @@ from pds.registrysweepers.utils.misc import limit_log_length
 from retry import retry
 from retry.api import retry_call
 from tqdm import tqdm
-from pds.registrysweepers.utils.db.multitenancy import index_exists
 
 log = logging.getLogger(__name__)
 
 
 def query_registry_db_with_scroll(
-    client: OpenSearch,
-    index_name: str,
-    query: Dict,
-    _source: Dict,
-    page_size: int = 10000,
-    scroll_keepalive_minutes: int = 10,
-    request_timeout_seconds: int = 20,
+        client: OpenSearch,
+        index_name: str,
+        query: Dict,
+        _source: Dict,
+        page_size: int = 10000,
+        scroll_keepalive_minutes: int = 10,
+        request_timeout_seconds: int = 20,
 ) -> Iterable[Dict]:
     """
     Given an OpenSearch client and query/_source, return an iterable collection of hits
@@ -129,14 +130,14 @@ def query_registry_db_with_scroll(
 
 
 def query_registry_db_with_search_after(
-    client: OpenSearch,
-    index_name: str,
-    query: Dict,
-    _source: Dict,
-    page_size: int = 5000,
-    limit: Union[int, None] = None,
-    sort_fields: Union[List[str], None] = None,
-    request_timeout_seconds: int = 20,
+        client: OpenSearch,
+        index_name: str,
+        query: Dict,
+        _source: Dict,
+        page_size: int = 5000,
+        limit: Union[int, None] = None,
+        sort_fields: Union[List[str], None] = None,
+        request_timeout_seconds: int = 20,
 ) -> Iterable[Dict]:
     """
     Given an OpenSearch client and query/_source, return an iterable collection of hits
@@ -269,21 +270,21 @@ def query_registry_db_with_search_after(
 
 
 def query_registry_db_or_mock(
-    mock_f: Optional[Callable[[str], Iterable[Dict]]],
-    mock_query_id: str,
-    use_search_after: bool = True,
+        mock_f: Optional[Callable[[str], Iterable[Dict]]],
+        mock_query_id: str,
+        use_search_after: bool = True,
 ):
     if mock_f is not None:
 
         def mock_wrapper(
-            client: OpenSearch,
-            index_name: str,
-            query: Dict,
-            _source: Dict,
-            page_size: int = 10000,
-            scroll_validity_duration_minutes: int = 10,
-            request_timeout_seconds: int = 20,
-            sort_fields: Union[List[str], None] = None,
+                client: OpenSearch,
+                index_name: str,
+                query: Dict,
+                _source: Dict,
+                page_size: int = 10000,
+                scroll_validity_duration_minutes: int = 10,
+                request_timeout_seconds: int = 20,
+                sort_fields: Union[List[str], None] = None,
         ) -> Iterable[Dict]:
             return mock_f(mock_query_id)  # type: ignore  # see None-check above
 
@@ -295,12 +296,12 @@ def query_registry_db_or_mock(
 
 
 def write_updated_docs(
-    client: OpenSearch,
-    updates: Iterable[Update],
-    index_name: str,
-    bulk_chunk_max_update_count: Union[int, None] = None,
-    as_upsert: bool = False,
-    defer_on_missing_document = False
+        client: OpenSearch,
+        updates: Iterable[Update],
+        index_name: str,
+        bulk_chunk_max_update_count: Union[int, None] = None,
+        as_upsert: bool = False,
+        defer_on_missing_document=False
 ):
     if as_upsert and defer_on_missing_document:
         raise RuntimeError('"as_upsert" and "defer_if_not_exists" may not both be set as they are mutually-exclusive')
@@ -353,7 +354,8 @@ def write_updated_docs(
                     f"Bulk update buffer has reached {threshold_log_str} threshold - writing {buffered_updates_count} document updates to db..."
                 )
             )
-            _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer, update_deferral_tracker=update_deferral_tracker)
+            _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer,
+                                      update_deferral_tracker=update_deferral_tracker)
 
             # TODO: eliminate duplication of this block - it's already proven brittle - edunn 20260818
             if update_deferral_tracker is not None:
@@ -371,7 +373,7 @@ def write_updated_docs(
         update_statement_strs = update_as_statements(update, as_upsert=as_upsert)
 
         for s in update_statement_strs:
-            bulk_buffer_size_mb += sys.getsizeof(s) / 1024**2
+            bulk_buffer_size_mb += sys.getsizeof(s) / 1024 ** 2
 
         bulk_updates_buffer.extend(update_statement_strs)
         total_update_count += 1
@@ -380,7 +382,8 @@ def write_updated_docs(
         log.debug(
             limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
         )
-        _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer, update_deferral_tracker=update_deferral_tracker)
+        _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer,
+                                  update_deferral_tracker=update_deferral_tracker)
 
         # this duplicates earlier implementation - refactor at some point - edunn 20260918
         if update_deferral_tracker is not None:
@@ -390,7 +393,6 @@ def write_updated_docs(
                                           for deferred_update in deferred_updates
                                           for statement in update_as_statements(deferred_update, as_upsert=True)]
             _write_bulk_updates_chunk(client, deferred_index_name, deferred_update_statements)
-
 
     log_msg = f"Wrote {total_update_count} doc updates"
     if total_update_count > 0:
@@ -418,7 +420,7 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
                 "source": update.inline_script_content,
                 "lang": "painless",
                 "params": {
-                    "new_items": list(update.inline_script_new_items),
+                    "new_items": list(update.inline_script_new_items or []),
                 },
             },
         }
@@ -433,8 +435,10 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
     updates_strs = [json.dumps(obj) for obj in update_objs]
     return updates_strs
 
+
 @retry(tries=6, delay=15, backoff=2, logger=log)
-def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str], update_deferral_tracker: Optional[UpdateDeferralTracker] = None) -> Dict:
+def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str],
+                              update_deferral_tracker: Optional[UpdateDeferralTracker] = None) -> Dict:
     """
     TODO: Flesh out function docs
     """
@@ -456,20 +460,20 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
     if deferring_updates_to_missing_docs:
         successful_updates = [item["update"] for item in response_content["items"] if "error" not in item["update"]]
         for update in successful_updates:
-            update_deferral_tracker.discard(update["_id"])
-        update_deferral_tracker.lock_in_deferrals()
-
+            update_deferral_tracker.discard(  # type: ignore #- checked by conditional deferring_updates_to_missing_docs
+                update["_id"])
+        update_deferral_tracker.lock_in_deferrals()  # type: ignore #- checked by conditional deferring_updates_to_missing_docs
 
     if response_content.get("errors"):
         deferral_types = {
             "document_missing_exception",
             "document_missing_in_index_exception",
         } if deferring_updates_to_missing_docs else set()  # these types are handled by deferral, if enabled
-        warn_types = set()  # these types represent bad data, not bad sweepers behaviour
+        warn_types: Set[str] = set()  # these types represent bad data, not bad sweepers behaviour
         items_with_problems = [item for item in response_content["items"] if "error" in item["update"]]
         if any(
-            item["update"]["status"] == 429 and item["update"]["error"]["type"] == "circuit_breaking_exception"
-            for item in items_with_problems
+                item["update"]["status"] == 429 and item["update"]["error"]["type"] == "circuit_breaking_exception"
+                for item in items_with_problems
         ):
             raise RuntimeWarning(
                 "Bulk updates response includes item with status HTTP429, circuit_breaking_exception/throttled - chunk will need to be resubmitted"
@@ -491,7 +495,8 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
 
         if log.isEnabledFor(logging.ERROR):
             items_with_errors = [
-                item for item in items_with_problems if item["update"]["error"]["type"] not in (warn_types | deferral_types)
+                item for item in items_with_problems if
+                item["update"]["error"]["type"] not in (warn_types | deferral_types)
             ]
             error_aggregates = aggregate_update_error_types(items_with_errors)
             for error_type, reason_aggregate in error_aggregates.items():
@@ -504,6 +509,8 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                     )
     else:
         log.debug(limit_log_length("Successfully wrote bulk update chunk"))
+
+    return response_content
 
 
 def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str, List[str]]]:
@@ -535,30 +542,30 @@ def get_query_hits_count(client: OpenSearch, index_name: str, query: Dict) -> in
 
     return response["hits"]["total"]["value"]
 
+
 def bulk_delete_documents(
         client: OpenSearch,
         index: str,
         doc_ids: Iterable[str],
         chunk_size: int = 1000,
 ) -> None:
+    def _generate_delete_actions():
+        for doc_id in doc_ids:
+            yield {
+                "_op_type": "delete",
+                "_index": index,
+                "_id": doc_id,
+            }
 
-        def _generate_delete_actions():
-            for doc_id in doc_ids:
-                yield {
-                    "_op_type": "delete",
-                    "_index": index,
-                    "_id": doc_id,
-                }
+    success_count, errors = bulk(
+        client,
+        _generate_delete_actions(),
+        chunk_size=chunk_size,
+        raise_on_error=False,
+        raise_on_exception=True,
+        max_retries=3,
+    )
 
-        success_count, errors = bulk(
-            client,
-            _generate_delete_actions(),
-            chunk_size=chunk_size,
-            raise_on_error=False,
-            raise_on_exception=True,
-            max_retries=3,
-        )
-
-        non_404_errors = [e.get("delete", {}).get("status") != 404 for e in errors]
-        if non_404_errors:
-            raise RuntimeError(f'Some deletions have failed on index {index}: {", ".join(non_404_errors)}')
+    non_404_errors = [e.get("delete", {}).get("status") != 404 for e in errors]
+    if non_404_errors:
+        raise RuntimeError(f'Some deletions have failed on index {index}: {", ".join(non_404_errors)}')

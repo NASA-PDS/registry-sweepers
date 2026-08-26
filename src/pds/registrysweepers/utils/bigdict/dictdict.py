@@ -9,7 +9,7 @@ class DictDict(BigDict):
     """Baseline in-memory dictionary-backed BigDict, for speed"""
 
     def __init__(self):
-        self._store: dict[str, Any] = {}
+        self._store: dict[str, Any] = {}  # type: ignore #type provided for documentation purpose only
 
     def put(self, key: str, value: Any) -> None:
         self._store[key] = value
