@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict
-from typing import Union
+from typing import Iterable
 from typing import Optional
-
+from typing import Union
 
 
 @dataclass
@@ -44,4 +44,5 @@ class Update:
             raise ValueError("only one of content or inline_script_content may be provided in a single update")
 
         if self.inline_script_content and self.inline_script_new_items is None:
-            raise ValueError("inline_script_content is provided, inline_script_new_items must be provided (but may be empty)")
+            raise ValueError(
+                "inline_script_content is provided, inline_script_new_items must be provided (but may be empty)")
