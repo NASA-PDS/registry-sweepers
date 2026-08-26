@@ -1,10 +1,12 @@
 import logging
-from itertools import chain, batched
+from itertools import batched
+from itertools import chain
 from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 from typing import Union
 
@@ -21,7 +23,8 @@ from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_args
-from pds.registrysweepers.utils.db import write_updated_docs, bulk_delete_documents
+from pds.registrysweepers.utils.db import bulk_delete_documents
+from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
@@ -84,27 +87,23 @@ def run(
         for _ in updates:
             pass
 
-
-    #### Give any orphan documents their previously-resolved metadata
+    # Give any orphan documents their previously-resolved metadata
     registry_index_name = resolve_multitenant_index_name(client, 'registry')
     deferred_index_name = f"{registry_index_name}-deferred-updates"
 
     orphaned_docs = get_orphaned_documents(client, registry_index_name)
-    orphaned_doc_ids = {doc.get("_id") for doc in orphaned_docs}
+    orphaned_doc_ids: Set[str] = {doc.get("_id") for doc in orphaned_docs}  # type: ignore
 
     deferred_update_docs = get_deferred_update_documents(client, deferred_index_name)
-    deferred_update_doc_ids = {doc.get("_id") for doc in deferred_update_docs}
+    deferred_update_doc_ids: Set[str] = {doc.get("_id") for doc in deferred_update_docs}  # type: ignore
 
-    pending_update_doc_ids = orphaned_doc_ids.intersection(deferred_update_doc_ids)
+    pending_update_doc_ids: Set[str] = orphaned_doc_ids.intersection(deferred_update_doc_ids)  # type: ignore
     successfully_merged_doc_count = 0
     for batch in batched(pending_update_doc_ids, 1000):
         response = client.mget(index=f'{registry_index_name}-deferred-updates', body={'ids': batch})
         pending_content_docs = response['docs']
 
         pending_updates = iter(Update(id=doc['_id'], content=doc['_source']) for doc in pending_content_docs)
-
-        ## revert the source bit to test non-deletion of failed update targets' pending content
-        # pending_updates = iter(Update(id=doc['_id'], content=doc) for doc in pending_content_docs)
 
         write_updated_docs(
             client,

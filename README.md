@@ -13,7 +13,10 @@ The repairkit sweeper applies idempotent transformations to targeted subsets of 
 The provenance sweeper generates metadata for linking each version-superseded product with the versioned product which supersedes it.  The value of the successor is stored in the `ops:Registry_Sweepers/ops:superseded_by` property.  This property will not be set for the latest version of any product. All documents are processed, but db writes are optimised based on whether their `ops:Registry_Sweepers/ops:provenance_software_version` metadata value is up-to-date relative to the sweeper codebase.
 
 #### [Ancestry](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/ancestry/__init__.py)
-The ancestry sweeper generates membership metadata for each product, i.e. which bundle and collection identifiers (LID and LIDVID) reference a given product. These values will be stored in property `[[ops:Provenance/ops:parent_bundle_identifier` and `ops:Registry_Sweepers.ops:ancestor_refs)`. 
+
+The ancestry sweeper generates membership metadata for each product, i.e. which bundle and collection identifiers (LID
+and LIDVID) reference a given product. These values will be stored in property
+`[[ops:Provenance/ops:parent_bundle_identifier` and `ops:Registry_Sweepers.ops:ancestor_refs)`.
  <TODO: describe mechanism after reimplementation is complete - edunn 20260630>
 
 #### [Reindexer](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/reindexer/main.py)

@@ -9,9 +9,9 @@ from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConsta
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import get_query_hits_count
+from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
-from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,8 @@ def query_for_pending_bundles(client: OpenSearch) -> Iterable[Dict]:
 
     query = product_class_query_factory(ProductClass.BUNDLE)
     _source = {"includes": ["lidvid", "ref_lid_collection", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
-    docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query, _source)
+    docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query,
+                                               _source)
 
     return docs
 
@@ -55,13 +56,14 @@ def query_for_pending_collections(client: OpenSearch) -> Iterable[Dict]:
     )
 
     _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
-    docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query, _source)
+    docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query,
+                                               _source)
 
     return docs
 
 
 def query_for_collection_nonaggregate_refs(
-    client: OpenSearch, collection_lidvid: PdsLidVid
+        client: OpenSearch, collection_lidvid: PdsLidVid
 ) -> Iterable[PdsLidVid]:
     # Query the registry-refs index for the contents of the given collection
     from pds.registrysweepers.utils.db import query_registry_db_with_search_after
@@ -115,9 +117,10 @@ def get_orphaned_documents_count(client: OpenSearch, index_name: str) -> int:
     # orphaned and is getting missed in processing
     return get_query_hits_count(client, index_name, _orphaned_docs_query)
 
+
 def get_deferred_update_documents(client: OpenSearch, index_name: str) -> Iterable[Dict]:
     deferred_updates_index_name = f"{index_name}-deferred-updates"
-    query = {"query": {"match_all": {}}}
+    query: Dict = {"query": {"match_all": {}}}
     source: Dict = {"includes": []}
 
     docs = query_registry_db_with_search_after(client, index_name, query, source, sort_fields=["_id"])
