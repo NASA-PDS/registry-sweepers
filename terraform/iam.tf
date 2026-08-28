@@ -57,7 +57,7 @@ resource "aws_iam_role" "execution_role" {
 
 # Allow sweeper to write cloudwatch logs
 resource "aws_iam_policy" "write_cloudwatch_logs" {
-  name = "registry-sweeeper-cloudwatch-logs-policy"
+  name = "pds-registry-sweeeper-cloudwatch-logs-policy"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -77,7 +77,7 @@ resource "aws_iam_policy" "write_cloudwatch_logs" {
 }
 
 resource "aws_iam_policy" "opensearch_api_only_access" {
-  name        = "aoss-${var.aoss_collection_id}-api-access"
+  name        = "pds-registry-sweeper-aoss-api-access"
   description = "IAM policy for OpenSearch Serverless writer access, to be used by nodes through their Cognito user groups"
 
   policy = jsonencode({
