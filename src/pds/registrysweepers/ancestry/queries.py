@@ -51,9 +51,6 @@ def query_for_pending_collections(client: OpenSearch) -> Iterable[Dict]:
     from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 
     query = product_class_query_factory(ProductClass.COLLECTION)
-    query["query"]["bool"].update(
-        {"must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]}
-    )
 
     _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
     docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query, _source)
@@ -67,9 +64,7 @@ def get_nonaggregate_ancestry_records_query(client: OpenSearch) -> Iterable[Dict
 
     query: Dict = {
         "query": {
-            "bool": {
-                "must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]
-            }
+            "match_all": {}
         },
         "seq_no_primary_term": True,
     }
@@ -98,7 +93,6 @@ def query_for_collection_nonaggregate_refs(
     query: Dict = {
         "query": {
             "bool": {
-                "must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}],
                 "filter": [{"term": {"collection_lidvid": str(collection_lidvid)}}],
             }
         },

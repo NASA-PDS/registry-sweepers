@@ -155,7 +155,7 @@ def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpd
     for doc in docs:
         try:
             sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
-            skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
+            skip_write = False #sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
             yield ProductUpdateRecord(product=PdsLidVid.from_string(doc["_source"]["lidvid"]),
                                       skip_write=skip_write)
         except (ValueError, KeyError) as err:

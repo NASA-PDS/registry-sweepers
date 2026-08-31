@@ -45,7 +45,7 @@ def run(
     logging.info("Updating collection ancestries for non-aggregate products...")
     collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client)
 
-    product_update_records_to_write = filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records,
+    product_update_records_to_write = filter(lambda r: True, chain(bundle_and_collection_update_records,
                                                                                 collection_nonaggregate_refs_updates))
     updates = convert_records_to_updates(
         product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
