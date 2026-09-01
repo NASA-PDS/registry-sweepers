@@ -11,6 +11,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+except ImportError:
+    boto3 = None
+
 ENV_FILE = Path(__file__).parent / "generate_dags.env"
 TERRAFORM_DIR = Path(__file__).parent
 
@@ -129,6 +135,23 @@ print_start_time >> registry_sweeper >> print_end_time
 '''
 
 
+def push_to_s3(bucket: str, file_path: Path, root_prefix: str = "") -> None:
+    if boto3 is None:
+        print("Error: boto3 is required for S3 upload. Install it with: pip install boto3", file=sys.stderr)
+        sys.exit(1)
+    # Node prefix is the part of the filename before the first '-', e.g. PDS_EN from PDS_EN-sweeper.py
+    node_prefix = file_path.stem.split("-")[0]
+    parts = [p for p in [root_prefix, node_prefix, file_path.name] if p]
+    key = "/".join(parts)
+    try:
+        s3 = boto3.client("s3")
+        s3.upload_file(str(file_path), bucket, key)
+        print(f"Uploaded to s3://{bucket}/{key}")
+    except (BotoCoreError, ClientError) as e:
+        print(f"Error uploading {file_path.name} to S3: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     if not ENV_FILE.exists():
         print(f"Error: {ENV_FILE} not found. Copy generate_dags.env.example and fill in your values.", file=sys.stderr)
@@ -151,12 +174,17 @@ def main():
     output_dir = Path(env.get("DAGS_OUTPUT_DIR", "."))
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    s3_bucket = env.get("DAGS_S3_BUCKET", "").strip()
+    root_prefix = env.get("DAGS_S3_ROOT_PREFIX", "").strip()
+
     for node_name, task_arn in task_arns.items():
         log_group = log_group_names[node_name]
         content = generate_dag(node_name, task_arn, log_group, env)
         out_path = output_dir / f"PDS_{node_name.upper()}-sweeper.py"
         out_path.write_text(content)
         print(f"Generated {out_path}")
+        if s3_bucket:
+            push_to_s3(s3_bucket, out_path, root_prefix)
 
 
 if __name__ == "__main__":
