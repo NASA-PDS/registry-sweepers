@@ -1,12 +1,24 @@
 # Changelog
 
-## [release/1.7.0](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.7.0) (2026-06-18)
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-08-17)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...release/1.7.0)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.0...«unknown»)
 
 **Requirements:**
 
-- As a user, I want a --force flag for legacy registry sync to overwrite existing node assignments [\#225](https://github.com/NASA-PDS/registry-sweepers/issues/225)
+- As a node operator, I want `pds-registry-sweepers` available as an installed CLI command [\#229](https://github.com/NASA-PDS/registry-sweepers/issues/229)
+- As a node operator, I want to run any individual sweeper by name from the command line [\#228](https://github.com/NASA-PDS/registry-sweepers/issues/228)
+- As a PDS cloud operator, I want to automatically deploy sweepers with specific docker commands [\#211](https://github.com/NASA-PDS/registry-sweepers/issues/211)
+- As a registry administrator, I want the system to enforce that only one sweeper can operate on a single node concurrently [\#203](https://github.com/NASA-PDS/registry-sweepers/issues/203)
+
+**Other closed issues:**
+
+- Document on-demand sweeper execution for operators [\#231](https://github.com/NASA-PDS/registry-sweepers/issues/231)
+- Update sweepers to support new structured metadata [\#189](https://github.com/NASA-PDS/registry-sweepers/issues/189)
+
+## [v1.7.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.0) (2026-06-23)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...v1.7.0)
 
 **Defects:**
 

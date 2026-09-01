@@ -5,13 +5,11 @@ from typing import Dict
 from typing import Iterable
 
 from opensearchpy import OpenSearch
-from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import get_query_hits_count
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
-from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 log = logging.getLogger(__name__)
@@ -57,34 +55,6 @@ def query_for_pending_collections(client: OpenSearch) -> Iterable[Dict]:
 
     _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
     docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query, _source)
-
-    return docs
-
-
-def get_nonaggregate_ancestry_records_query(client: OpenSearch) -> Iterable[Dict]:
-    # Query the registry-refs index for the contents of all collections
-    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
-
-    query: Dict = {
-        "query": {
-            "bool": {
-                "must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]
-            }
-        },
-        "seq_no_primary_term": True,
-    }
-    _source = {"includes": ["collection_lidvid", "batch_id", "product_lidvid"]}
-
-    # each document will have many product lidvids, so a smaller page size is warranted here
-    docs = query_registry_db_with_search_after(
-        client,
-        resolve_multitenant_index_name(client, "registry-refs"),
-        query,
-        _source,
-        page_size=AncestryRuntimeConstants.nonaggregate_ancestry_records_query_page_size,
-        request_timeout_seconds=30,
-        sort_fields=["collection_lidvid", "batch_id"],
-    )
 
     return docs
 
