@@ -19,11 +19,13 @@ class PdsLidVid(PdsProductIdentifier):
 
     @staticmethod
     def from_string(lidvid_str: str) -> PdsLidVid:
-        lid_chunk, vid_chunk = lidvid_str.split(PdsProductIdentifier.LIDVID_SEPARATOR)
-        lid = PdsLid(lid_chunk)
-        vid = PdsVid.from_string(vid_chunk)
-        return PdsLidVid(lid, vid)
-
+        try:
+            lid_chunk, vid_chunk = lidvid_str.split(PdsProductIdentifier.LIDVID_SEPARATOR)
+            lid = PdsLid(lid_chunk)
+            vid = PdsVid.from_string(vid_chunk)
+            return PdsLidVid(lid, vid)
+        except ValueError as err:
+            raise RuntimeError(f"Failed to parse LIDVID {lidvid_str}: {err}") from err
     def __str__(self):
         return str(self.lid) + PdsProductIdentifier.LIDVID_SEPARATOR + str(self.vid)
 
