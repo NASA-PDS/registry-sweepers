@@ -1,8 +1,8 @@
 # Changelog
 
-## [release/1.7.1](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.7.1) (2026-09-01)
+## [release/1.7.2](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.7.2) (2026-09-02)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.0-deploy...release/1.7.1)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.0-deploy...release/1.7.2)
 
 ## [v1.7.0-deploy](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.0-deploy) (2026-08-17)
 
