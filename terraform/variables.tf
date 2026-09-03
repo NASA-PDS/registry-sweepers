@@ -22,11 +22,6 @@ variable "aoss_endpoint" {
   description = "Registry AOSS endpoint url"
 }
 
-variable "aoss_collection_id" {
-  type        = string
-  description = "Registry AOSS collection ID"
-}
-
 variable "image_uri" {
   type        = string
   description = "registry-sweepers ECR image URI"

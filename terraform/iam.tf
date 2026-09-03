@@ -75,7 +75,7 @@ resource "aws_iam_policy" "write_cloudwatch_logs" {
 }
 
 resource "aws_iam_policy" "opensearch_api_only_access" {
-  name        = "aoss-${var.aoss_collection_id}-api-access"
+  name        = "aoss-${local.aoss_collection_id}-api-access"
   description = "IAM policy for OpenSearch Serverless writer access, to be used by nodes through their Cognito user groups"
 
   policy = jsonencode({
@@ -86,7 +86,7 @@ resource "aws_iam_policy" "opensearch_api_only_access" {
         Action = [
           "aoss:APIAccessAll",
         ]
-        Resource = "arn:aws:aoss:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:collection/${var.aoss_collection_id}"
+        Resource = "arn:aws:aoss:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:collection/${local.aoss_collection_id}"
       }
     ]
   })

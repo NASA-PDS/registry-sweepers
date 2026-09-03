@@ -1,6 +1,5 @@
 venue              = "prod"
 aoss_endpoint      = "https://..."
-aoss_collection_id = "..."
 image_uri          = "123456789012.dkr.ecr.us-west-2.amazonaws.com/pds-registry-sweepers:latest"
 
 mwaa_execution_role_name=<role name used by Airflow for DAG execution>
