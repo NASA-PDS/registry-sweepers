@@ -9,7 +9,6 @@ locals {
 resource "aws_iam_role" "task_role" {
   name                 = "pds-registry-sweeper-ecs-task-role"
   max_session_duration = 3600
-  permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.permissions_boundary_policy_name}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -28,7 +27,6 @@ resource "aws_iam_role" "task_role" {
 resource "aws_iam_role" "execution_role" {
   name                 = "pds-registry-sweeper-task-execution-role"
   max_session_duration = 3600
-  permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.permissions_boundary_policy_name}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

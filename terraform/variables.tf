@@ -32,11 +32,6 @@ variable "image_uri" {
   description = "registry-sweepers ECR image URI"
 }
 
-variable "permissions_boundary_policy_name" {
-  type        = string
-  description = "Name of the IAM policy to use as the permissions boundary for ECS roles"
-}
-
 variable "mwaa_execution_role_name" {
   type        = string
   description = "Name of the MWAA execution role that needs iam:PassRole to launch ECS tasks"
