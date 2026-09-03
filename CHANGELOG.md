@@ -1,12 +1,12 @@
 # Changelog
 
+## [release/1.7.3](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.7.3) (2026-09-03)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.3-rc.2...release/1.7.3)
+
 ## [v1.7.3-rc.2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.3-rc.2) (2026-09-03)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/release/1.7.3-rc.1...v1.7.3-rc.2)
-
-## [release/1.7.3-rc.1](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.7.3-rc.1) (2026-09-03)
-
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.2...release/1.7.3-rc.1)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.2...v1.7.3-rc.2)
 
 ## [v1.7.2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.2) (2026-09-02)
 
