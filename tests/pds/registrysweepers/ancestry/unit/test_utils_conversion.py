@@ -24,7 +24,7 @@ class TestUpdateFromRecord:
 
         assert update.id == "urn:nasa:pds:collection::1.0"
 
-    def test_includes_ancestry_refs_in_content(self):
+    def test_includes_ancestry_refs_in_payload(self):
         """Update content includes ancestor references"""
         product = PdsLidVid.from_string("urn:nasa:pds:product::1.0")
         ancestor = PdsLidVid.from_string("urn:nasa:pds:collection::1.0")
@@ -32,22 +32,20 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        assert ANCESTRY_REFS_METADATA_KEY in update.content
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        assert ANCESTRY_REFS_METADATA_KEY in update.inline_script_content
+        refs = update.inline_script_new_items
         assert isinstance(refs, list)
         assert "urn:nasa:pds:collection::1.0" in refs
 
-    def test_includes_ancestry_version_in_content(self):
+    def test_includes_ancestry_version_in_payload(self):
         """Update content includes current ancestry version"""
         product = PdsLidVid.from_string("urn:nasa:pds:collection::1.0")
         record = ProductUpdateRecord(product)
 
         update = update_from_record(record)
 
-        assert SWEEPERS_ANCESTRY_VERSION_METADATA_KEY in update.content
-        version = update.content[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]
-        assert version == SWEEPERS_ANCESTRY_VERSION
-        assert isinstance(version, int)
+        expected_script_snippet = f"ctx._source['{SWEEPERS_ANCESTRY_VERSION_METADATA_KEY}']={SWEEPERS_ANCESTRY_VERSION}"
+        assert expected_script_snippet in update.inline_script_content
 
     def test_includes_deduplication_script(self):
         """Update includes inline script for deduplication"""
@@ -73,7 +71,7 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        refs = update.inline_script_new_items
         assert len(refs) == 6
         for ancestor in ancestors:
             assert str(ancestor) in refs
@@ -91,7 +89,7 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        refs = update.inline_script_new_items
         # Should contain both references (as strings)
         assert len(refs) >= 2
         assert any("bundle" in ref for ref in refs)
@@ -104,7 +102,7 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        refs = update.inline_script_new_items
         assert isinstance(refs, list)
         assert len(refs) == 0
 
@@ -116,6 +114,6 @@ class TestUpdateFromRecord:
 
         update = update_from_record(record)
 
-        refs = update.content[ANCESTRY_REFS_METADATA_KEY]
+        refs = update.inline_script_new_items
         for ref in refs:
             assert isinstance(ref, str)
