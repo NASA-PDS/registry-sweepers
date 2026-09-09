@@ -63,7 +63,7 @@ jobs:
                     # To restore a set of files, we only need to match a prefix of the saved key.
                     restore-keys: pds-${{runner.os}}-py-
             -   name: 🤠 Roundup
-                uses: NASA-PDS/roundup-action@stable
+                uses: NASA-PDS/roundup-action@fix_179
                 with:
                     assembly: stable
                 env:

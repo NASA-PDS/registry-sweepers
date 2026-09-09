@@ -8,7 +8,6 @@ ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER = "ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER
 ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER = "ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER"
 ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER = "ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER"
 
-
 # The following is a minified painless script to deduplicate ancestry elements at update-time
 # Because AOSS does not support named/stored scripts, it is necessary to inline the script within each update
 # The script is equivalent to the following unminified version:
