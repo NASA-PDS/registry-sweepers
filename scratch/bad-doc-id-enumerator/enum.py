@@ -21,16 +21,16 @@ MULTITENANCY_NODE_ID='*' PROV_ENDPOINT='<opensearch url>' SWEEPERS_IAM_ROLE_NAME
 import json
 import os
 
-
 from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
+
 def enumerate_ids(
-    client,
-    index_name: str,
-    output_file: str,
-    page_size: int = 1000,
-    keep_alive: str = "2m",
+        client,
+        index_name: str,
+        output_file: str,
+        page_size: int = 1000,
+        keep_alive: str = "2m",
 ) -> int:
     """
     Enumerate every document _id in `index_name` via PIT + search_after,
@@ -91,22 +91,23 @@ def enumerate_ids(
                         # Last page was partial -> nothing left to fetch.
                         break
 
-                finally:
-                # 2. Always release the PIT, win or lose. Serverless collections
-                #    still consume resources holding a PIT open.
-                print(f'PROCESS TERMINATING - DELETING {pit_id}')
-                try:
-                    client.delete_pit(body={"pit_id": [pit_id]})
-                except Exception as e:
-                    print(f"Warning: failed to delete PIT {pit_id}: {e}")
+    finally:
+        # 2. Always release the PIT, win or lose. Serverless collections
+        #    still consume resources holding a PIT open.
+        print(f'PROCESS TERMINATING - DELETING {pit_id}')
+        try:
+            client.delete_pit(body={"pit_id": [pit_id]})
+        except Exception as e:
+            print(f"Warning: failed to delete PIT {pit_id}: {e}")
 
-            return total
+    return total
 
-        if __name__ == "__main__":
-            client = get_opensearch_client_from_environment()
 
-            INDEX_NAME = f"{os.environ['MULTITENANCY_NODE_ID']}-registry"
-            OUTPUT_FILE = "doc_ids.txt"
+if __name__ == "__main__":
+    client = get_opensearch_client_from_environment()
 
-            count = enumerate_ids(client, INDEX_NAME, OUTPUT_FILE)
-            print(f"Wrote {count} document ids to {OUTPUT_FILE}")
+    INDEX_NAME = f"{os.environ['MULTITENANCY_NODE_ID']}-registry"
+    OUTPUT_FILE = "doc_ids.txt"
+
+    count = enumerate_ids(client, INDEX_NAME, OUTPUT_FILE)
+    print(f"Wrote {count} document ids to {OUTPUT_FILE}")
