@@ -21,6 +21,8 @@ MULTITENANCY_NODE_ID='*' PROV_ENDPOINT='<opensearch url>' SWEEPERS_IAM_ROLE_NAME
 import json
 import os
 
+from retry.api import retry_call
+
 from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
@@ -65,7 +67,7 @@ def enumerate_ids(
                 if search_after is not None:
                     body["search_after"] = search_after
 
-                resp = client.search(body=body)
+                resp = retry_call(lambda: client.search(body=body), tries=9, delay=2, backoff=2)
                 hits = resp["hits"]["hits"]
                 total_read += len(hits)
                 print(f'STATUS: {total_read} docs checked')
