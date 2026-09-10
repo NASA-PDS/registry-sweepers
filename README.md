@@ -7,13 +7,17 @@ This package provides supplementary metadata generation for registry documents, 
 #### [RepairKit](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/repairkit/__init__.py)
 The repairkit sweeper applies idempotent transformations to targeted subsets of properties, for example ensuring that all properties expected to have array-like values are in fact arrays (as opposed to single-element arrays being flattened to strings during harvest).  Documents are processed based on whether their `ops:Provenance/ops:registry_sweepers_repairkit_version` metadata value is up-to-date relative to the sweeper codebase.
 
+> **Note:** RepairKit is currently disabled. It is not compatible with the current registry and requires refactoring before it can be executed.
+
 #### [Provenance](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/provenance.py)
-The provenance sweeper generates metadata for linking each version-superseded product with the versioned product which supersedes it.  The value of the successor is stored in the `ops:Provenance/ops:superseded_by` property.  This property will not be set for the latest version of any product. All documents are processed, but db writes are optimised based on whether their `ops:Provenance/ops:registry_sweepers_provenance_version` metadata value is up-to-date relative to the sweeper codebase.
+The provenance sweeper generates metadata for linking each version-superseded product with the versioned product which supersedes it.  The value of the successor is stored in the `ops:Registry_Sweepers/ops:superseded_by` property.  This property will not be set for the latest version of any product. All documents are processed, but db writes are optimised based on whether their `ops:Registry_Sweepers/ops:provenance_software_version` metadata value is up-to-date relative to the sweeper codebase.
 
 #### [Ancestry](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/ancestry/__init__.py)
-The ancestry sweeper generates membership metadata for each product, i.e. which bundle lidvids and which collection lidvids reference a given product. These values will be stored in properties `ops:Provenance/ops:parent_bundle_identifier` and `ops:Provenance/ops:parent_collection_identifier`, respectively. All bundles/collections are processed to populate a lookup table, but db writes are optimised based on whether their `ops:Provenance/ops:registry_sweepers_provenance_version` metadata value is up-to-date relative to the sweeper codebase, and collection non-aggregate reference pages in registry-refs are skipped entirely if they are marked as up-to-date.
 
-[Accepts environment variables to tune performance](./src/pds/registrysweepers/ancestry/runtimeconstants.py), primarily trading increased runtime duration for reduced peak memory usage.
+The ancestry sweeper generates membership metadata for each product, i.e. which bundle and collection identifiers (LID
+and LIDVID) reference a given product. These values will be stored in property
+`[[ops:Provenance/ops:parent_bundle_identifier` and `ops:Registry_Sweepers.ops:ancestor_refs)`.
+ <TODO: describe mechanism after reimplementation is complete - edunn 20260630>
 
 #### [Reindexer](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/reindexer/main.py)
 The reindexer sweeper ensures that the registry index mappings are updated with all fields available in the registry-dd index, and then triggers reindexation on all products which have not yet been successfully processed previously.  This ensures that all products are searchable on all fields, provided a field type mapping is defined in the registry-dd index at the time of processing.
@@ -66,6 +70,29 @@ The tool provides comprehensive statistics including:
 
 **Full synchronization** (Solr + OpenSearch) is available programmatically via the `run()` function but is not yet implemented as a console script option.
 
+## On-Demand Execution
+
+Use `pds-registry-sweepers` to run the sweepers from the command line.
+
+```bash
+# Run the full default suite (provenance, ancestry, reindexer)
+pds-registry-sweepers
+
+# Run a single sweeper
+pds-registry-sweepers --only ancestry
+
+# Run multiple specific sweepers
+pds-registry-sweepers --only ancestry provenance
+
+# Run the legacy registry sync sweeper
+pds-registry-sweepers --only legacy-sync
+```
+
+- With no flags, the full default suite runs: `provenance`, `ancestry`, `reindexer`.
+- With `--only <name> [name ...]`, only the named sweeper(s) run. Available names: `provenance`, `ancestry`, `reindexer`, `legacy-sync`.
+
+`PROV_ENDPOINT` and (for non-AWS OpenSearch) `PROV_CREDENTIALS` environment variables are required. See the Developer Quickstart section for details.
+
 ## Developer Quickstart
 
 ### Prerequisites
@@ -100,7 +127,7 @@ DEV_MODE=1      #disables host verification
 PYDEVD_USE_CYTHON=NO // disables Cython speedup extension
 ```
 
-With `--legacy-sync` option, the "registry" alias mapping all the discipline nodes indexes is required.
+With `--only legacy-sync`, the "registry" alias mapping all the discipline nodes indexes is required.
 
 Use the connection aliases found in the 'Connections' tab of the Engineering Node OpenSearch Domain on AWS.
 

@@ -1,13 +1,12 @@
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 
-ANCESTRY_REFS_METADATA_KEY = "ops:Provenance/ops:ancestor_refs"
+ANCESTRY_REFS_METADATA_KEY = "ops:Registry_Sweepers.ops:ancestor_refs"
 
 # this placeholder exists to provide interpolation of the key without needing to escape special characters in the painless script
 ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER = "ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER"
 ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER = "ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER"
 ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER = "ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER"
-
 
 # The following is a minified painless script to deduplicate ancestry elements at update-time
 # Because AOSS does not support named/stored scripts, it is necessary to inline the script within each update
