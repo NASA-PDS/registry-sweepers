@@ -16,7 +16,7 @@ from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
 from pds.registrysweepers.ancestry.generation import process_collection_bundle_ancestry
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
-from pds.registrysweepers.ancestry.queries import get_deferred_update_documents
+from pds.registrysweepers.ancestry.queries import get_deferred_update_documents_without_content
 from pds.registrysweepers.ancestry.queries import get_orphaned_documents
 from pds.registrysweepers.ancestry.utils import update_from_record
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
@@ -97,7 +97,7 @@ def run(
     orphaned_doc_ids: Set[str] = {doc.get("_id") for doc in orphaned_docs}  # type: ignore
 
     # get all update content which is waiting to be attached to a product document
-    deferred_update_docs = get_deferred_update_documents(client, deferred_index_name)
+    deferred_update_docs = get_deferred_update_documents_without_content(client, deferred_index_name)
     deferred_update_doc_ids: Set[str] = {doc.get("_id") for doc in deferred_update_docs}  # type: ignore
 
     # get the set of doc_ids which can merge update content onto an extant product document
