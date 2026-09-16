@@ -15,9 +15,9 @@ The provenance sweeper generates metadata for linking each version-superseded pr
 #### [Ancestry](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/ancestry/__init__.py)
 
 The ancestry sweeper generates membership metadata for each product, i.e. which bundle and collection identifiers (LID
-and LIDVID) reference a given product. These values will be stored in property
-`[[ops:Provenance/ops:parent_bundle_identifier` and `ops:Registry_Sweepers.ops:ancestor_refs)`.
- <TODO: describe mechanism after reimplementation is complete - edunn 20260630>
+and LIDVID) reference a given product. These values will be stored in property `ops:Registry_Sweepers.ops:ancestor_refs)`.
+
+Ancestry is processed collection-by-collection.  Any ancestry metadata generated for products which do not yet exist in registry is stored in a deferral index, and merged if/when the corresponding document is written to the registry.  Processing is skipped for collections (and their respective child non-aggregates) where the collection is considered up-to-date, i.e. where their `ops:Registry_Sweepers/ops:ancestry_software_version` metadata value is up-to-date relative to the sweeper codebase.
 
 #### [Reindexer](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/reindexer/main.py)
 The reindexer sweeper ensures that the registry index mappings are updated with all fields available in the registry-dd index, and then triggers reindexation on all products which have not yet been successfully processed previously.  This ensures that all products are searchable on all fields, provided a field type mapping is defined in the registry-dd index at the time of processing.

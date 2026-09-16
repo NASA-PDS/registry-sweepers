@@ -87,8 +87,8 @@ def run(
         for _ in updates:
             pass
 
-    #### Give any orphan documents their previously-resolved metadata
-    #### TODO: extract this to function edunn 20260916
+    # Give any orphan documents their previously-resolved metadata
+    # TODO: extract this to function edunn 20260916
     registry_index_name = resolve_multitenant_index_name(client, 'registry')
     deferred_index_name = f"{registry_index_name}-deferred-updates"
 
