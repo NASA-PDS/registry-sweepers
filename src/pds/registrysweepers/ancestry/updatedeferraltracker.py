@@ -26,11 +26,13 @@ class UpdateDeferralTracker:
     N.B. Not thread safe
     """
     _source: Iterable[Update]
-    _temp_store: dict[str, List[Update]] = defaultdict(list)
-    _store: dict[str, List[Update]] = defaultdict(list)
+    _temp_store: dict[str, List[Update]]
+    _store: dict[str, List[Update]]
 
     def __init__(self, source: Iterable[Update]):
         self._source = source
+        self._temp_store = defaultdict(list)
+        self._store = defaultdict(list)
 
     def __iter__(self):
         return self
