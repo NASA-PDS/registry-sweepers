@@ -10,6 +10,8 @@ data "aws_region" "current" {}
 
 locals {
 
+  aoss_collection_id = split(".", trimprefix(var.aoss_endpoint, "https://"))[0]
+
   tags = {
     cicd      = "iac"
     project   = "pds-registry-sweepers"

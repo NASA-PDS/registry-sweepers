@@ -18,7 +18,6 @@ except ImportError:
     boto3 = None
 
 ENV_FILE = Path(__file__).parent / "generate_dags.env"
-TERRAFORM_DIR = Path(__file__).parent
 
 
 def load_env_file(path: Path) -> dict:
@@ -36,15 +35,13 @@ def load_env_file(path: Path) -> dict:
 def get_terraform_output() -> tuple[dict, dict]:
     """Returns (task_arns, log_group_names) from terraform outputs."""
     task_arns_result = subprocess.run(
-        ["terraform", "output", "-json", "task_definition_arns"],
-        cwd=TERRAFORM_DIR,
+        ["terraform", "output", "-json", "sweepers_task_definition_arns"],
         capture_output=True,
         text=True,
         check=True,
     )
     log_groups_result = subprocess.run(
-        ["terraform", "output", "-json", "log_group_names"],
-        cwd=TERRAFORM_DIR,
+        ["terraform", "output", "-json", "sweepers_log_group_names"],
         capture_output=True,
         text=True,
         check=True,

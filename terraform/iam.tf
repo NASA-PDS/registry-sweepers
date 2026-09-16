@@ -9,7 +9,6 @@ locals {
 resource "aws_iam_role" "task_role" {
   name                 = "pds-registry-sweeper-ecs-task-role"
   max_session_duration = 3600
-  permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.permissions_boundary_policy_name}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -28,7 +27,6 @@ resource "aws_iam_role" "task_role" {
 resource "aws_iam_role" "execution_role" {
   name                 = "pds-registry-sweeper-task-execution-role"
   max_session_duration = 3600
-  permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.permissions_boundary_policy_name}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -77,7 +75,7 @@ resource "aws_iam_policy" "write_cloudwatch_logs" {
 }
 
 resource "aws_iam_policy" "opensearch_api_only_access" {
-  name        = "aoss-${var.aoss_collection_id}-api-access"
+  name        = "aoss-${local.aoss_collection_id}-api-access"
   description = "IAM policy for OpenSearch Serverless writer access, to be used by nodes through their Cognito user groups"
 
   policy = jsonencode({
@@ -88,7 +86,7 @@ resource "aws_iam_policy" "opensearch_api_only_access" {
         Action = [
           "aoss:APIAccessAll",
         ]
-        Resource = "arn:aws:aoss:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:collection/${var.aoss_collection_id}"
+        Resource = "arn:aws:aoss:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:collection/${local.aoss_collection_id}"
       }
     ]
   })

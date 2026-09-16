@@ -56,8 +56,14 @@ First set your venue environment:
 
 Update the copied file with your environment.
 
-Generate the DAG file:
+Set a python local environment with the necessary requirements:
 
-    python generate_dags.py
+    python3.12 -m venv venv
+    source venv/bin/activate
+    pip install boto3
+
+Generate the DAG file, run it from where the `terraform apply` command has been launched, could be registry local repository when registry-sweeper was deployed as a module:
+
+    python {path of your registry-swwpers repo}/terraform/generate_dags.py
 
 Push the generated DAG python files on the Airflow S3 bucket.
