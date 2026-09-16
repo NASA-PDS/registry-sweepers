@@ -87,17 +87,23 @@ def run(
         for _ in updates:
             pass
 
-    # Give any orphan documents their previously-resolved metadata
+    #### Give any orphan documents their previously-resolved metadata
+    #### TODO: extract this to function edunn 20260916
     registry_index_name = resolve_multitenant_index_name(client, 'registry')
     deferred_index_name = f"{registry_index_name}-deferred-updates"
 
+    # get all product documents which are missing ancestry metadata
     orphaned_docs = get_orphaned_documents(client, registry_index_name)
     orphaned_doc_ids: Set[str] = {doc.get("_id") for doc in orphaned_docs}  # type: ignore
 
+    # get all update content which is waiting to be attached to a product document
     deferred_update_docs = get_deferred_update_documents(client, deferred_index_name)
     deferred_update_doc_ids: Set[str] = {doc.get("_id") for doc in deferred_update_docs}  # type: ignore
 
+    # get the set of doc_ids which can merge update content onto an extant product document
     pending_update_doc_ids: Set[str] = orphaned_doc_ids.intersection(deferred_update_doc_ids)  # type: ignore
+
+    # perform fetch/merge/write in batches
     successfully_merged_doc_count = 0
     for batch in batched(pending_update_doc_ids, 1000):
         response = client.mget(index=f'{registry_index_name}-deferred-updates', body={'ids': batch})
@@ -114,15 +120,21 @@ def run(
         # Force a refresh to prevent read-after-write consistency from hiding the applied updates
         client.indices.refresh(index=registry_index_name)
 
-        remaining_orphaned_docs = get_orphaned_documents(client, registry_index_name)
-        remaining_orphaned_doc_ids = {doc.get("_id") for doc in remaining_orphaned_docs}
-        successfully_merged_doc_ids = pending_update_doc_ids.difference(remaining_orphaned_doc_ids)
-        successfully_merged_doc_count += len(successfully_merged_doc_ids)
+    remaining_orphaned_docs = get_orphaned_documents(client, registry_index_name)
+    remaining_orphaned_doc_ids = {doc.get("_id") for doc in remaining_orphaned_docs}
+    remaining_orphaned_docs_count = len(remaining_orphaned_doc_ids)
 
-        bulk_delete_documents(client, deferred_index_name, successfully_merged_doc_ids)
+    successfully_merged_doc_ids = pending_update_doc_ids.difference(remaining_orphaned_doc_ids)
+    successfully_merged_doc_count += len(successfully_merged_doc_ids)
+
+    # clean up applied updates
+    bulk_delete_documents(client, deferred_index_name, successfully_merged_doc_ids)
 
     if successfully_merged_doc_count > 0:
         log.info(f"Applied {successfully_merged_doc_count} deferred updates to documents in {registry_index_name}")
+
+    if remaining_orphaned_docs_count > 0:
+        log.info(f'{remaining_orphaned_docs_count} orphaned documents remain in {registry_index_name}')
 
     log.info("Ancestry sweeper processing complete!")
 
