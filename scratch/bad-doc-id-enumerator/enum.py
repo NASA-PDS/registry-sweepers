@@ -75,23 +75,23 @@ def enumerate_ids(
                 if not hits:
                     break
 
-                    for hit in hits:
-                        try:
-                            _id = hit["_id"]
-                            parsed = PdsLidVid.from_string(_id)
-                        except Exception as err:
-                            print(f'bad document: {_id}')
-                            f.write(_id + "\n")
-                            total += 1
+                for hit in hits:
+                    try:
+                        _id = hit["_id"]
+                        parsed = PdsLidVid.from_string(_id)
+                    except Exception as err:
+                        print(f'bad document: {_id}')
+                        f.write(_id + "\n")
+                        total += 1
 
-                    # PIT id can rotate between requests; always carry the
-                    # latest one forward.
-                    pit_id = resp.get("pit_id", pit_id)
-                    search_after = hits[-1]["sort"]
+                # PIT id can rotate between requests; always carry the
+                # latest one forward.
+                pit_id = resp.get("pit_id", pit_id)
+                search_after = hits[-1]["sort"]
 
-                    if len(hits) < page_size:
-                        # Last page was partial -> nothing left to fetch.
-                        break
+                if len(hits) < page_size:
+                    # Last page was partial -> nothing left to fetch.
+                    break
 
     finally:
         # 2. Always release the PIT, win or lose. Serverless collections
