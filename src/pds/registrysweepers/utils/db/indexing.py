@@ -22,12 +22,17 @@ def _get_existing_mapping_type(client: OpenSearch, index_name: str, property_nam
     Returns the current mapped type for a given property, or None if the mapping does not yet exist.
     """
     response = client.indices.get_mapping(index=index_name)
-    existing_properties = (
+    existing_mappings = (
         response.get(index_name, {})
         .get("mappings", {})
-        .get("properties", {})
     )
-    return existing_properties.get(property_name, {}).get("type")
+
+    # extract the relevant object, accounting for nesting
+    it = existing_mappings
+    for node in property_name.split('.'):
+        it = it.get('properties', {}).get(node, {})
+
+    return it.get("type")
 
 
 def _check_mapping(client: OpenSearch, index_name: str, property_name: str, expected_property_type: str) -> None:
@@ -61,7 +66,7 @@ def _await_mapping_creation(client: OpenSearch, index_name: str, property_name: 
     _check_mapping(client, index_name, property_name, property_type)
 
 
-def ensure_index_mapping(client: OpenSearch, index_name: str, property_name: str, property_type: str) -> None:
+def ensure_index_mapping(client: OpenSearch, index_name: str, property_key: str, property_type: str) -> None:
     """
     Ensures a given property mapping exists with the expected type in the given index,
     polling until the mapping is confirmed active or retries are exhausted.
@@ -70,16 +75,17 @@ def ensure_index_mapping(client: OpenSearch, index_name: str, property_name: str
         UnexpectedMappingTypeError: immediately, if the mapping exists with a conflicting type.
         MissingMappingError: if the mapping fails to propagate within the retry budget.
     """
+
     try:
-        _check_mapping(client, index_name, property_name, property_type)
+        _check_mapping(client, index_name, property_key, property_type)
         return
     except MissingMappingError:
         logger.info(
-            f"Mapping for '{property_name}' not yet present in index '{index_name}' - creating mapping with type {property_type}."
+            f"Mapping for '{property_key}' not yet present in index '{index_name}' - creating mapping with type {property_type}."
         )
         client.indices.put_mapping(
             index=index_name,
-            body={"properties": {property_name: {"type": property_type}}},
+            body={"properties": {property_key: {"type": property_type}}},
         )
 
-    _await_mapping_creation(client, index_name, property_name, property_type)
+    _await_mapping_creation(client, index_name, property_key, property_type)
