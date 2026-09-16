@@ -304,7 +304,7 @@ def write_updated_docs(
         defer_on_missing_document=False
 ):
     if as_upsert and defer_on_missing_document:
-        raise RuntimeError('"as_upsert" and "defer_if_not_exists" may not both be set as they are mutually-exclusive')
+        raise RuntimeError('"as_upsert" and "defer_on_missing_document" may not both be set as they are mutually-exclusive')
 
     log.info(limit_log_length("Writing document updates..."))
     buffered_updates_count = 0
