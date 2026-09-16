@@ -118,11 +118,11 @@ def get_orphaned_documents_count(client: OpenSearch, index_name: str) -> int:
     return get_query_hits_count(client, index_name, _orphaned_docs_query)
 
 
-def get_deferred_update_documents(client: OpenSearch, index_name: str) -> Iterable[Dict]:
+def get_deferred_update_documents_without_content(client: OpenSearch, index_name: str) -> Iterable[Dict]:
     deferred_updates_index_name = f"{index_name}-deferred-updates"
     query: Dict = {"query": {"match_all": {}}}
     source: Dict = {"includes": []}
 
-    docs = query_registry_db_with_search_after(client, index_name, query, source, sort_fields=["_id"])
+    docs = query_registry_db_with_search_after(client, deferred_updates_index_name, query, source, sort_fields=["_id"])
 
     return docs
