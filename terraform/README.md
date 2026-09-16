@@ -56,7 +56,7 @@ First set your venue environment:
 
 Update the copied file with your environment.
 
-Generate the DAG file:
+Generate the DAG file, run it from where the `terraform apply` command has been launched, could be registry local repository when registry-sweeper was deployed as a module:
 
     python generate_dags.py
 
