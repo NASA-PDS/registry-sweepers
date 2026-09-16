@@ -110,35 +110,6 @@ class TestFullPipeline:
         # Should not generate any updates
         assert len(bulk_updates) == 0
 
-    @pytest.mark.skip(reason='Requires reimplementation or removal as mock is incompatible with https://github.com/NASA-PDS/registry-sweepers/pull/256')
-    def test_ancestry_version_stamped_on_all_updates(self, mock_opensearch_client, simple_collection_hierarchy):
-        """All updates should include current ancestry version"""
-        mock_opensearch_client.register_search_response(
-            index_pattern=".*registry.*",
-            query_matcher=lambda q: query_matches_product_class(q, "Product_Bundle"),
-            response_data=create_search_response(simple_collection_hierarchy['bundles'])
-        )
-        mock_opensearch_client.register_search_response(
-            index_pattern=".*registry.*",
-            query_matcher=lambda q: query_matches_product_class(q, "Product_Collection"),
-            response_data=create_search_response(simple_collection_hierarchy['collections'])
-        )
-        mock_opensearch_client.register_search_response(
-            index_pattern=".*registry-refs.*",
-            query_matcher=lambda q: True,
-            response_data=create_search_response(simple_collection_hierarchy['collection_refs'])
-        )
-
-        bulk_updates = []
-
-        # Execute
-        main.run(client=mock_opensearch_client, bulk_updates_sink=bulk_updates)
-
-        # Verify all updates have version stamp
-        for update in bulk_updates:
-            assert SWEEPERS_ANCESTRY_VERSION_METADATA_KEY in update.content
-            assert update.content[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY] == SWEEPERS_ANCESTRY_VERSION
-
     def test_deduplication_script_included(self, mock_opensearch_client, simple_collection_hierarchy):
         """All updates should include deduplication script"""
         mock_opensearch_client.register_search_response(
