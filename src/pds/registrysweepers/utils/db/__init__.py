@@ -566,6 +566,7 @@ def bulk_delete_documents(
         max_retries=3,
     )
 
-    non_404_errors = [e.get("delete", {}).get("status") != 404 for e in errors]
+    non_404_errors = [e.get("delete", {}).get("error", {}) for e in errors if e.get("delete", {}).get("status") != 404]
+    non_404_error_descriptions = [f'{e.get("type")}: {e.get("reason")}' for e in non_404_errors]
     if non_404_errors:
-        raise RuntimeError(f'Some deletions have failed on index {index}: {", ".join(non_404_errors)}')
+        raise RuntimeError(f'Some deletions have failed on index {index}: {", ".join(non_404_error_descriptions)}')
