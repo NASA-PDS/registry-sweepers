@@ -127,11 +127,11 @@ def run(
     successfully_merged_doc_ids = pending_update_doc_ids.difference(remaining_orphaned_doc_ids)
     successfully_merged_doc_count += len(successfully_merged_doc_ids)
 
-    # clean up applied updates
-    bulk_delete_documents(client, deferred_index_name, successfully_merged_doc_ids)
-
     if successfully_merged_doc_count > 0:
         log.info(f"Applied {successfully_merged_doc_count} deferred updates to documents in {registry_index_name}")
+
+        # clean up applied updates
+        bulk_delete_documents(client, deferred_index_name, successfully_merged_doc_ids)
 
     if remaining_orphaned_docs_count > 0:
         log.info(f'{remaining_orphaned_docs_count} orphaned documents remain in {registry_index_name}')
