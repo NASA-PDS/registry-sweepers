@@ -7,6 +7,7 @@ from typing import Optional
 import opensearchpy  # type: ignore
 from opensearchpy import OpenSearch
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 
 # Optional Environment variable  used for the Cross Cluster Search
 # connections aliases. Each element is separated by a ","
@@ -28,19 +29,19 @@ def get_already_loaded_lidvids(
 
     query: Dict[str, Any] = {"query": {"bool": {"should": [], "minimum_should_match": 1}}, "fields": ["_id"]}
 
-    prod_class_prop = "pds:Identification_Area/pds:product_class"
-    node_name_field = "ops:Harvest_Info/ops:node_name"
+    prod_class_prop = "pds:Identification_Area.pds:product_class"
+    node_name_field = "ops:Harvest_Info.ops:node_name"
 
     if product_classes is not None:
         query["query"]["bool"]["should"] = [
             dict(match_phrase={prod_class_prop: prod_class}) for prod_class in product_classes
         ]
 
-    sort_field = "ops:Harvest_Info/ops:harvest_date_time"
+    sort_field = "ops:Harvest_Info.ops:harvest_date_time"
     assert es_conn is not None, "es_conn must be provided"
     prod_id_resp: Iterable[Dict[str, Any]] = query_registry_db_with_search_after(
         es_conn,
-        "registry",
+        resolve_multitenant_index_name(es_conn, "registry"),
         _source={"includes": ["_id", sort_field, node_name_field], "excludes": []},
         query=query,
         sort_fields=[sort_field],

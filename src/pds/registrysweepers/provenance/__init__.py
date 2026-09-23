@@ -34,7 +34,7 @@
 #
 # Determines if a particular document has been superseded by a more
 # recent version, if upon which it has, sets the field
-# ops:Provenance/ops:superseded_by to the id of the superseding document.
+# ops:Registry_Sweepers.ops:superseded_by to the id of the superseding document.
 #
 # It is important to note that the document is updated, not any dependent
 # index.
@@ -54,7 +54,6 @@ from typing import Union
 from opensearchpy import OpenSearch
 from pds.registrysweepers.provenance.constants import METADATA_SUCCESSOR_KEY
 from pds.registrysweepers.provenance.provenancerecord import ProvenanceRecord
-from pds.registrysweepers.provenance.versioning import SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.provenance.versioning import SWEEPERS_PROVENANCE_VERSION
 from pds.registrysweepers.provenance.versioning import SWEEPERS_PROVENANCE_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
@@ -83,7 +82,7 @@ def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterab
         "query": {
             "bool": {
                 "must": [
-                    {"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}},
+                    {"terms": {"ops:Tracking_Meta.ops:archive_status": ["archived", "certified"]}},
                     {"terms": {"lid": lids}},
                 ]
             }
@@ -123,7 +122,7 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
             "query": {
                 "bool": {
                     "must": [
-                        {"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}},
+                        {"terms": {"ops:Tracking_Meta.ops:archive_status": ["archived", "certified"]}},
                         {
                             "bool": {
                                 "should": [
@@ -288,7 +287,6 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
         update_content = {
             METADATA_SUCCESSOR_KEY: str(record.successor) if record.successor else None,
             SWEEPERS_PROVENANCE_VERSION_METADATA_KEY: SWEEPERS_PROVENANCE_VERSION,
-            SWEEPERS_BROKEN_PROVENANCE_VERSION_METADATA_KEY: None,  # see comment in versioning.py for context - edunn
         }
 
         if record.skip_write:
