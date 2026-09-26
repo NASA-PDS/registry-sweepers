@@ -104,10 +104,6 @@ def process_collection_bundle_ancestry(
             )
             continue
 
-        # skip processing if bundle is up-to-date
-        if bundle_update_record.skippable:
-            continue
-
         # For each collection identifier
         #   - if a LIDVID is specified, add bundle to that LIDVID's record
         #   - else if a LID is specified, add bundle to the record of every LIDVID with that LID
