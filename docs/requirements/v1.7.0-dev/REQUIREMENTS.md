@@ -76,3 +76,7 @@ This requirement is not impacted by the current version
 
 
 This requirement is not impacted by the current version
+## As a data engineer, I want the ancestry sweeper to flag collections and bundles as ancestry-complete when all members are successfully processed ([#243](https://github.com/NASA-PDS/registry-sweepers/issues/243)) 
+
+
+This requirement is not impacted by the current version

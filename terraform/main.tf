@@ -24,23 +24,23 @@ locals {
 # ECR Repository
 # ------------------------------------------------------------------------------
 # TL: commented out as the repository already exsits and we don't want to loose of the same image in it
-# resource "aws_ecr_repository" "registry_sweepers" {
-#   name                 = "pds-registry-sweepers"
-#   image_tag_mutability = "MUTABLE"
-#
-#   image_scanning_configuration {
-#     scan_on_push = false
-#   }
-#
-#   encryption_configuration {
-#     encryption_type = "AES256"
-#   }
-#
-#   tags = local.tags
-#
-#
-#   }
-# }
+resource "aws_ecr_repository" "registry_sweepers" {
+  count                = 0
+  name                 = "pds-registry-sweepers"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = false
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = local.tags
+
+}
+
 
 # ------------------------------------------------------------------------------
 # CloudWatch Log Groups (one per node)

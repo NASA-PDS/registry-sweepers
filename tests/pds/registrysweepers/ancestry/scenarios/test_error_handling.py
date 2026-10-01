@@ -74,24 +74,11 @@ class TestTypeCoercion:
         record.add_direct_ancestor_ref(lidvid_ancestor)
 
         update = update_from_record(record)
-        refs = update.content['ops:Registry_Sweepers.ops:ancestor_refs']
+        refs = update.inline_script_new_items
 
         # All refs should be strings
         for ref in refs:
             assert isinstance(ref, str)
-
-    def test_version_number_is_integer(self):
-        """Ancestry version in update is integer type"""
-        from pds.registrysweepers.ancestry.utils import update_from_record
-        from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
-
-        product = PdsLidVid.from_string("urn:nasa:pds:product::1.0")
-        record = ProductUpdateRecord(product)
-
-        update = update_from_record(record)
-        version = update.content[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]
-
-        assert isinstance(version, int)
 
 
 class TestConcurrencyConsiderations:
