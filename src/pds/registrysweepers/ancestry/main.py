@@ -1,10 +1,12 @@
 import logging
+from itertools import batched
 from itertools import chain
 from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 from typing import Union
 
@@ -14,11 +16,14 @@ from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
 from pds.registrysweepers.ancestry.generation import process_collection_bundle_ancestry
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
+from pds.registrysweepers.ancestry.queries import get_deferred_update_documents_without_content
+from pds.registrysweepers.ancestry.queries import get_orphaned_documents
 from pds.registrysweepers.ancestry.utils import update_from_record
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_args
+from pds.registrysweepers.utils.db import bulk_delete_documents
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
@@ -51,8 +56,6 @@ def run(
         product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
     )
 
-    # TODO: BOOKMARK LMAO - CONTINUE WORK HERE VVV
-
     if bulk_updates_sink is None:
         log.info("Ensuring metadata keys are present in database index...")
         for metadata_key in [
@@ -64,6 +67,7 @@ def run(
         for metadata_key in [
             # TODO: need to check whether values for these are actually updated for the refs docs, and whether they
             #  should even be - edunn 20251112
+            #  Update: appears not to be, but no time to confirm right now - edunn 20260630
             SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
         ]:
             ensure_index_mapping(
@@ -75,6 +79,7 @@ def run(
             client,
             updates,
             index_name=resolve_multitenant_index_name(client, "registry"),
+            defer_on_missing_document=True,
         )
 
     else:
@@ -82,33 +87,54 @@ def run(
         for _ in updates:
             pass
 
-    # TODO: reimplement orphan checking for ancestry sweeper - edunn 20251112
-    log.critical("Skipping checks for for orphaned documents - requires reimplementation")
-    # index_names = [resolve_multitenant_index_name(client, index_label) for index_label in ["registry", "registry-refs"]]
-    # for index_name in index_names:
-    #     if log.isEnabledFor(logging.DEBUG):
-    #         orphaned_docs = get_orphaned_documents(client, registry_mock_query_f, index_name)
-    #         orphaned_doc_ids = [doc.get("_id") for doc in orphaned_docs]
-    #         orphaned_doc_ids_str = str(orphaned_doc_ids)
-    #         orphaned_doc_count = len(orphaned_doc_ids)
-    #     else:
-    #         orphaned_doc_ids_str = "<run with debug logging enabled to view list of orphaned lidvids>"
-    #
-    #         # Currently, mocks are only implemented for iterating over document collections, not accessing the
-    #         # enclosing query response metadata.  This is a shortcoming which should be addressed, but in the meantime
-    #         # this bandaid will allow functional tests to complete when a client is not provided, i.e. during functional
-    #         # testing.
-    #         # TODO: refactor mock framework to provide access to arbitrary queries, not just the hits themselves
-    #         def orphan_counter_mock(_, __):
-    #             return -1
-    #
-    #         orphan_counter_f = get_orphaned_documents_count if client is not None else orphan_counter_mock
-    #         orphaned_doc_count = orphan_counter_f(client, index_name)
-    #
-    #     if orphaned_doc_count > 0:
-    #         log.warning(
-    #             f'Detected {orphaned_doc_count} orphaned documents in index "{index_name} - please inform developers": {orphaned_doc_ids_str}'
-    #         )
+    # Give any orphan documents their previously-resolved metadata
+    # TODO: extract this to function edunn 20260916
+    registry_index_name = resolve_multitenant_index_name(client, 'registry')
+    deferred_index_name = f"{registry_index_name}-deferred-updates"
+
+    # get all product documents which are missing ancestry metadata
+    orphaned_docs = get_orphaned_documents(client, registry_index_name)
+    orphaned_doc_ids: Set[str] = {doc.get("_id") for doc in orphaned_docs}  # type: ignore
+
+    # get all update content which is waiting to be attached to a product document
+    deferred_update_docs = get_deferred_update_documents_without_content(client, deferred_index_name)
+    deferred_update_doc_ids: Set[str] = {doc.get("_id") for doc in deferred_update_docs}  # type: ignore
+
+    # get the set of doc_ids which can merge update content onto an extant product document
+    pending_update_doc_ids: Set[str] = orphaned_doc_ids.intersection(deferred_update_doc_ids)  # type: ignore
+
+    # perform fetch/merge/write in batches
+    successfully_merged_doc_count = 0
+    for batch in batched(pending_update_doc_ids, 1000):
+        response = client.mget(index=f'{registry_index_name}-deferred-updates', body={'ids': batch})
+        pending_content_docs = response['docs']
+
+        pending_updates = iter(Update(id=doc['_id'], content=doc['_source']) for doc in pending_content_docs)
+
+        write_updated_docs(
+            client,
+            pending_updates,
+            index_name=resolve_multitenant_index_name(client, "registry"),
+        )
+
+        # Force a refresh to prevent read-after-write consistency from hiding the applied updates
+        client.indices.refresh(index=registry_index_name)
+
+    remaining_orphaned_docs = get_orphaned_documents(client, registry_index_name)
+    remaining_orphaned_doc_ids = {doc.get("_id") for doc in remaining_orphaned_docs}
+    remaining_orphaned_docs_count = len(remaining_orphaned_doc_ids)
+
+    successfully_merged_doc_ids = pending_update_doc_ids.difference(remaining_orphaned_doc_ids)
+    successfully_merged_doc_count += len(successfully_merged_doc_ids)
+
+    if successfully_merged_doc_count > 0:
+        log.info(f"Applied {successfully_merged_doc_count} deferred updates to documents in {registry_index_name}")
+
+        # clean up applied updates
+        bulk_delete_documents(client, deferred_index_name, successfully_merged_doc_ids)
+
+    if remaining_orphaned_docs_count > 0:
+        log.info(f'{remaining_orphaned_docs_count} orphaned documents remain in {registry_index_name}')
 
     log.info("Ancestry sweeper processing complete!")
 

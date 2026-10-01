@@ -18,7 +18,7 @@ from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecor
 from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTypeDef
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
-from pds.registrysweepers.utils.db import Update
+from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
@@ -93,9 +93,6 @@ def gb_mem_to_size(desired_mem_usage_gb) -> int:
 
 def update_from_record(record: ProductUpdateRecord) -> Update:
     doc_id = str(record.product)
-    content = {
-        ANCESTRY_REFS_METADATA_KEY: [str(id) for id in record.direct_ancestor_refs],
-        SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: int(SWEEPERS_ANCESTRY_VERSION),
-    }
+    new_ancestry_refs = [str(ref) for ref in record.direct_ancestor_refs]
 
-    return Update(id=doc_id, content=content, inline_script_content=ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED)
+    return Update(id=doc_id, inline_script_content=ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED, inline_script_new_items=new_ancestry_refs)

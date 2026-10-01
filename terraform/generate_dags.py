@@ -18,6 +18,7 @@ except ImportError:
     boto3 = None
 
 ENV_FILE = Path(__file__).parent / "generate_dags.env"
+TERRAFORM_DIR = Path(__file__).parent
 
 
 def load_env_file(path: Path) -> dict:

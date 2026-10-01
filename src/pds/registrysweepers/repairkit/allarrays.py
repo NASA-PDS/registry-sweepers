@@ -20,7 +20,7 @@ EXCLUDED_PROPERTIES = {
 
 def repair(document: Dict, fieldname: str) -> Dict:
     # don't touch the enumerated exclusions, or any registry-sweepers metadata property
-    if fieldname in EXCLUDED_PROPERTIES or fieldname.startswith("ops:Provenance"):
+    if fieldname in EXCLUDED_PROPERTIES or fieldname.startswith("ops:Registry_Sweepers"):
         return {}
 
     if isinstance(document[fieldname], str):
