@@ -10,6 +10,10 @@ data "aws_region" "current" {}
 
 locals {
 
+  # TODO find a better way of retrieving the collection id which is could easily break
+  # should make the collection_id the variable and retrieve the URL end point from the AOSS ressource on AWS.
+  aoss_collection_id = split(".", trimprefix(var.aoss_endpoint, "https://"))[0]
+
   tags = {
     cicd      = "iac"
     project   = "pds-registry-sweepers"

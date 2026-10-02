@@ -22,19 +22,9 @@ variable "aoss_endpoint" {
   description = "Registry AOSS endpoint url"
 }
 
-variable "aoss_collection_id" {
-  type        = string
-  description = "Registry AOSS collection ID"
-}
-
 variable "image_uri" {
   type        = string
   description = "registry-sweepers ECR image URI"
-}
-
-variable "permissions_boundary_policy_name" {
-  type        = string
-  description = "Name of the IAM policy to use as the permissions boundary for ECS roles"
 }
 
 variable "mwaa_execution_role_name" {

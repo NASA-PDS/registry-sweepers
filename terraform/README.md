@@ -56,8 +56,15 @@ First set your venue environment:
 
 Update the copied file with your environment.
 
-Generate the DAG file:
+Set a python local environment with the necessary requirements:
 
-    python generate_dags.py
+    python3.12 -m venv venv
+    source venv/bin/activate
+    pip install boto3==1.34.162 # required to push DAGs automatically on S3
+
+Generate the DAG file, run it from where the `terraform apply` command has been launched.
+When registry-sweeper is deployed as a terraform module of the [registry](https://github.com/NASA-PDS/registry), then use the directory from where the registry terraform has been launched.
+
+    python {path of your registry-sweepers repo}/terraform/generate_dags.py
 
 Push the generated DAG python files on the Airflow S3 bucket.

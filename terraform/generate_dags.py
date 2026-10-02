@@ -36,15 +36,13 @@ def load_env_file(path: Path) -> dict:
 def get_terraform_output() -> tuple[dict, dict]:
     """Returns (task_arns, log_group_names) from terraform outputs."""
     task_arns_result = subprocess.run(
-        ["terraform", "output", "-json", "task_definition_arns"],
-        cwd=TERRAFORM_DIR,
+        ["terraform", "output", "-json", "sweepers_task_definition_arns"],
         capture_output=True,
         text=True,
         check=True,
     )
     log_groups_result = subprocess.run(
-        ["terraform", "output", "-json", "log_group_names"],
-        cwd=TERRAFORM_DIR,
+        ["terraform", "output", "-json", "sweepers_log_group_names"],
         capture_output=True,
         text=True,
         check=True,
@@ -149,7 +147,7 @@ def push_to_s3(bucket: str, file_path: Path, root_prefix: str = "") -> None:
         print(f"Uploaded to s3://{bucket}/{key}")
     except (BotoCoreError, ClientError) as e:
         print(f"Error uploading {file_path.name} to S3: {e}", file=sys.stderr)
-        sys.exit(1)
+        raise
 
 
 def main():
@@ -175,7 +173,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     s3_bucket = env.get("DAGS_S3_BUCKET", "").strip()
-    root_prefix = env.get("DAGS_S3_ROOT_PREFIX", "").strip()
+    root_prefix = env.get("DAGS_S3_ROOT_PREFIX", "").strip().strip("/")
 
     for node_name, task_arn in task_arns.items():
         log_group = log_group_names[node_name]
@@ -184,7 +182,11 @@ def main():
         out_path.write_text(content)
         print(f"Generated {out_path}")
         if s3_bucket:
-            push_to_s3(s3_bucket, out_path, root_prefix)
+            try:
+                push_to_s3(s3_bucket, out_path, root_prefix=root_prefix)
+            except (BotoCoreError, ClientError):
+                print(f"Error uploading {out_path}, keep uploading remaining DAGs, as needed", file=sys.stderr)
+
 
 
 if __name__ == "__main__":
