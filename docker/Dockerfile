@@ -28,36 +28,40 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
-# Dockerfile for PDS Registry Provenance
+# Dockerfile for PDS Registry Sweepers metadata maintainance suite
 # ======================================
 #
-# Docker command is to run the sweepers_driver.py script which drives the
-# provenance process for scheduled execution via AWS Event Bridge and AWS
-# ECS/Fargate. Refer to the script for its run-time assumptions under
-# which is it executed in the AWS environment.
-#
-# Basis
-# -----
-#
-FROM python:3.13.7-slim-trixie
+# Multi-stage build process is used to eliminate the presence of unneccessary dependencies (i.e. their vulns)
+# in the deployed image
+# ---------- Stage 1: builder (compilers, headers, git live and die here) ----------
+FROM python:3.13-slim-trixie AS builder
 
-ENV INSTALL_WORKDIR=/tmp/registry-sweepers
+RUN apt-get update --quiet \
+ && apt-get install --quiet --yes --no-install-recommends git gcc libc6-dev \
+ && rm --force --recursive /var/lib/apt/lists/*
 
-COPY . $INSTALL_WORKDIR
+WORKDIR /src
+COPY . .
 
-RUN apt-get update --quiet && \
-    apt-get upgrade --quiet --yes && \
-    apt-get install --quiet --yes git gcc python3-dev
+# Build registry-sweepers and every dependency into wheels.
+RUN pip wheel --no-cache-dir --wheel-dir /wheels .
 
-RUN pip install $INSTALL_WORKDIR \
- && cp $INSTALL_WORKDIR/docker/sweepers_driver.py /usr/local/bin/ \
- && rm -r $INSTALL_WORKDIR
+# ---------- Stage 2: runtime (no gcc, no libc6-dev, no linux-libc-dev) ----------
+FROM python:3.13-slim-trixie
 
-RUN apt-get autoremove && \
-    apt-get remove --quiet --yes gcc python3-dev && \
-    rm --force --recursive /var/lib/apt/lists/*
+# Current Debian security fixes (glibc, etc.)
+RUN apt-get update --quiet \
+ && apt-get upgrade --quiet --yes \
+ && rm --force --recursive /var/lib/apt/lists/*
 
-# Create non-root user for security best practices
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl \
+ && rm --force --recursive /wheels
+
+COPY docker/sweepers_driver.py /usr/local/bin/sweepers_driver.py
+RUN chmod 0755 /usr/local/bin/sweepers_driver.py
+
+# Non-root user
 RUN useradd --create-home --shell /bin/bash sweeper
 USER sweeper
 
