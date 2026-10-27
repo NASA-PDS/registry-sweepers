@@ -97,7 +97,7 @@ def run(
     orphaned_doc_ids: Set[str] = {doc.get("_id") for doc in orphaned_docs}  # type: ignore
 
     # get all update content which is waiting to be attached to a product document
-    deferred_update_docs = get_deferred_update_documents_without_content(client, deferred_index_name)
+    deferred_update_docs = get_deferred_update_documents_without_content(client, registry_index_name)
     deferred_update_doc_ids: Set[str] = {doc.get("_id") for doc in deferred_update_docs}  # type: ignore
 
     # get the set of doc_ids which can merge update content onto an extant product document
