@@ -80,3 +80,7 @@ This requirement is not impacted by the current version
 
 
 This requirement is not impacted by the current version
+## As a Registry administrator, I want to receive Alerts when one of the sweepers DAG fails ([#272](https://github.com/NASA-PDS/registry-sweepers/issues/272)) 
+
+
+This requirement is not impacted by the current version
