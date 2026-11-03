@@ -1,5 +1,25 @@
 # Changelog
 
+## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-11-03)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.3...«unknown»)
+
+**Improvements:**
+
+- \(re\)implement handling of partially-uploaded collections, missing products, etc [\#200](https://github.com/NASA-PDS/registry-sweepers/issues/200)
+
+**Defects:**
+
+- Missing ancestry\_version = 7 for ATM registry products [\#260](https://github.com/NASA-PDS/registry-sweepers/issues/260) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
+- Ancestry not working properly for SBN in Prod [\#171](https://github.com/NASA-PDS/registry-sweepers/issues/171) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
+
+**Other closed issues:**
+
+- Activate the new sweepers 1.7.3 in production  with Airflow [\#259](https://github.com/NASA-PDS/registry-sweepers/issues/259)
+- Implement replacement for orphan detection [\#199](https://github.com/NASA-PDS/registry-sweepers/issues/199)
+- Deploy and/or execute sweeper upgrade in production to close our membership issues in API [\#197](https://github.com/NASA-PDS/registry-sweepers/issues/197)
+- Implement support in ancestry for tracking history of non-aggregate products and collections which do not yet exist in the db [\#188](https://github.com/NASA-PDS/registry-sweepers/issues/188)
+
 ## [v1.7.3](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.3) (2026-09-03)
 
 [Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.3-rc.2...v1.7.3)
