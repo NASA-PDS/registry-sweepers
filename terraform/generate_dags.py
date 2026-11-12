@@ -6,6 +6,7 @@ Usage:
   2. Run: python generate_dags.py
 """
 
+import argparse
 import json
 import subprocess
 import sys
@@ -33,21 +34,57 @@ def load_env_file(path: Path) -> dict:
     return env
 
 
-def get_terraform_output() -> tuple[dict, dict]:
-    """Returns (task_arns, log_group_names) from terraform outputs."""
+def _parse_json_output(cmd: str, output_name: str, stdout: str, stderr: str) -> dict:
+    """Parse JSON from command output, tolerating terragrunt log lines on stdout."""
+    stdout = stdout.strip()
+    if not stdout:
+        raise ValueError(
+            f"`{cmd} output -json {output_name}` produced no stdout.\n"
+            f"stderr: {stderr.strip()}"
+        )
+    try:
+        return json.loads(stdout)
+    except json.JSONDecodeError:
+        # Terragrunt may prefix log lines to stdout; decode the JSON suffix.
+        decoder = json.JSONDecoder()
+        for start, char in enumerate(stdout):
+            if char not in "{[":
+                continue
+            try:
+                value, end = decoder.raw_decode(stdout[start:])
+            except json.JSONDecodeError:
+                continue
+            if not stdout[start + end:].strip():
+                return value
+        raise ValueError(
+            f"Could not parse JSON from `{cmd} output -json {output_name}`.\n"
+            f"stdout: {stdout!r}\nstderr: {stderr.strip()!r}"
+        )
+
+
+def get_terraform_output(cmd: str = "terraform") -> tuple[dict, dict]:
+    """Returns (task_arns, log_group_names) from terraform/terragrunt outputs."""
     task_arns_result = subprocess.run(
-        ["terraform", "output", "-json", "sweepers_task_definition_arns"],
+        [cmd, "output", "-json", "sweepers_task_definition_arns"],
         capture_output=True,
         text=True,
         check=True,
     )
     log_groups_result = subprocess.run(
-        ["terraform", "output", "-json", "sweepers_log_group_names"],
+        [cmd, "output", "-json", "sweepers_log_group_names"],
         capture_output=True,
         text=True,
         check=True,
     )
-    return json.loads(task_arns_result.stdout), json.loads(log_groups_result.stdout)
+    task_arns = _parse_json_output(
+        cmd, "sweepers_task_definition_arns",
+        task_arns_result.stdout, task_arns_result.stderr,
+    )
+    log_group_names = _parse_json_output(
+        cmd, "sweepers_log_group_names",
+        log_groups_result.stdout, log_groups_result.stderr,
+    )
+    return task_arns, log_group_names
 
 
 def generate_dag(node_name: str, task_arn: str, log_group: str, env: dict) -> str:
@@ -151,6 +188,15 @@ def push_to_s3(bucket: str, file_path: Path, root_prefix: str = "") -> None:
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument(
+        "--terragrunt",
+        action="store_true",
+        default=False,
+        help="Use terragrunt instead of terraform to fetch outputs.",
+    )
+    args = parser.parse_args()
+
     if not ENV_FILE.exists():
         print(f"Error: {ENV_FILE} not found. Copy generate_dags.env.example and fill in your values.", file=sys.stderr)
         sys.exit(1)
@@ -163,10 +209,16 @@ def main():
         print(f"Error: missing keys in {ENV_FILE}: {', '.join(sorted(missing))}", file=sys.stderr)
         sys.exit(1)
 
+    # --terragrunt flag takes precedence; fall back to TERRAFORM_CMD env var, then default to "terraform".
+    if args.terragrunt:
+        tf_cmd = "terragrunt"
+    else:
+        tf_cmd = env.get("TERRAFORM_CMD", "terraform").strip() or "terraform"
+
     try:
-        task_arns, log_group_names = get_terraform_output()
+        task_arns, log_group_names = get_terraform_output(tf_cmd)
     except subprocess.CalledProcessError as e:
-        print(f"Error running terraform output: {e.stderr}", file=sys.stderr)
+        print(f"Error running {tf_cmd} output: {e.stderr}", file=sys.stderr)
         sys.exit(1)
 
     output_dir = Path(env.get("DAGS_OUTPUT_DIR", "."))

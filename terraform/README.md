@@ -67,4 +67,9 @@ When registry-sweeper is deployed as a terraform module of the [registry](https:
 
     python {path of your registry-sweepers repo}/terraform/generate_dags.py
 
-Push the generated DAG python files on the Airflow S3 bucket.
+or from the terragrunt deployment directory (registry/applications):
+
+    python {path of your registry-sweepers repo}/terraform/generate_dags.py --terragrunt
+
+
+Push the generated DAG Python files to the Airflow S3 bucket. They are uploaded automatically when `DAGS_S3_BUCKET` is set in `generate_dags.env`; `DAGS_S3_ROOT_PREFIX` is optional.
