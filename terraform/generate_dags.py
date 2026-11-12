@@ -45,14 +45,17 @@ def _parse_json_output(cmd: str, output_name: str, stdout: str, stderr: str) -> 
     try:
         return json.loads(stdout)
     except json.JSONDecodeError:
-        # Terragrunt may prefix log lines to stdout; scan lines for the JSON value.
-        for line in reversed(stdout.splitlines()):
-            line = line.strip()
-            if line.startswith(("{", "[")):
-                try:
-                    return json.loads(line)
-                except json.JSONDecodeError:
-                    pass
+        # Terragrunt may prefix log lines to stdout; decode the JSON suffix.
+        decoder = json.JSONDecoder()
+        for start, char in enumerate(stdout):
+            if char not in "{[":
+                continue
+            try:
+                value, end = decoder.raw_decode(stdout[start:])
+            except json.JSONDecodeError:
+                continue
+            if not stdout[start + end:].strip():
+                return value
         raise ValueError(
             f"Could not parse JSON from `{cmd} output -json {output_name}`.\n"
             f"stdout: {stdout!r}\nstderr: {stderr.strip()!r}"
