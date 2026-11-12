@@ -1,0 +1,52 @@
+{
+  "en-registry-dd": {
+    "mappings": {
+      "dynamic": "false",
+      "dynamic_templates": [
+        {
+          "strings": {
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "attr_name": {
+          "type": "keyword"
+        },
+        "attr_ns": {
+          "type": "keyword"
+        },
+        "class_name": {
+          "type": "keyword"
+        },
+        "class_ns": {
+          "type": "keyword"
+        },
+        "data_type": {
+          "type": "keyword"
+        },
+        "date": {
+          "type": "date"
+        },
+        "description": {
+          "type": "text"
+        },
+        "es_data_type": {
+          "type": "keyword"
+        },
+        "es_field_name": {
+          "type": "keyword"
+        },
+        "im_version": {
+          "type": "keyword"
+        },
+        "ldd_version": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}

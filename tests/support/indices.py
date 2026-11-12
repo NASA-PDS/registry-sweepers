@@ -47,8 +47,17 @@ def load_mappings() -> Dict[str, dict]:
     return result
 
 
+_KNOWN_TOP_LEVEL_KEYS = frozenset({"mappings", "properties", "settings", "aliases"})
+
+
 def _normalise_mapping(body: dict) -> dict:
     """Normalise to {"settings": ..., "mappings": {"properties": {...}}} form."""
+    # Handle the OpenSearch get-mapping API response: {"<index-name>": {"mappings": {...}}}
+    if len(body) == 1:
+        key = next(iter(body))
+        if key not in _KNOWN_TOP_LEVEL_KEYS:
+            body = body[key]
+
     if "mappings" in body:
         return body
     if "properties" in body:

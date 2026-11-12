@@ -1,0 +1,49 @@
+{
+  "en-registry-refs": {
+    "mappings": {
+      "dynamic": "false",
+      "dynamic_templates": [
+        {
+          "strings": {
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "_package_id": {
+          "type": "keyword"
+        },
+        "batch_id": {
+          "type": "integer"
+        },
+        "batch_size": {
+          "type": "integer"
+        },
+        "collection_lid": {
+          "type": "keyword"
+        },
+        "collection_lidvid": {
+          "type": "keyword"
+        },
+        "collection_vid": {
+          "type": "float"
+        },
+        "ops:Provenance/ops:registry_sweepers_ancestry_version": {
+          "type": "keyword"
+        },
+        "product_lid": {
+          "type": "keyword"
+        },
+        "product_lidvid": {
+          "type": "keyword"
+        },
+        "reference_type": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}

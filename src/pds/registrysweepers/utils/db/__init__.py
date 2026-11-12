@@ -378,9 +378,9 @@ def write_updated_docs(
         bulk_updates_buffer.extend(update_statement_strs)
         total_update_count += 1
 
-    if buffered_updates_count > 0:
+    if bulk_updates_buffer:
         log.debug(
-            limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
+            limit_log_length(f"Writing documents updates for {len(bulk_updates_buffer) // 2} remaining products to db...")
         )
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer,
                                   update_deferral_tracker=update_deferral_tracker)
