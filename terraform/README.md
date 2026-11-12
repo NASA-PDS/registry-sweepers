@@ -72,4 +72,4 @@ or from the terragrunt deployment directory (registry/applications):
     python {path of your registry-sweepers repo}/terraform/generate_dags.py --terragrunt
 
 
-Push the generated DAG python files on the Airflow S3 bucket. The DAG's are automatically pushed if the environment variables DAGS_S3_BUCKET and DAGS_S3_ROOT_PREFIX are set.
+Push the generated DAG Python files to the Airflow S3 bucket. They are uploaded automatically when `DAGS_S3_BUCKET` is set in `generate_dags.env`; `DAGS_S3_ROOT_PREFIX` is optional.
