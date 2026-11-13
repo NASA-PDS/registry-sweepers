@@ -1,9 +1,38 @@
+import os
 import unittest
+from unittest import mock
 
 from pds.registrysweepers.utils.misc import bin_elements
 from pds.registrysweepers.utils.misc import coerce_list_type
 from pds.registrysweepers.utils.misc import coerce_non_list_type
+from pds.registrysweepers.utils.misc import FORCE_REPROCESS_ENV_VAR
 from pds.registrysweepers.utils.misc import iterate_pages_of_size
+from pds.registrysweepers.utils.misc import resolve_force_reprocess
+
+
+class ResolveForceReprocessTestCase(unittest.TestCase):
+    def test_disabled_by_default(self):
+        with mock.patch.dict(os.environ, clear=False):
+            os.environ.pop(FORCE_REPROCESS_ENV_VAR, None)
+            self.assertFalse(resolve_force_reprocess())
+
+    def test_enabled_by_cli_flag(self):
+        with mock.patch.dict(os.environ, clear=False):
+            os.environ.pop(FORCE_REPROCESS_ENV_VAR, None)
+            self.assertTrue(resolve_force_reprocess(True))
+
+    def test_enabled_by_environment_variable(self):
+        with mock.patch.dict(os.environ, {FORCE_REPROCESS_ENV_VAR: "true"}):
+            self.assertTrue(resolve_force_reprocess(False))
+
+    def test_falsy_environment_variable_does_not_enable(self):
+        with mock.patch.dict(os.environ, {FORCE_REPROCESS_ENV_VAR: "false"}):
+            self.assertFalse(resolve_force_reprocess(False))
+
+    def test_invalid_environment_variable_value_is_rejected(self):
+        with mock.patch.dict(os.environ, {FORCE_REPROCESS_ENV_VAR: "maybe"}):
+            with self.assertRaises(ValueError):
+                resolve_force_reprocess(False)
 
 
 class IteratePagesOfTestCase(unittest.TestCase):

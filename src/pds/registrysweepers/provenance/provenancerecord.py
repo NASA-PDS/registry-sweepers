@@ -29,7 +29,7 @@ class ProvenanceRecord:
             self.skip_write = False
 
     @staticmethod
-    def from_source(_source: Dict) -> ProvenanceRecord:
+    def from_source(_source: Dict, force: bool = False) -> ProvenanceRecord:
         successor_exists_in_doc = METADATA_SUCCESSOR_KEY in _source
         successor = _source.get(METADATA_SUCCESSOR_KEY)
 
@@ -37,8 +37,10 @@ class ProvenanceRecord:
         # If the value of successor is changed, this assumption is invalidated in the setter.
         # The check that a (null or non-null) successor value is explicitly defined in the doc is probably redundant,
         # but can stay for the moment
+        # When force is set, the existing version is ignored and every record is written.
         skip_write = (
-            successor_exists_in_doc
+            not force
+            and successor_exists_in_doc
             and _source.get(SWEEPERS_PROVENANCE_VERSION_METADATA_KEY, 0) >= SWEEPERS_PROVENANCE_VERSION
         )
 
@@ -47,5 +49,5 @@ class ProvenanceRecord:
         )
 
     @staticmethod
-    def from_doc(doc: Dict) -> ProvenanceRecord:
-        return ProvenanceRecord.from_source(doc["_source"])
+    def from_doc(doc: Dict, force: bool = False) -> ProvenanceRecord:
+        return ProvenanceRecord.from_source(doc["_source"], force=force)

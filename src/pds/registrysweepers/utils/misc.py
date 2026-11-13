@@ -136,6 +136,17 @@ def parse_boolean_env_var(key: str) -> bool:
         )
 
 
+FORCE_REPROCESS_ENV_VAR = "SWEEPERS_FORCE_REPROCESS"
+
+
+def resolve_force_reprocess(cli_flag: bool = False) -> bool:
+    """
+    Return whether a forced reprocess of the entire index has been requested, either via the --force/--overwrite CLI
+    flag or by setting the SWEEPERS_FORCE_REPROCESS environment variable (useful for containerized runs).
+    """
+    return cli_flag or parse_boolean_env_var(FORCE_REPROCESS_ENV_VAR)
+
+
 def bin_elements(elements: Iterable[V], key_f: Callable[[V], K]) -> Dict[K, List[V]]:
     """
     Given a collection of elements and a function to derive the hashable bin key of an element, return a dict of

@@ -27,7 +27,7 @@ from tqdm import tqdm
 log = logging.getLogger(__name__)
 
 
-def get_docs_query(filter_to_harvested_before: datetime):
+def get_docs_query(filter_to_harvested_before: datetime, force: bool = False):
     """
     Return a query to get all docs which haven't been reindexed by this sweeper and which haven't been harvested
     since this sweeper process instance started running
@@ -37,12 +37,25 @@ def get_docs_query(filter_to_harvested_before: datetime):
     - Exclude anything which has already been processed, to avoid redundant reprocessing
     - Exclude anything which was harvested in the middle of this sweeper running, since this can cause erroneous results
       due to inconsistency in the document set across query calls which are expected to be identical.
+
+    If force is set, documents which were reindexed by a previous run are included.  filter_to_harvested_before is the
+    sweeper start timestamp, which is also the value written to REINDEXER_FLAG_METADATA_KEY, so documents already
+    processed by this run (flag >= start timestamp) are the only ones excluded.  This allows the sweeper's
+    query-until-exhausted loop to terminate.
     """
+    already_processed_clause: Dict[str, Dict]
+    if force:
+        already_processed_clause = {
+            "range": {REINDEXER_FLAG_METADATA_KEY: {"gte": filter_to_harvested_before.isoformat()}}
+        }
+    else:
+        already_processed_clause = {"exists": {"field": REINDEXER_FLAG_METADATA_KEY}}
+
     # TODO: Remove this once query_registry_db_with_search_after is modified to remove mutation side-effects
     return {
         "query": {
             "bool": {
-                "must_not": [{"exists": {"field": REINDEXER_FLAG_METADATA_KEY}}],
+                "must_not": [already_processed_clause],
                 "must": {
                     "range": {
                         "ops:Harvest_Info/ops:harvest_date_time": {
@@ -300,8 +313,16 @@ def run(
     client: OpenSearch,
     log_filepath: Union[str, None] = None,
     log_level: int = logging.INFO,
+    force: bool = False,
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
+    if force:
+        log.warning(
+            limit_log_length(
+                f"Force mode enabled - all documents will be reprocessed and re-stamped regardless of existing "
+                f"{REINDEXER_FLAG_METADATA_KEY} values"
+            )
+        )
 
     sweeper_start_timestamp = datetime.now()
     products_index_name = resolve_multitenant_index_name(client, "registry")
@@ -310,7 +331,7 @@ def run(
     dd_field_types_by_field_name = fetch_dd_field_types(client)
 
     def get_updated_hits_count():
-        return get_query_hits_count(client, products_index_name, get_docs_query(sweeper_start_timestamp))
+        return get_query_hits_count(client, products_index_name, get_docs_query(sweeper_start_timestamp, force))
 
     # AOSS was becoming overloaded during iteration while accumulating missing mappings on populous nodes, so it is
     # necessary to impose a limit for how many products are iterated over before a batch of updates is created and
@@ -343,7 +364,7 @@ def run(
                     client,
                     products_index_name,
                     _source={},
-                    query=get_docs_query(sweeper_start_timestamp),
+                    query=get_docs_query(sweeper_start_timestamp, force),
                     limit=batch_size_limit,
                     sort_fields=sort_fields,
                 ),
@@ -364,7 +385,7 @@ def run(
                     client,
                     products_index_name,
                     _source={},
-                    query=get_docs_query(sweeper_start_timestamp),
+                    query=get_docs_query(sweeper_start_timestamp, force),
                     limit=batch_size_limit,
                     sort_fields=sort_fields,
                 ),
@@ -405,7 +426,7 @@ if __name__ == "__main__":
 
     """
 
-    args = parse_args(description=cli_description)
+    args = parse_args(description=cli_description, supports_force=True)
     client = get_userpass_opensearch_client(
         endpoint_url=args.base_URL, username=args.username, password=args.password, verify_certs=not args.insecure
     )
@@ -414,4 +435,5 @@ if __name__ == "__main__":
         client=client,
         log_level=args.log_level,
         log_filepath=args.log_file,
+        force=args.force,
     )
