@@ -6,12 +6,22 @@ from typing import Union
 
 log = logging.getLogger(__name__)
 
+FORCE_FLAG_HELP = (
+    "reprocess and re-stamp every document in the index regardless of the sweeper version metadata already present "
+    "(may also be enabled by setting the environment variable SWEEPERS_FORCE_REPROCESS=true)"
+)
 
-def parse_args(description: str = "", epilog: str = "") -> Namespace:
+
+def parse_args(description: str = "", epilog: str = "", supports_force: bool = False) -> Namespace:
     """
     Provides a consistent CLI for sweepers.  May need to be re-thought in future but a standardized interface makes
     sense for the time being.
+
+    If supports_force is True, the --force/--overwrite flag is accepted and args.force reflects the flag or the
+    SWEEPERS_FORCE_REPROCESS environment variable.
     """
+    from pds.registrysweepers.utils.misc import resolve_force_reprocess
+
     ap = argparse.ArgumentParser(
         description=description,
         epilog=epilog,
@@ -42,8 +52,12 @@ def parse_args(description: str = "", epilog: str = "") -> Namespace:
         help="username to login to the registry db, leaving it blank if db does not require login",
     )
     ap.add_argument("--insecure", action="store_true", default=False, help="skip verification of the host certificates")
+    if supports_force:
+        ap.add_argument("--force", "--overwrite", dest="force", action="store_true", default=False, help=FORCE_FLAG_HELP)
 
     args = ap.parse_args()
+    if supports_force:
+        args.force = resolve_force_reprocess(args.force)
     return args
 
 

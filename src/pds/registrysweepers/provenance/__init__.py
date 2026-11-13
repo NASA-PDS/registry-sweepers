@@ -75,7 +75,9 @@ from tqdm import tqdm
 log = logging.getLogger(__name__)
 
 
-def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterable[ProvenanceRecord]:
+def get_records_for_lids(
+    client: OpenSearch, lids: Collection[PdsLid], force: bool = False
+) -> Iterable[ProvenanceRecord]:
     ids_str = get_ids_list_str(lids, 3)  # type: ignore
     log.debug(limit_log_length(f"Fetching docs and generating records for {len(lids)} LIDs: {ids_str}"))
 
@@ -97,7 +99,7 @@ def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterab
 
     for doc in docs:
         try:
-            yield ProvenanceRecord.from_doc(doc)
+            yield ProvenanceRecord.from_doc(doc, force=force)
         except ValueError as err:
             log.warning(
                 limit_log_length(
@@ -106,7 +108,47 @@ def get_records_for_lids(client: OpenSearch, lids: Collection[PdsLid]) -> Iterab
             )
 
 
-def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
+def fetch_all_lids(client: OpenSearch, page_size: int = 25000) -> Iterable[PdsLid]:
+    """
+    Iterate over every LID having archived/certified products, regardless of the provenance version metadata of those
+    products.  Because processed products can't be excluded from the query, a composite aggregation is paged via its
+    after_key rather than re-querying until no unprocessed documents remain.
+    """
+    query: Dict = {
+        "query": {"bool": {"must": [{"terms": {"ops:Tracking_Meta/ops:archive_status": ["archived", "certified"]}}]}},
+        "aggs": {"unique_lids": {"composite": {"size": page_size, "sources": [{"lid": {"terms": {"field": "lid"}}}]}}},
+        "size": 0,
+        "track_total_hits": True,
+    }
+    index_name = resolve_multitenant_index_name(client, "registry")
+
+    response = client.search(index=index_name, body=query, size=0, _source_includes=[], request_timeout=20)
+    # disable=None enables auto-detection: progress bar is shown in interactive terminals (TTY)
+    # and suppressed automatically in non-interactive environments (production containers, CI pipelines).
+    with tqdm(
+        desc="Provenance sweeper progress (approximate)", total=response["hits"]["total"]["value"], disable=None
+    ) as pbar:
+        while True:
+            aggregation = response["aggregations"]["unique_lids"]
+            for bucket in aggregation["buckets"]:
+                pbar.update(bucket["doc_count"])
+                yield bucket["key"]["lid"]
+
+            after_key = aggregation.get("after_key")
+            if len(aggregation["buckets"]) < page_size or after_key is None:
+                break
+
+            query["aggs"]["unique_lids"]["composite"]["after"] = after_key
+            response = client.search(index=index_name, body=query, size=0, _source_includes=[], request_timeout=20)
+
+    log.info("All LIDs have been fetched for forced reprocessing")
+
+
+def fetch_target_lids(client: OpenSearch, force: bool = False) -> Iterable[PdsLid]:
+    if force:
+        yield from fetch_all_lids(client)
+        return
+
     # This page size determines how many LIDs are fetched at a time.  This value should be set high enough that the
     # updates produced from a single page are safely sufficient to trigger a buffer flush in
     # pds.registrysweepers.utils.db.write_updated_docs()
@@ -215,14 +257,15 @@ def fetch_target_lids(client: OpenSearch) -> Iterable[PdsLid]:
 
 
 def generate_record_chains(
-    client: OpenSearch, lids: Iterable[PdsLid], lid_batch_size=5000
+    client: OpenSearch, lids: Iterable[PdsLid], lid_batch_size=5000, force: bool = False
 ) -> Iterable[List[ProvenanceRecord]]:
     """
     Create an iterable of unsorted collections of records which share LIDs.
     :param client:
+    :param force: if True, no record is marked as skippable on the basis of its existing version metadata
     """
     for lid_batch in chunked(lids, lid_batch_size):
-        unbucketed_records = get_records_for_lids(client, lid_batch)
+        unbucketed_records = get_records_for_lids(client, lid_batch, force=force)
         for record_chain in group_and_link_records_into_chains(unbucketed_records):
             yield record_chain
 
@@ -258,10 +301,18 @@ def run(
     client: OpenSearch,
     log_filepath: Union[str, None] = None,
     log_level: int = logging.INFO,
+    force: bool = False,
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
 
     log.info(limit_log_length(f"Starting provenance v{SWEEPERS_PROVENANCE_VERSION} sweeper processing..."))
+    if force:
+        log.warning(
+            limit_log_length(
+                "Force mode enabled - all documents will be reprocessed and re-stamped regardless of existing "
+                "provenance version metadata"
+            )
+        )
 
     ensure_index_mapping(
         client,
@@ -270,8 +321,8 @@ def run(
         "integer",
     )
 
-    target_lids = fetch_target_lids(client)
-    record_chains = generate_record_chains(client, target_lids)
+    target_lids = fetch_target_lids(client, force=force)
+    record_chains = generate_record_chains(client, target_lids, force=force)
     updates = generate_updates(itertools.chain.from_iterable(record_chains))
 
     write_updated_docs(
@@ -324,7 +375,7 @@ if __name__ == "__main__":
 
     """
 
-    args = parse_args(description=cli_description, epilog=cli_epilog)
+    args = parse_args(description=cli_description, epilog=cli_epilog, supports_force=True)
     client = get_userpass_opensearch_client(
         endpoint_url=args.base_URL, username=args.username, password=args.password, verify_certs=not args.insecure
     )
@@ -333,4 +384,5 @@ if __name__ == "__main__":
         client=client,
         log_level=args.log_level,
         log_filepath=args.log_file,
+        force=args.force,
     )

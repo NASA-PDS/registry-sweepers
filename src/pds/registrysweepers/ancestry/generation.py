@@ -65,17 +65,18 @@ def get_ancestry_by_collection_lid(
 
 
 def process_collection_bundle_ancestry(
-        client: OpenSearch) -> Iterable[ProductUpdateRecord]:
+        client: OpenSearch, force: bool = False) -> Iterable[ProductUpdateRecord]:
     """
     Because the number of bundles and collections is relatively small, we can process all bundle-ancestries at once to
     leverage the existing code.
     :param client: OpenSearch client
+    :param force: if True, all bundles and collections are processed regardless of their existing ancestry version
     :return:
     """
 
     log.info(limit_log_length("Generating ProductUpdateRecords for collections' bundle-ancestries..."))
     bundles_docs = list(query_for_pending_bundles(client))
-    collections_docs = list(query_for_pending_collections(client))
+    collections_docs = list(query_for_pending_collections(client, force=force))
 
     # Prepare empty ancestry records for collections, with fast access by LID or LIDVID
     collection_update_records_by_collection_lidvid: Mapping[PdsLidVid, ProductUpdateRecord] = get_ancestry_by_collection_lidvid(
@@ -85,7 +86,7 @@ def process_collection_bundle_ancestry(
         collection_update_records_by_collection_lidvid
     )
 
-    bundle_update_records_by_bundle_lidvid: Mapping[PdsLidVid, ProductUpdateRecord] = {record.product: record for record in bundle_update_records_from_docs(bundles_docs)}
+    bundle_update_records_by_bundle_lidvid: Mapping[PdsLidVid, ProductUpdateRecord] = {record.product: record for record in bundle_update_records_from_docs(bundles_docs, force=force)}
 
     # For each bundle, add it to the bundle-ancestry of every collection it references
     for bundle_doc in bundles_docs:
@@ -144,14 +145,15 @@ def process_collection_bundle_ancestry(
     return collection_and_bundle_update_records
 
 
-def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpdateRecord]:
+def bundle_update_records_from_docs(docs: Iterable[dict], force: bool = False) -> Iterable[ProductUpdateRecord]:
     """
     Generate ProductUpdateRecords from bundle docs, indicating whether they are up-to-date or require processing.
+    If force is set, no record is skippable.
     """
     for doc in docs:
         try:
             sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
-            skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
+            skip_write = not force and sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
             yield ProductUpdateRecord(product=PdsLidVid.from_string(doc["_source"]["lidvid"]),
                                       skip_write=skip_write)
         except (ValueError, KeyError) as err:
@@ -162,18 +164,19 @@ def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpd
             )
 
 
-def process_collection_ancestries_for_nonaggregates(client) -> Iterator[ProductUpdateRecord]:
+def process_collection_ancestries_for_nonaggregates(client, force: bool = False) -> Iterator[ProductUpdateRecord]:
     """
     Process each non-up-to-date collection, yielding updates for its descendant nonaggregate products, then an update for the collection itself to mark it as up-to-date.
+    If force is set, every collection is processed regardless of its ancestry version.
     """
 
     # iterate over collections (and their member nonaggregate products) which require ancestry updates
-    pending_collections_docs = query_for_pending_collections(client)
+    pending_collections_docs = query_for_pending_collections(client, force=force)
     pending_collections = iter(PdsLidVid.from_string(record["_source"]["lidvid"]) for record in pending_collections_docs)
     # TODO: add orphan processing step. not sure if it belongs here or as a separate step after ancestry has completed - edunn 20251112
 
     for collection_lidvid in pending_collections:
-        collection_nonaggregate_refs = query_for_collection_nonaggregate_refs(client, collection_lidvid)
+        collection_nonaggregate_refs = query_for_collection_nonaggregate_refs(client, collection_lidvid, force=force)
 
         for nonaggregate_lidvid in collection_nonaggregate_refs:
             nonagg_update_record = ProductUpdateRecord(product=nonaggregate_lidvid,

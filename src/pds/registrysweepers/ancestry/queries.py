@@ -46,14 +46,18 @@ def query_for_pending_bundles(client: OpenSearch) -> Iterable[Dict]:
     return docs
 
 
-def query_for_pending_collections(client: OpenSearch) -> Iterable[Dict]:
-    """Query the registry for all collection LIDVIDs which require ancestry processing"""
+def query_for_pending_collections(client: OpenSearch, force: bool = False) -> Iterable[Dict]:
+    """
+    Query the registry for all collection LIDVIDs which require ancestry processing.
+    If force is set, all collections are returned regardless of their ancestry version.
+    """
     from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 
     query = product_class_query_factory(ProductClass.COLLECTION)
-    query["query"]["bool"].update(
-        {"must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]}
-    )
+    if not force:
+        query["query"]["bool"].update(
+            {"must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]}
+        )
 
     _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
     docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query, _source)
@@ -90,15 +94,18 @@ def get_nonaggregate_ancestry_records_query(client: OpenSearch) -> Iterable[Dict
 
 
 def query_for_collection_nonaggregate_refs(
-    client: OpenSearch, collection_lidvid: PdsLidVid
+    client: OpenSearch, collection_lidvid: PdsLidVid, force: bool = False
 ) -> Iterable[PdsLidVid]:
     # Query the registry-refs index for the contents of the given collection
+    # If force is set, refs documents are returned regardless of their ancestry version
     from pds.registrysweepers.utils.db import query_registry_db_with_search_after
 
     query: Dict = {
         "query": {
             "bool": {
-                "must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}],
+                "must_not": []
+                if force
+                else [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}],
                 "filter": [{"term": {"collection_lidvid": str(collection_lidvid)}}],
             }
         },
