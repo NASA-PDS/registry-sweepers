@@ -12,6 +12,7 @@ from typing import Set
 from typing import Union
 
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
+from pds.registrysweepers.ancestry.constants import ANCESTRY_DEDUPLICATION_SCRIPT_FORCED_MINIFIED
 from pds.registrysweepers.ancestry.constants import ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
@@ -91,11 +92,13 @@ def gb_mem_to_size(desired_mem_usage_gb) -> int:
     return desired_mem_usage_gb / 3.1 * 2621536
 
 
-def update_from_record(record: ProductUpdateRecord) -> Update:
+def update_from_record(record: ProductUpdateRecord, force: bool = False) -> Update:
+    """If force is set, the update script does not skip the write when it changes nothing."""
     doc_id = str(record.product)
     content = {
         ANCESTRY_REFS_METADATA_KEY: [str(id) for id in record.direct_ancestor_refs],
         SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: int(SWEEPERS_ANCESTRY_VERSION),
     }
 
-    return Update(id=doc_id, content=content, inline_script_content=ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED)
+    script = ANCESTRY_DEDUPLICATION_SCRIPT_FORCED_MINIFIED if force else ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED
+    return Update(id=doc_id, content=content, inline_script_content=script, force_rewrite=force)
