@@ -373,6 +373,9 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
 
     if update.inline_script_content is None:
         content_statement = {"doc": update.content, "doc_as_upsert": as_upsert}
+        if update.force_rewrite:
+            # OpenSearch skips updates which change nothing by default, leaving the document unwritten and unindexed
+            content_statement["detect_noop"] = False
     else:
         if not update.content:
             return []

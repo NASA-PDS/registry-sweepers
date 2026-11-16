@@ -1,10 +1,21 @@
 """Unit tests for the force (reprocess everything) behaviour of the ancestry sweeper"""
+import json
+
+import pytest
 from pds.registrysweepers.ancestry import generation
+from pds.registrysweepers.ancestry import main as ancestry_main
+from pds.registrysweepers.ancestry.constants import ANCESTRY_DEDUPLICATION_SCRIPT_FORCED_MINIFIED
+from pds.registrysweepers.ancestry.constants import ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED
+from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.generation import bundle_update_records_from_docs
+from pds.registrysweepers.ancestry.main import convert_records_to_updates
+from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
 from pds.registrysweepers.ancestry.queries import query_for_collection_nonaggregate_refs
 from pds.registrysweepers.ancestry.queries import query_for_pending_collections
+from pds.registrysweepers.ancestry.utils import update_from_record
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.utils.db import update_as_statements
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 from ..mock_opensearch import create_empty_response
@@ -138,3 +149,92 @@ class TestGenerationForce:
         assert refs_query_force_values == [True]
         # one record for the member product, one marking the collection itself as processed
         assert [str(r.product) for r in records] == [str(member_lidvid), COLLECTION_LIDVID]
+
+
+class TestForcedUpdateScript:
+    product = PdsLidVid.from_string("urn:nasa:pds:bundle:collection:product::1.0")
+
+    def _record(self):
+        return ProductUpdateRecord(self.product, direct_ancestor_refs=[PdsLidVid.from_string(COLLECTION_LIDVID)])
+
+    def test_default_update_script_skips_the_write_when_nothing_changed(self):
+        update = update_from_record(self._record())
+
+        assert update.inline_script_content == ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED
+        assert "ctx.op='none'" in update.inline_script_content
+        assert not update.force_rewrite
+
+    def test_forced_update_script_does_not_skip_the_write(self):
+        update = update_from_record(self._record(), force=True)
+
+        assert update.inline_script_content == ANCESTRY_DEDUPLICATION_SCRIPT_FORCED_MINIFIED
+        assert "ctx.op" not in update.inline_script_content
+        assert update.force_rewrite
+
+    def test_forced_script_differs_from_default_only_by_the_noop_guard(self):
+        assert ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED == (
+            ANCESTRY_DEDUPLICATION_SCRIPT_FORCED_MINIFIED + "if(!c){ctx.op='none';}"
+        )
+
+    def test_forced_update_writes_the_same_content_as_the_default_update(self):
+        assert update_from_record(self._record(), force=True).content == update_from_record(self._record()).content
+
+    def test_forced_update_statement_is_a_script_without_detect_noop(self):
+        update = update_from_record(self._record(), force=True)
+        _, content_str = update_as_statements(update)
+
+        statement = json.loads(content_str)
+        assert statement["script"]["source"] == ANCESTRY_DEDUPLICATION_SCRIPT_FORCED_MINIFIED
+        assert statement["script"]["params"] == {"new_items": update.content[ANCESTRY_REFS_METADATA_KEY]}
+        assert COLLECTION_LIDVID in statement["script"]["params"]["new_items"]
+        assert "detect_noop" not in statement
+
+    def test_default_update_statement_is_unchanged(self):
+        update = update_from_record(self._record())
+        _, content_str = update_as_statements(update)
+
+        assert json.loads(content_str) == {
+            "script": {
+                "source": ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED,
+                "lang": "painless",
+                "params": {"new_items": update.content[ANCESTRY_REFS_METADATA_KEY]},
+            }
+        }
+
+    def test_convert_records_to_updates_forwards_force(self):
+        unforced_updates = list(convert_records_to_updates([self._record()]))
+        forced_updates = list(convert_records_to_updates([self._record()], force=True))
+
+        assert [u.inline_script_content for u in unforced_updates] == [ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED]
+        assert [u.inline_script_content for u in forced_updates] == [ANCESTRY_DEDUPLICATION_SCRIPT_FORCED_MINIFIED]
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_run_forwards_force_to_generation_and_writes_matching_updates(monkeypatch, force):
+    generation_force_values = []
+    written_updates = []
+
+    def fake_bundle_ancestry(client, force=False):
+        generation_force_values.append(force)
+        return [ProductUpdateRecord(PdsLidVid.from_string(COLLECTION_LIDVID))]
+
+    def fake_nonaggregate_ancestry(client, force=False):
+        generation_force_values.append(force)
+        return []
+
+    def fake_write_updated_docs(client, updates, **kwargs):
+        written_updates.extend(updates)
+
+    monkeypatch.setattr(ancestry_main, "configure_logging", lambda **kwargs: None)
+    monkeypatch.setattr(ancestry_main, "process_collection_bundle_ancestry", fake_bundle_ancestry)
+    monkeypatch.setattr(ancestry_main, "process_collection_ancestries_for_nonaggregates", fake_nonaggregate_ancestry)
+    monkeypatch.setattr(ancestry_main, "ensure_index_mapping", lambda *args, **kwargs: None)
+    monkeypatch.setattr(ancestry_main, "resolve_multitenant_index_name", lambda client, label: label)
+    monkeypatch.setattr(ancestry_main, "write_updated_docs", fake_write_updated_docs)
+
+    ancestry_main.run(client=object(), force=force)
+
+    assert generation_force_values == [force, force]
+    assert [u.force_rewrite for u in written_updates] == [force]
+    expected_script = ANCESTRY_DEDUPLICATION_SCRIPT_FORCED_MINIFIED if force else ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED
+    assert [u.inline_script_content for u in written_updates] == [expected_script]

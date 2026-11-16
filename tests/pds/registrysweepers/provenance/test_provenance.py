@@ -114,6 +114,15 @@ class ProvenanceForceTestCase(unittest.TestCase):
         self.assertFalse(updates[0].skip_write)
         self.assertEqual(SWEEPERS_PROVENANCE_VERSION, updates[0].content[SWEEPERS_PROVENANCE_VERSION_METADATA_KEY])
 
+    def test_updates_force_rewrite_only_when_forced(self):
+        records = [ProvenanceRecord.from_source(self.up_to_date_source, force=True)]
+
+        unforced_updates = list(provenance.generate_updates(records))
+        forced_updates = list(provenance.generate_updates(records, force=True))
+
+        self.assertFalse(unforced_updates[0].force_rewrite)
+        self.assertTrue(forced_updates[0].force_rewrite)
+
     def test_fetch_all_lids_pages_through_every_lid_without_version_filter(self):
         client = _FakeSearchClient(
             [_composite_response(["lid-a", "lid-b"], after_key={"lid": "lid-b"}), _composite_response(["lid-c"])]
@@ -156,6 +165,38 @@ class ProvenanceForceTestCase(unittest.TestCase):
         fetch_target_lids.assert_called_once()
         self.assertTrue(fetch_target_lids.call_args.kwargs["force"])
         self.assertTrue(generate_record_chains.call_args.kwargs["force"])
+
+    def _run_and_collect_written_updates(self, force):
+        written_updates = []
+
+        def fake_write_updated_docs(client, updates, **kwargs):
+            written_updates.extend(updates)
+
+        records = [ProvenanceRecord.from_source(self.up_to_date_source, force=force)]
+        with mock.patch.object(provenance, "configure_logging"), mock.patch.object(
+            provenance, "ensure_index_mapping"
+        ), mock.patch.object(provenance, "resolve_multitenant_index_name", return_value="registry"), mock.patch.object(
+            provenance, "write_updated_docs", side_effect=fake_write_updated_docs
+        ), mock.patch.object(
+            provenance, "fetch_target_lids", return_value=iter([])
+        ), mock.patch.object(
+            provenance, "generate_record_chains", return_value=iter([records])
+        ):
+            provenance.run(client=object(), force=force)
+
+        return written_updates
+
+    def test_run_writes_updates_which_force_a_rewrite_when_forced(self):
+        written_updates = self._run_and_collect_written_updates(force=True)
+
+        self.assertEqual(1, len(written_updates))
+        self.assertTrue(written_updates[0].force_rewrite)
+
+    def test_run_writes_updates_which_do_not_force_a_rewrite_by_default(self):
+        written_updates = self._run_and_collect_written_updates(force=False)
+
+        self.assertEqual(1, len(written_updates))
+        self.assertFalse(written_updates[0].force_rewrite)
 
 
 if __name__ == "__main__":

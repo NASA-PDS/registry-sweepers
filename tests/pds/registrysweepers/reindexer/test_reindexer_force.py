@@ -1,7 +1,10 @@
 from datetime import datetime
 from datetime import timezone
 
+import pytest
+from pds.registrysweepers.reindexer import main as reindexer
 from pds.registrysweepers.reindexer.constants import REINDEXER_FLAG_METADATA_KEY
+from pds.registrysweepers.reindexer.main import generate_updates
 from pds.registrysweepers.reindexer.main import get_docs_query
 
 SWEEPER_START = datetime(2026, 11, 13, 12, 30, 15)
@@ -30,3 +33,37 @@ def test_forced_query_still_excludes_documents_harvested_during_the_run():
     assert default_range["range"]["ops:Harvest_Info/ops:harvest_date_time"]["lt"] == (
         SWEEPER_START.astimezone(timezone.utc).isoformat()
     )
+
+
+def test_updates_force_rewrite_only_when_forced():
+    docs = [{"_id": "urn:nasa:pds:bundle::1.0", "_source": {"lidvid": "urn:nasa:pds:bundle::1.0"}}]
+
+    unforced_updates = list(generate_updates(SWEEPER_START, ["lidvid"], docs))
+    forced_updates = list(generate_updates(SWEEPER_START, ["lidvid"], docs, force=True))
+
+    assert [u.force_rewrite for u in unforced_updates] == [False]
+    assert [u.force_rewrite for u in forced_updates] == [True]
+    assert forced_updates[0].content == {REINDEXER_FLAG_METADATA_KEY: SWEEPER_START.isoformat()}
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_run_writes_updates_with_force_rewrite_matching_force(monkeypatch, force):
+    written_updates = []
+
+    def fake_write_updated_docs(client, updates, **kwargs):
+        written_updates.extend(updates)
+
+    docs = [{"_id": "urn:nasa:pds:bundle::1.0", "_source": {"lidvid": "urn:nasa:pds:bundle::1.0"}}]
+    monkeypatch.setattr(reindexer, "configure_logging", lambda **kwargs: None)
+    monkeypatch.setattr(reindexer, "resolve_multitenant_index_name", lambda client, label: "registry")
+    monkeypatch.setattr(reindexer, "ensure_index_mapping", lambda *args, **kwargs: None)
+    monkeypatch.setattr(reindexer, "fetch_dd_field_types", lambda client: {})
+    monkeypatch.setattr(reindexer, "get_query_hits_count", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(reindexer, "get_mapping_field_types_by_field_name", lambda client, index: {"lidvid": "keyword"})
+    monkeypatch.setattr(reindexer, "accumulate_missing_mappings", lambda *args, **kwargs: {})
+    monkeypatch.setattr(reindexer, "query_registry_db_with_search_after", lambda *args, **kwargs: iter(docs))
+    monkeypatch.setattr(reindexer, "write_updated_docs", fake_write_updated_docs)
+
+    reindexer.run(client=object(), force=force)
+
+    assert [u.force_rewrite for u in written_updates] == [force]

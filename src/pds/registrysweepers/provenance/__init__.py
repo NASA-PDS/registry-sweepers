@@ -323,7 +323,7 @@ def run(
 
     target_lids = fetch_target_lids(client, force=force)
     record_chains = generate_record_chains(client, target_lids, force=force)
-    updates = generate_updates(itertools.chain.from_iterable(record_chains))
+    updates = generate_updates(itertools.chain.from_iterable(record_chains), force=force)
 
     write_updated_docs(
         client, updates, index_name=resolve_multitenant_index_name(client, "registry"), bulk_chunk_max_update_count=5000
@@ -332,7 +332,8 @@ def run(
     log.info(limit_log_length("Completed provenance sweeper processing!"))
 
 
-def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
+def generate_updates(records: Iterable[ProvenanceRecord], force: bool = False) -> Iterable[Update]:
+    """If force is set, every update rewrites its document even if the regenerated values are unchanged."""
     update_count = 0
     skippable_count = 0
     for record in records:
@@ -347,7 +348,9 @@ def generate_updates(records: Iterable[ProvenanceRecord]) -> Iterable[Update]:
 
         update_count += 1
 
-        yield Update(id=str(record.lidvid), content=update_content, skip_write=record.skip_write)
+        yield Update(
+            id=str(record.lidvid), content=update_content, skip_write=record.skip_write, force_rewrite=force
+        )
 
     log.info(
         limit_log_length(

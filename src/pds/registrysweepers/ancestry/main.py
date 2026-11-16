@@ -54,7 +54,7 @@ def run(
     product_update_records_to_write = filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records,
                                                                                 collection_nonaggregate_refs_updates))
     updates = convert_records_to_updates(
-        product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
+        product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink, force=force
     )
 
     # TODO: BOOKMARK LMAO - CONTINUE WORK HERE VVV
@@ -123,9 +123,11 @@ def convert_records_to_updates(
         update_records: Iterable[ProductUpdateRecord],
         update_records_accumulator=None,
         bulk_updates_sink=None,
+        force: bool = False,
 ) -> Iterable[Update]:
     """
     Given a collection of ProductUpdateRecords, yield corresponding Update objects.
+    If force is set, the updates rewrite their documents even if the update changes nothing.
 
     Unlike prior implementations, this function does not have to reconcile deferred updates, as updates are now
     accumulative and do not have to be written to the db in a single operation
@@ -138,7 +140,7 @@ def convert_records_to_updates(
         if update_records_accumulator is not None:
             update_records_accumulator.append(record)
 
-        update = update_from_record(record)
+        update = update_from_record(record, force=force)
 
         # Tee the stream of bulk update KVs into the accumulator, if one was provided (functional testing).
         if bulk_updates_sink is not None:

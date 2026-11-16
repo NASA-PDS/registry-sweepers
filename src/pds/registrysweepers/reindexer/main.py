@@ -279,8 +279,9 @@ def accumulate_missing_mappings(
 
 
 def generate_updates(
-    timestamp: datetime, extant_mapping_keys: Collection[str], docs: Iterable[Dict]
+    timestamp: datetime, extant_mapping_keys: Collection[str], docs: Iterable[Dict], force: bool = False
 ) -> Iterable[Update]:
+    """If force is set, every update rewrites its document even if the regenerated values are unchanged."""
     for document in docs:
         id = document["_id"]
         extant_mapping_keys = set(extant_mapping_keys)
@@ -291,7 +292,7 @@ def generate_updates(
                 f"Missing mappings {document_fields_missing_from_mappings} detected when attempting to create Update for doc with id {id} - skipping"
             )
 
-        yield Update(id=id, content={REINDEXER_FLAG_METADATA_KEY: timestamp.isoformat()})
+        yield Update(id=id, content={REINDEXER_FLAG_METADATA_KEY: timestamp.isoformat()}, force_rewrite=force)
 
 
 def format_hits_count(count: int) -> str:
@@ -389,6 +390,7 @@ def run(
                     limit=batch_size_limit,
                     sort_fields=sort_fields,
                 ),
+                force=force,
             )
             log.info(
                 limit_log_length(
