@@ -40,8 +40,22 @@ ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER = "ANCESTRY_VERSION_METADATA_VALUE_P
 # if (!changed) {
 #     ctx.op = 'none';  // <— Prevents reindexing if nothing changed
 # }
+#
+# The forced variant omits the final no-op guard. A script which leaves ctx.op at its default is always written back,
+# so the document is rewritten (and reindexed) even when the script changed nothing.
 
-ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED = "boolean c=false;if(ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\']==null){ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\']=[];c=true;}def e=new HashSet();for(i in ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\']){e.add(i);}for(i in params.new_items){if(!e.contains(i)){ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\'].add(i);c=true;}}if(ctx._source[\'ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER\']!=ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER){ctx._source[\'ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER\']=ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER;c=true;}if(!c){ctx.op=\'none\';}" \
-    .replace(ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER, ANCESTRY_REFS_METADATA_KEY) \
-    .replace(ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER, SWEEPERS_ANCESTRY_VERSION_METADATA_KEY) \
-    .replace(ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER, str(SWEEPERS_ANCESTRY_VERSION))
+_ANCESTRY_DEDUPLICATION_SCRIPT_BODY_MINIFIED = "boolean c=false;if(ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\']==null){ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\']=[];c=true;}def e=new HashSet();for(i in ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\']){e.add(i);}for(i in params.new_items){if(!e.contains(i)){ctx._source[\'ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER\'].add(i);c=true;}}if(ctx._source[\'ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER\']!=ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER){ctx._source[\'ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER\']=ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER;c=true;}"
+_ANCESTRY_DEDUPLICATION_SCRIPT_NOOP_GUARD_MINIFIED = "if(!c){ctx.op=\'none\';}"
+
+
+def _interpolate_placeholders(script: str) -> str:
+    return script \
+        .replace(ANCESTRY_REFS_METADATA_KEY_PLACEHOLDER, ANCESTRY_REFS_METADATA_KEY) \
+        .replace(ANCESTRY_VERSION_METADATA_KEY_PLACEHOLDER, SWEEPERS_ANCESTRY_VERSION_METADATA_KEY) \
+        .replace(ANCESTRY_VERSION_METADATA_VALUE_PLACEHOLDER, str(SWEEPERS_ANCESTRY_VERSION))
+
+
+ANCESTRY_DEDUPLICATION_SCRIPT_MINIFIED = _interpolate_placeholders(
+    _ANCESTRY_DEDUPLICATION_SCRIPT_BODY_MINIFIED + _ANCESTRY_DEDUPLICATION_SCRIPT_NOOP_GUARD_MINIFIED
+)
+ANCESTRY_DEDUPLICATION_SCRIPT_FORCED_MINIFIED = _interpolate_placeholders(_ANCESTRY_DEDUPLICATION_SCRIPT_BODY_MINIFIED)
