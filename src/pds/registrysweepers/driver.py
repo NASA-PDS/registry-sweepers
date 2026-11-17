@@ -60,11 +60,13 @@ import logging
 import os
 from datetime import datetime
 from typing import Callable
+from typing import List
 
 from pds.registrysweepers import legacy_registry_sync
 from pds.registrysweepers import provenance
 from pds.registrysweepers import repairkit
 from pds.registrysweepers.ancestry import main as ancestry
+from pds.registrysweepers.ancestry_orphan_repair import main as ancestry_orphan_repair
 from pds.registrysweepers.reindexer import main as reindexer
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_log_level
@@ -79,9 +81,26 @@ SWEEPER_REGISTRY = {
     "ancestry": ancestry.run,
     "reindexer": reindexer.run,
     "legacy-sync": legacy_registry_sync.run,
+    "ancestry-orphan-repair": ancestry_orphan_repair.run,
 }
 
+# The orphan repair is a dry run unless --apply is given, so it is selected explicitly with --only rather than being
+# part of the default suite.
 DEFAULT_SWEEPERS = ["provenance", "ancestry", "reindexer"]
+
+ORPHAN_REPAIR_SWEEPER = "ancestry-orphan-repair"
+
+
+def order_sweepers(names: List[str]) -> List[str]:
+    """
+    Keep the requested order, except that the orphan repair repairs what the ancestry sweeper leaves behind and so
+    always runs immediately after it when both are selected.
+    """
+    ordered = list(names)
+    if ORPHAN_REPAIR_SWEEPER in ordered and "ancestry" in ordered:
+        ordered.remove(ORPHAN_REPAIR_SWEEPER)
+        ordered.insert(ordered.index("ancestry") + 1, ORPHAN_REPAIR_SWEEPER)
+    return ordered
 
 
 def run():
@@ -97,13 +116,14 @@ def run():
 
     log_level = parse_log_level(os.environ.get("LOGLEVEL", "INFO"))
 
-    def run_factory(sweeper_f: Callable) -> Callable:
+    def run_factory(sweeper_f: Callable, **sweeper_options) -> Callable:
         return functools.partial(
             sweeper_f,
             client=get_opensearch_client_from_environment(verify_certs=True if not dev_mode else False),
             # enable for development if required - not necessary in production
             # log_filepath='registry-sweepers.log',
             log_level=log_level,
+            **sweeper_options,
         )
 
     def module_name(f: Callable) -> str:
@@ -121,11 +141,33 @@ def run():
         choices=SWEEPER_REGISTRY.keys(),
         help=f"Only run the specified sweeper(s). Choices: {', '.join(SWEEPER_REGISTRY.keys())}",
     )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        default=False,
+        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: write the repairs.  Without it that sweeper is a dry run which "
+        "only reports counts.",
+    )
+    parser.add_argument(
+        "--output-file",
+        default=None,
+        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: write a TSV of the products it can repair to this file.",
+    )
+    parser.add_argument(
+        "--output-all",
+        action="store_true",
+        default=False,
+        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: also list the unresolved products in --output-file.",
+    )
 
     args = parser.parse_args()
 
-    names = args.only if args.only else DEFAULT_SWEEPERS
+    names = order_sweepers(args.only if args.only else DEFAULT_SWEEPERS)
     sweepers = [SWEEPER_REGISTRY[name] for name in names]
+
+    orphan_repair_options = {"apply": args.apply, "output_file": args.output_file, "output_all": args.output_all}
+    if ORPHAN_REPAIR_SWEEPER not in names and (args.apply or args.output_file or args.output_all):
+        log.warning(limit_log_length(f"--apply/--output-file/--output-all have no effect without {ORPHAN_REPAIR_SWEEPER}"))
 
     sweeper_descriptions = [module_name(f) for f in sweepers]
     log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
@@ -134,9 +176,9 @@ def run():
 
     sweeper_execution_duration_strs = []
 
-    for sweeper in sweepers:
+    for name, sweeper in zip(names, sweepers):
         sweeper_execution_begin = datetime.now()
-        run_sweeper_f = run_factory(sweeper)
+        run_sweeper_f = run_factory(sweeper, **(orphan_repair_options if name == ORPHAN_REPAIR_SWEEPER else {}))
 
         run_sweeper_f()
 
