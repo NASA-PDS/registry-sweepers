@@ -1,8 +1,13 @@
 """
 Field names and limits used by the ancestry orphan repair.
 
-Every registry field name the repair depends on is defined (or imported) here, so porting the repair to a branch with
-different metadata key names (for example the structured ``ops:Registry_Sweepers.*`` keys) only touches this module.
+Every registry field name the repair depends on is defined (or imported) here.  The ancestry, stamp and superseded keys
+are imported from the ancestry and provenance sweepers, so they always match what those sweepers read and write; on this
+branch they are the structured ``ops:Registry_Sweepers.*`` keys:
+
+- ``ops:Registry_Sweepers.ops:ancestor_refs``
+- ``ops:Registry_Sweepers.ops:ancestry_software_version``
+- ``ops:Registry_Sweepers.ops:superseded_by``
 """
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
@@ -28,6 +33,14 @@ AGGREGATE_PRODUCT_CLASSES = ["Product_Bundle", "Product_Collection"]
 REFS_COLLECTION_FIELD = "collection_lidvid"
 REFS_PRODUCT_FIELD = "product_lidvid"
 REFS_BATCH_FIELD = "batch_id"
+
+# Updates for products which did not yet exist when the ancestry sweeper wrote them are held in
+# "<resolved registry index name><suffix>", keyed by product LIDVID, until the ancestry sweeper merges them onto the
+# product document (see ancestry.main.run and utils.db.write_updated_docs)
+DEFERRED_UPDATES_INDEX_SUFFIX = "-deferred-updates"
+
+# Product LIDVIDs checked for a pending deferral entry per mget (the ancestry sweeper's own merge uses 1,000)
+DEFERRAL_LOOKUP_CHUNK_SIZE = 1_000
 
 # OpenSearch Serverless caps a page at 10,000 hits, and a request with a larger size returns garbage rather than failing
 MAX_PAGE_SIZE = 10_000

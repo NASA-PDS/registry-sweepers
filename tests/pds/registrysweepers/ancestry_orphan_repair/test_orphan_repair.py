@@ -111,7 +111,7 @@ def _bulk_body(updates) -> str:
                     "script": {
                         "source": update.inline_script_content,
                         "lang": "painless",
-                        "params": {"new_items": update.content[REFS]},
+                        "params": {"new_items": list(update.inline_script_new_items)},
                     }
                 }
             )

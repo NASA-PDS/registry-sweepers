@@ -20,21 +20,29 @@ and LIDVID) reference a given product. These values will be stored in property `
 Ancestry is processed collection-by-collection.  Any ancestry metadata generated for products which do not yet exist in registry is stored in a deferral index, and merged if/when the corresponding document is written to the registry.  Processing is skipped for collections (and their respective child non-aggregates) where the collection is considered up-to-date, i.e. where their `ops:Registry_Sweepers/ops:ancestry_software_version` metadata value is up-to-date relative to the sweeper codebase.
 
 #### [Ancestry Orphan Repair](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/ancestry_orphan_repair/main.py)
-The ancestry sweeper reaches a non-aggregate product only through the `registry-refs` documents of a collection which is not yet stamped with the current ancestry version. A product which is loaded, overwritten by Harvest, or listed in refs after its collection was swept therefore stays without ancestry, and re-harvesting every collection is not sustainable. The orphan repair is a separate, brute-force step which runs after the ancestry sweeper:
+The ancestry sweeper reaches a non-aggregate product only through the `registry-refs` documents of a collection which is not yet stamped with the current ancestry version. A product which was overwritten by Harvest after it was swept, or which is listed in a refs document written after its collection was stamped, therefore stays without ancestry, and re-harvesting every collection is not sustainable. The orphan repair is a separate, brute-force step which runs after the ancestry sweeper:
 
-1. It pages (`search_after`) through the non-aggregate, non-superseded products which have no `ops:Provenance/ops:ancestor_refs` or an `ops:Provenance/ops:registry_sweepers_ancestry_version` below the current ancestry version.
-2. For each batch of those products it looks up, with a single `terms` query, the `registry-refs` documents which list them, and keeps the parent collections which exist in the registry.
-3. It writes exactly what the ancestry sweeper writes for such a product (the collection LIDVID and LID, and the version stamp), through the same `ProductUpdateRecord`, `update_from_record`, painless script and `write_updated_docs` path, so the result is identical to a normal run, retries and error handling included. Bundle LIDVIDs are not part of a non-aggregate product's ancestry, in the repair as in a normal run.
+1. It pages (`search_after`) through the non-aggregate, non-superseded products which have no `ops:Registry_Sweepers.ops:ancestor_refs` or an `ops:Registry_Sweepers.ops:ancestry_software_version` below the current ancestry version (the same stamp test the ancestry sweeper's deferral merge uses to find orphaned documents).
+2. It leaves alone the products of each batch which still have an entry in the deferral index (see below).
+3. For the rest of the batch it looks up, with a single `terms` query, the `registry-refs` documents which list them (`product_lidvid`, `collection_lidvid`, `batch_id`), and keeps the parent collections which exist in the registry.
+4. It writes exactly what the ancestry sweeper writes for such a product (the collection LIDVID and LID, and the version stamp), through the same `ProductUpdateRecord`, `update_from_record`, painless script and `write_updated_docs` path, so the result is identical to a normal run, retries and error handling included. Bundle LIDVIDs are not part of a non-aggregate product's ancestry, in the repair as in a normal run.
 
 It **only repairs where a refs document confirms the parent**. A product that no refs document lists, or which is listed only under a collection that is not in the registry, is never guessed: nothing is written to it and it is not stamped, so every run examines it again and repairs it as soon as a refs document appears. These products are counted and reported separately as *unresolved*; they are data problems for the node (a collection inventory that was never loaded or that does not list them). Re-examining them costs a product query and a refs query per batch on every run.
 
-It is **a dry run by default**: it reports counts (products examined, repairable, unresolved by reason, and when applying, repaired / already up to date / vanished before write / failed) and writes nothing. Pass `--apply` to write. A product that vanishes between read and write is counted and does not abort the run.
+It is **a dry run by default**: it reports counts (products examined, left to the deferral merge, repairable, unresolved by reason, and when applying, repaired / already up to date / vanished before write / failed) and writes nothing. Pass `--apply` to write. A product that vanishes between read and write is counted and does not abort the run.
+
+##### Interaction with the deferral
+When the ancestry sweeper writes ancestry for a product that is not yet in the registry, the update is stored in the deferral index (`<registry index>-deferred-updates`, keyed by product LIDVID). At the end of every ancestry run, inside the ancestry sweeper, a merge step applies each stored update to its product once the product document exists and then deletes the entry. The orphan repair is ordered after the ancestry sweeper, so:
+
+- Products that were missing when their collection was swept are already repaired by the merge when the repair starts, and are not selected. Only products without ancestry or stamp which the deferral cannot reach remain for the repair: a product that existed at sweep time and was then overwritten by Harvest (no deferral was ever created for it), and a product listed in a refs document written after its collection was stamped.
+- A product that still has a deferral entry when the repair examines it (the merge failed for it, or the repair was run out of order) is left to the merge: it is not written, not stamped, and counted as *left to the deferral merge*. The merge applies its entry as a partial document, which replaces `ancestor_refs`, and deletes the entry; a repair write in between would be overwritten by it, or leave the entry behind. If the count does not fall after an ancestry run, the merge is failing for those products.
+- Everything else is unaffected: the repair writes with the ancestry sweeper's painless script, which only appends missing refs, so a later merge or a second repair run changes nothing it has already written.
 
 ```bash
 # dry run: report only
 python -m pds.registrysweepers.ancestry_orphan_repair --base-URL "${PROV_ENDPOINT}" --log-level INFO
 
-# dry run, also listing the products which would be repaired (and, with --output-all, the unresolved ones)
+# dry run, also listing the products which would be repaired (and, with --output-all, the unresolved ones and those left to the deferral merge)
 python -m pds.registrysweepers.ancestry_orphan_repair --base-URL "${PROV_ENDPOINT}" --output-file repairable.tsv
 
 # write the repairs
@@ -45,12 +53,12 @@ pds-registry-sweepers --only ancestry-orphan-repair
 pds-registry-sweepers --only ancestry ancestry-orphan-repair --apply
 ```
 
-Options: `--batch-size` (products examined and refs terms looked up per round trip, default 2000, at most 10000), `--include-superseded` (superseded versions are skipped by default), `--output-file` / `--output-all`. It is not part of the default suite; when selected together with `ancestry` the driver always runs it immediately after `ancestry`. As for every sweeper, run it with no other sweeper running on the same node.
+Options: `--batch-size` (products examined and refs terms looked up per round trip, default 2000, at most 10000), `--include-superseded` (superseded versions are skipped by default), `--output-file` / `--output-all`. It is part of the default suite and the driver always runs it immediately after `ancestry` when both are selected; as a dry run it only reports, so a scheduled run that should repair uses `pds-registry-sweepers --apply`. As for every sweeper, run it with no other sweeper running on the same node.
 
 Limits:
 - It cannot repair a product that no refs document lists, nor one whose only listing collection is missing from the registry.
 - It does not fix a collection that was stamped without a link to its bundle ([#301](https://github.com/NASA-PDS/registry-sweepers/issues/301)); it only writes non-aggregate products.
-- It repairs a product only from the refs documents as they are now: it does not check that the collection's inventory is complete.
+- It repairs a product only from the refs documents as they are now: it does not check that the collection's inventory is complete, and a product that already carries the current stamp is not examined, even if it lacks some of its parents.
 
 #### [Reindexer](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/reindexer/main.py)
 The reindexer sweeper ensures that the registry index mappings are updated with all fields available in the registry-dd index, and then triggers reindexation on all products which have not yet been successfully processed previously.  This ensures that all products are searchable on all fields, provided a field type mapping is defined in the registry-dd index at the time of processing.

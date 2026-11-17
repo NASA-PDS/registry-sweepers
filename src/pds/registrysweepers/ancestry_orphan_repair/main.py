@@ -8,10 +8,18 @@ products without re-harvesting their collections:
 
 1. page (search_after) through the non-aggregate, non-superseded products which have no ancestor refs or a stamp below
    the current ancestry version
-2. for each batch, look up the registry-refs documents which list the products (one terms query per batch)
-3. keep the parent collections which exist in the registry (as the ancestry sweeper only ever processes those)
-4. write exactly what the ancestry sweeper writes for such a product (ProductUpdateRecord -> update_from_record -> the
+2. leave alone the products of the batch which still have an entry in the deferral index (<registry>-deferred-updates):
+   the ancestry sweeper's merge step owns those entries, applies them to the product and deletes them
+3. for the rest of the batch, look up the registry-refs documents which list the products (one terms query per batch)
+4. keep the parent collections which exist in the registry (as the ancestry sweeper only ever processes those)
+5. write exactly what the ancestry sweeper writes for such a product (ProductUpdateRecord -> update_from_record -> the
    same painless script) through write_updated_docs
+
+The ancestry sweeper defers the ancestry of products which are missing from the registry when their collection is swept,
+and merges it onto them once they exist (all inside ancestry.main.run).  Because this step runs after that sweeper has
+completed, such products are already repaired and are not selected.  What remains for this step is chiefly a product that
+Harvest overwrote after it was swept (no deferral was ever created for it) and a product listed in a refs document
+written after its collection was stamped.
 
 A product whose parent cannot be confirmed by a refs document is never guessed: nothing is written to it (in particular
 it is not stamped), so every later run examines it again and repairs it as soon as a refs document appears.
@@ -39,6 +47,8 @@ from pds.registrysweepers.ancestry_orphan_repair.constants import COLLECTION_LOO
 from pds.registrysweepers.ancestry_orphan_repair.constants import COLLECTION_PRODUCT_CLASS
 from pds.registrysweepers.ancestry_orphan_repair.constants import CURRENT_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry_orphan_repair.constants import DEFAULT_BATCH_SIZE
+from pds.registrysweepers.ancestry_orphan_repair.constants import DEFERRAL_LOOKUP_CHUNK_SIZE
+from pds.registrysweepers.ancestry_orphan_repair.constants import DEFERRED_UPDATES_INDEX_SUFFIX
 from pds.registrysweepers.ancestry_orphan_repair.constants import LIDVID_FIELD
 from pds.registrysweepers.ancestry_orphan_repair.constants import MAX_PAGE_SIZE
 from pds.registrysweepers.ancestry_orphan_repair.constants import PRODUCT_CLASS_FIELD
@@ -51,6 +61,7 @@ from pds.registrysweepers.utils import parse_args
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
+from pds.registrysweepers.utils.db.multitenancy import index_exists
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.misc import chunked
@@ -62,6 +73,7 @@ from retry.api import retry_call
 log = logging.getLogger(__name__)
 
 STATUS_REPAIRABLE = "repairable"
+STATUS_PENDING_DEFERRAL = "pending_deferral"
 STATUS_NO_REFS_LISTING = "no_refs_listing"
 STATUS_COLLECTION_NOT_IN_REGISTRY = "collection_not_in_registry"
 
@@ -86,6 +98,9 @@ class OrphanRepairReport:
     products_examined: int = 0
     invalid_lidvid: int = 0
 
+    # the product still has an entry in the deferral index: left to the ancestry sweeper's merge, not written here
+    pending_deferral: int = 0
+
     # a refs document lists the product under at least one collection which exists in the registry
     repairable: int = 0
 
@@ -107,6 +122,8 @@ class OrphanRepairReport:
         lines = [
             "Ancestry orphan repair - " + ("APPLIED" if self.apply else "DRY RUN (nothing was written; use --apply)"),
             f"  products examined (no ancestry, or ancestry stamp below v{CURRENT_ANCESTRY_VERSION}): {self.products_examined}",
+            f"  left to the deferral merge (a deferral entry is pending; not written, not stamped): "
+            f"{self.pending_deferral}",
             f"  repairable (a refs document lists the product under a collection in the registry): {self.repairable}",
         ]
         if self.apply:
@@ -124,6 +141,11 @@ class OrphanRepairReport:
         ]
         if self.invalid_lidvid:
             lines.append(f"  skipped, unparseable lidvid: {self.invalid_lidvid}")
+        if self.pending_deferral:
+            lines.append(
+                "  Products with a pending deferral entry are applied by the ancestry sweeper's merge step, which also "
+                "deletes the entry; if this count does not fall after an ancestry run, the merge is failing for them."
+            )
         if self.unresolved:
             lines.append(
                 "  The unresolved products are data problems for the node (their collection inventory was never "
@@ -299,6 +321,43 @@ class _CollectionRegistry:
         return {c for c in wanted if self._exists[c]}
 
 
+class _PendingDeferrals:
+    """
+    Reports which products still have an entry in the deferral index ("<registry index>-deferred-updates", keyed by
+    product LIDVID).  The ancestry sweeper's merge step applies such an entry once the product document exists and then
+    deletes it; this step leaves those products to it.  One mget per chunk of the batch; nothing is written.
+    """
+
+    def __init__(self, client: OpenSearch, registry_index: str):
+        self._client = client
+        self._index = f"{registry_index}{DEFERRED_UPDATES_INDEX_SUFFIX}"
+        self._index_exists: Optional[bool] = None
+
+    def among(self, product_lidvids: List[str]) -> Set[str]:
+        if not product_lidvids:
+            return set()
+
+        if self._index_exists is None:
+            self._index_exists = index_exists(self._client, self._index)
+            if not self._index_exists:
+                log.info(limit_log_length(f"Deferral index {self._index} does not exist - no product has a deferral"))
+        if not self._index_exists:
+            return set()
+
+        pending: Set[str] = set()
+        for chunk in chunked(product_lidvids, DEFERRAL_LOOKUP_CHUNK_SIZE):
+            response = retry_call(
+                self._client.mget,
+                fkwargs={"index": self._index, "body": {"ids": chunk}},
+                tries=6,
+                delay=2,
+                backoff=2,
+                logger=log,
+            )
+            pending.update(doc["_id"] for doc in response.get("docs", []) if doc.get("found"))
+        return pending
+
+
 def find_listing_collections(client: OpenSearch, refs_index: str, product_lidvids: List[str]) -> Dict[str, Set[str]]:
     """
     One terms query (paged if it matches many refs documents) for the whole batch.  Returns, for each product listed by
@@ -350,6 +409,7 @@ def _generate_updates(
     registry_index = resolve_multitenant_index_name(client, "registry")
     refs_index = resolve_multitenant_index_name(client, "registry-refs")
     collections = _CollectionRegistry(client, registry_index)
+    deferrals = _PendingDeferrals(client, registry_index)
     next_progress_log_at = PROGRESS_LOG_INTERVAL
 
     pages = iterate_pages_search_after(
@@ -370,7 +430,14 @@ def _generate_updates(
                 report.invalid_lidvid += 1
                 log.warning(limit_log_length(f'Skipping document "{hit.get("_id")}" with unparseable lidvid: {err}'))
 
-        listing = find_listing_collections(client, refs_index, [str(p) for p in products])
+        pending_deferral = deferrals.among([str(p) for p in products])
+        for product in products:
+            if str(product) in pending_deferral:
+                report.pending_deferral += 1
+                sink.record(STATUS_PENDING_DEFERRAL, product, [])
+        products = [p for p in products if str(p) not in pending_deferral]
+
+        listing = find_listing_collections(client, refs_index, [str(p) for p in products]) if products else {}
         existing = collections.existing_among(c for cs in listing.values() for c in cs)
 
         for product in products:
@@ -420,7 +487,7 @@ def run(
 
     @param apply: write the repairs.  The default is a dry run which only reports.
     @param output_file: optional path of a TSV listing the repairable products (status, product, collections)
-    @param output_all: also list the unresolved products in output_file
+    @param output_all: also list the unresolved products and those left to the deferral merge in output_file
     @param batch_size: products examined and refs terms looked up per round trip (1..10,000)
     @param include_superseded: also repair superseded versions (they are skipped by default)
     """
@@ -477,7 +544,8 @@ def _configure_cli(ap) -> None:
         "--output-all",
         action="store_true",
         default=False,
-        help="also list the unresolved products (no refs listing / collection not in registry) in --output-file",
+        help="also list the unresolved products (no refs listing / collection not in registry) and the products left "
+        "to the deferral merge (pending deferral entry) in --output-file",
     )
     ap.add_argument(
         "--batch-size",
@@ -499,7 +567,8 @@ def main() -> None:
     where a registry-refs document confirms their parent collection and that collection is in the registry.
 
     Writes exactly what the ancestry sweeper writes.  Products whose parent cannot be confirmed are reported and left
-    untouched (not stamped).  Dry run unless --apply is given.  Run it after the ancestry sweeper, with no other sweeper
+    untouched (not stamped), as are products with a pending entry in the deferral index (the ancestry sweeper's merge
+    step applies those).  Dry run unless --apply is given.  Run it after the ancestry sweeper, with no other sweeper
     running on the node.
     """
     args = parse_args(description=cli_description, configure_parser=_configure_cli)
