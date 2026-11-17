@@ -14,6 +14,7 @@ import psutil  # type: ignore
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
+from pds.registrysweepers.ancestry.productupdaterecord import UpdateKind
 from pds.registrysweepers.ancestry.queries import query_for_all_collections
 from pds.registrysweepers.ancestry.queries import query_for_collection_nonaggregate_refs
 from pds.registrysweepers.ancestry.queries import query_for_pending_bundles
@@ -42,7 +43,9 @@ def get_ancestry_by_collection_lidvid(collections_docs: Iterable[Dict]) -> Mappi
     for doc in collections_docs:
         try:
             collection_lidvid = PdsLidVid.from_string(doc["_source"]["lidvid"])
-            ancestry_by_collection_lidvid[collection_lidvid] = ProductUpdateRecord(product=collection_lidvid)
+            ancestry_by_collection_lidvid[collection_lidvid] = ProductUpdateRecord(
+                product=collection_lidvid, kind=UpdateKind.PENDING_COLLECTION
+            )
         except (ValueError, KeyError) as err:
             log.warning(
                 limit_log_length(
@@ -118,7 +121,9 @@ class StampedCollectionBundleLinks:
             return
 
         if collection_lidvid not in self._update_records:
-            self._update_records[collection_lidvid] = ProductUpdateRecord(product=collection_lidvid)
+            self._update_records[collection_lidvid] = ProductUpdateRecord(
+                product=collection_lidvid, kind=UpdateKind.STAMPED_COLLECTION_LINK
+            )
         self._update_records[collection_lidvid].add_direct_ancestor_ref(bundle_lidvid)
 
     @property
@@ -270,7 +275,7 @@ def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpd
             sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
             skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
             yield ProductUpdateRecord(product=PdsLidVid.from_string(doc["_source"]["lidvid"]),
-                                      skip_write=skip_write)
+                                      skip_write=skip_write, kind=UpdateKind.BUNDLE)
         except (ValueError, KeyError) as err:
             log.warning(
                 limit_log_length(
@@ -294,10 +299,11 @@ def process_collection_ancestries_for_nonaggregates(client) -> Iterator[ProductU
 
         for nonaggregate_lidvid in collection_nonaggregate_refs:
             nonagg_update_record = ProductUpdateRecord(product=nonaggregate_lidvid,
-                                                       direct_ancestor_refs=[collection_lidvid])
+                                                       direct_ancestor_refs=[collection_lidvid],
+                                                       kind=UpdateKind.NONAGGREGATE)
             yield nonagg_update_record
 
         # finally, collection can be updated to mark it as complete
-        collection_complete_update_record = ProductUpdateRecord(collection_lidvid)
+        collection_complete_update_record = ProductUpdateRecord(collection_lidvid, kind=UpdateKind.COLLECTION_COMPLETE)
         collection_complete_update_record.mark_processed()
         yield collection_complete_update_record

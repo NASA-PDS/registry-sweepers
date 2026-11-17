@@ -5,6 +5,7 @@ This module provides a mock implementation of the OpenSearch client that:
 2. Returns configured test responses
 3. Tracks all search and bulk calls for verification in tests
 """
+import copy
 import logging
 import re
 from typing import Any
@@ -42,7 +43,14 @@ class MockOpenSearchClient:
         self._search_responses: List[Tuple[str, Callable, Dict]] = []
         self._default_search_response = {'hits': {'hits': [], 'total': {'value': 0, 'relation': 'eq'}}}
         self._tenant_prefix: Optional[str] = None
-        self.indices = MockIndicesClient()
+
+        # Every call made to the client, by name (e.g. "search", "bulk", "indices.put_mapping"), in order.  Lets a test
+        # assert that a run only read.
+        self.call_log: List[str] = []
+        self.mget_calls: List[Dict] = []
+        # ids which mget reports as not found; every other id is found
+        self.mget_missing_ids: set = set()
+        self.indices = MockIndicesClient(self.call_log)
 
     def register_search_response(
         self,
@@ -82,6 +90,7 @@ class MockOpenSearchClient:
             'kwargs': kwargs
         }
         self.search_calls.append(call_record)
+        self.call_log.append("search")
 
         logger.debug(f"Mock search called: index={index}, query={body.get('query', {})}")
 
@@ -114,6 +123,7 @@ class MockOpenSearchClient:
             'body': body,
             'kwargs': kwargs
         })
+        self.call_log.append("bulk")
 
         logger.debug(f"Mock bulk called with {len(body.splitlines())} lines")
 
@@ -124,6 +134,29 @@ class MockOpenSearchClient:
             'took': 1
         }
 
+    def mget(self, body: Dict, index: Optional[str] = None, **kwargs) -> Dict:
+        """Mock multi-get: every requested id is found unless it is listed in mget_missing_ids."""
+        self.mget_calls.append({'index': index, 'body': body, 'kwargs': kwargs})
+        self.call_log.append("mget")
+        return {'docs': [{'_id': doc_id, 'found': doc_id not in self.mget_missing_ids,
+                          '_source': {'mock_field': 'mock_value'}}
+                         for doc_id in body['ids']]}
+
+    def delete(self, *args, **kwargs) -> Dict:
+        self.call_log.append("delete")
+        return {'result': 'deleted'}
+
+    def delete_by_query(self, *args, **kwargs) -> Dict:
+        self.call_log.append("delete_by_query")
+        return {'deleted': 0}
+
+    def index(self, *args, **kwargs) -> Dict:
+        self.call_log.append("index")
+        return {'result': 'created'}
+
+    def update(self, *args, **kwargs) -> Dict:
+        self.call_log.append("update")
+        return {'result': 'updated'}
 
     def reset(self) -> None:
         """Clear all recorded calls and responses.
@@ -132,6 +165,10 @@ class MockOpenSearchClient:
         """
         self.search_calls.clear()
         self.bulk_calls.clear()
+        self.call_log.clear()
+        self.mget_calls.clear()
+        self.mget_missing_ids.clear()
+        self.indices.mappings.clear()
         self._search_responses.clear()
         logger.debug("Mock client reset")
 
@@ -177,10 +214,14 @@ class MockOpenSearchClient:
 class MockIndicesClient:
     """Mock for OpenSearch indices operations."""
 
-    def __init__(self):
+    def __init__(self, call_log: Optional[List[str]] = None):
         """Initialize the mock indices client."""
         self.put_mapping_calls: List[Dict] = []
         self.exists_calls: List[str] = []
+        self._call_log: List[str] = call_log if call_log is not None else []
+        # mappings per index, as returned by get_mapping; put_mapping adds to them.  As in OpenSearch, a dotted property
+        # name is stored as nested objects.
+        self.mappings: Dict[str, Dict] = {}
 
     def put_mapping(self, index: str, body: Dict, **kwargs) -> Dict:
         """Mock put_mapping operation.
@@ -198,6 +239,12 @@ class MockIndicesClient:
             'body': body,
             'kwargs': kwargs
         })
+        self._call_log.append("indices.put_mapping")
+        for property_name, definition in body.get('properties', {}).items():
+            node = self.mappings.setdefault(index, {})
+            for part in property_name.split('.'):
+                node = node.setdefault('properties', {}).setdefault(part, {})
+            node.update(definition)
         logger.debug(f"Mock put_mapping called: index={index}")
         return {'acknowledged': True}
 
@@ -211,6 +258,7 @@ class MockIndicesClient:
             Always returns True (index exists)
         """
         self.exists_calls.append(index)
+        self._call_log.append("indices.exists")
         logger.debug(f"Mock exists called: index={index}")
         return True
 
@@ -223,8 +271,26 @@ class MockIndicesClient:
         Returns:
             Always returns False (no aliases in mock)
         """
+        self._call_log.append("indices.exists_alias")
         logger.debug(f"Mock exists_alias called: name={name}")
         return False
+
+    def get_mapping(self, index: str, **kwargs) -> Dict:
+        """Mock get_mapping: the properties mapped by put_mapping, if any."""
+        self._call_log.append("indices.get_mapping")
+        return {index: {'mappings': copy.deepcopy(self.mappings.get(index, {}))}}
+
+    def create(self, index: str, *args, **kwargs) -> Dict:
+        self._call_log.append("indices.create")
+        return {'acknowledged': True}
+
+    def delete(self, index: str, *args, **kwargs) -> Dict:
+        self._call_log.append("indices.delete")
+        return {'acknowledged': True}
+
+    def refresh(self, index: Optional[str] = None, **kwargs) -> Dict:
+        self._call_log.append("indices.refresh")
+        return {'_shards': {}}
 
 
 def create_search_response(hits: List[Dict], total: Optional[int] = None) -> Dict:

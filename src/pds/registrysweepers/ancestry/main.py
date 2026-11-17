@@ -1,3 +1,4 @@
+import argparse
 import logging
 from itertools import batched
 from itertools import chain
@@ -13,6 +14,8 @@ from typing import Union
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
+from pds.registrysweepers.ancestry.dryrun import AncestryDryRunReport
+from pds.registrysweepers.ancestry.dryrun import summarise_dry_run
 from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
 from pds.registrysweepers.ancestry.generation import process_collection_bundle_ancestry
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
@@ -28,6 +31,7 @@ from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
+from pds.registrysweepers.utils.db.readonly import ReadOnlyOpenSearchClient
 from pds.registrysweepers.utils.db.update import Update
 
 log = logging.getLogger(__name__)
@@ -39,19 +43,30 @@ def run(
         log_level: int = logging.INFO,
         ancestry_records_accumulator: Optional[List[AncestryRecord]] = None,
         bulk_updates_sink: Optional[List[Tuple[str, Dict[str, List]]]] = None,
-):
+        dry_run: bool = False,
+        output_file: Optional[str] = None,
+) -> Optional[AncestryDryRunReport]:
+    """
+    @param dry_run: read and generate everything, but write nothing to the registry; report what would be written
+    @param output_file: dry run only - path of a TSV listing the bundle links which would be added to collections which
+        already carry the current ancestry version
+    """
     configure_logging(filepath=log_filepath, log_level=log_level)
 
-    log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing...")
+    if output_file and not dry_run:
+        raise ValueError("output_file is only supported with dry_run")
 
-    log.info("Updating bundle ancestries for collections...")
-    bundle_and_collection_update_records = process_collection_bundle_ancestry(client)
+    if dry_run:
+        # Everything below this point, including the reads, goes through a client which cannot write.
+        client = ReadOnlyOpenSearchClient(client)  # type: ignore[assignment]
 
-    logging.info("Updating collection ancestries for non-aggregate products...")
-    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client)
+    log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing{' (DRY RUN)' if dry_run else ''}...")
 
-    product_update_records_to_write = filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records,
-                                                                                collection_nonaggregate_refs_updates))
+    product_update_records_to_write = generate_product_update_records(client)
+
+    if dry_run:
+        return summarise_dry_run(client, product_update_records_to_write, output_file=output_file)
+
     updates = convert_records_to_updates(
         product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
     )
@@ -137,6 +152,19 @@ def run(
         log.info(f'{remaining_orphaned_docs_count} orphaned documents remain in {registry_index_name}')
 
     log.info("Ancestry sweeper processing complete!")
+    return None
+
+
+def generate_product_update_records(client: OpenSearch) -> Iterable[ProductUpdateRecord]:
+    """Generate the records of every document update the sweeper needs to write (the reads only; nothing is written)"""
+    log.info("Updating bundle ancestries for collections...")
+    bundle_and_collection_update_records = process_collection_bundle_ancestry(client)
+
+    logging.info("Updating collection ancestries for non-aggregate products...")
+    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client)
+
+    return filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records,
+                                                     collection_nonaggregate_refs_updates))
 
 
 def convert_records_to_updates(
@@ -167,15 +195,36 @@ def convert_records_to_updates(
         yield update
 
 
-if __name__ == "__main__":
+def _configure_cli(ap: argparse.ArgumentParser) -> None:
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="read and generate everything but write nothing to the registry; report the counts of updates which "
+        "would be written",
+    )
+    ap.add_argument(
+        "--output-file",
+        default=None,
+        help="with --dry-run, write a TSV of the bundle links which would be added to collections which already carry "
+        "the current ancestry version (collection_lidvid, bundle_lidvid_added) to this file",
+    )
+
+
+def main() -> None:
     cli_description = f"""
 
     Update registry records for ancestry-pending products with up-to-date direct ancestry metadata ({ANCESTRY_REFS_METADATA_KEY}).
 
     Retrieves existing published LIDVIDs from the registry, determines membership identities for each LID, and writes updated docs back to registry db
+
+    With --dry-run, nothing is written: the counts of the updates which would be written are reported instead.
     """
 
-    args = parse_args(description=cli_description)
+    args = parse_args(description=cli_description, configure_parser=_configure_cli)
+    if args.output_file and not args.dry_run:
+        raise SystemExit("error: --output-file requires --dry-run")
+
     client = get_userpass_opensearch_client(
         endpoint_url=args.base_URL, username=args.username, password=args.password, verify_certs=not args.insecure
     )
@@ -184,4 +233,10 @@ if __name__ == "__main__":
         client=client,
         log_level=args.log_level,
         log_filepath=args.log_file,
+        dry_run=args.dry_run,
+        output_file=args.output_file,
     )
+
+
+if __name__ == "__main__":
+    main()
