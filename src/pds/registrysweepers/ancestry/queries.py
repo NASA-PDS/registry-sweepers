@@ -61,6 +61,21 @@ def query_for_pending_collections(client: OpenSearch) -> Iterable[Dict]:
     return docs
 
 
+def query_for_all_collections(client: OpenSearch) -> Iterable[Dict]:
+    """
+    Query the registry for every collection, including those which already carry the current ancestry version, along
+    with their existing ancestor refs.  The number of collections is small enough to retrieve them all at once.
+    """
+    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+
+    query = product_class_query_factory(ProductClass.COLLECTION)
+
+    _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, ANCESTRY_REFS_METADATA_KEY]}
+    docs = query_registry_db_with_search_after(client, resolve_multitenant_index_name(client, "registry"), query, _source)
+
+    return docs
+
+
 def get_nonaggregate_ancestry_records_query(client: OpenSearch) -> Iterable[Dict]:
     # Query the registry-refs index for the contents of all collections
     from pds.registrysweepers.utils.db import query_registry_db_with_search_after

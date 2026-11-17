@@ -5,12 +5,16 @@ from itertools import chain
 from typing import Dict
 from typing import Generator
 from typing import Iterable
+from typing import List
 from typing import Mapping
 from typing import Set
+from typing import Tuple
 
 import psutil  # type: ignore
 from opensearchpy import OpenSearch
+from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
+from pds.registrysweepers.ancestry.queries import query_for_all_collections
 from pds.registrysweepers.ancestry.queries import query_for_collection_nonaggregate_refs
 from pds.registrysweepers.ancestry.queries import query_for_pending_bundles
 from pds.registrysweepers.ancestry.queries import query_for_pending_collections
@@ -64,6 +68,74 @@ def get_ancestry_by_collection_lid(
     return ancestry_by_collection_lid
 
 
+def get_ancestry_version(doc: Dict) -> int:
+    """Return the ancestry version stamped on a document, or 0 if it is missing or unparseable."""
+    try:
+        return int(doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+class StampedCollectionBundleLinks:
+    """
+    Tracks the collections which already carry the current ancestry version, so that a bundle which was loaded (or
+    re-harvested) after its collection was processed can still be added to that collection's ancestor refs.
+
+    A stamped collection is only given an update record when a bundle LIDVID is missing from its existing ancestor refs,
+    so a repeat run yields no records.  The record only adds the bundle: the collection's member products are not
+    touched, and the collection is not given a stamp which it did not already carry.
+    """
+
+    def __init__(self, stamped_collections_docs: Iterable[Dict]):
+        self._existing_ancestor_refs: Dict[PdsLidVid, Set[str]] = {}
+        self._lidvids_by_lid: Dict[PdsLid, Set[PdsLidVid]] = {}
+        self._update_records: Dict[PdsLidVid, ProductUpdateRecord] = {}
+
+        for doc in stamped_collections_docs:
+            try:
+                collection_lidvid = PdsLidVid.from_string(doc["_source"]["lidvid"])
+            except (ValueError, KeyError) as err:
+                log.warning(
+                    limit_log_length(
+                        f'Failed to parse LIDVID from collection document in index "{doc.get("_index")}" with id "{doc.get("_id")}" due to {type(err)}: {err}'
+                    )
+                )
+                continue
+
+            existing_refs = coerce_list_type(doc["_source"].get(ANCESTRY_REFS_METADATA_KEY) or [])
+            self._existing_ancestor_refs[collection_lidvid] = {str(ref) for ref in existing_refs}
+            self._lidvids_by_lid.setdefault(collection_lidvid.lid, set()).add(collection_lidvid)
+
+    def has_lidvid(self, collection_lidvid: PdsLidVid) -> bool:
+        return collection_lidvid in self._existing_ancestor_refs
+
+    def lidvids_for_lid(self, collection_lid: PdsLid) -> Set[PdsLidVid]:
+        return self._lidvids_by_lid.get(collection_lid, set())
+
+    def link(self, collection_lidvid: PdsLidVid, bundle_lidvid: PdsLidVid) -> None:
+        """Add the bundle to the stamped collection, unless the collection already lists it."""
+        if str(bundle_lidvid) in self._existing_ancestor_refs[collection_lidvid]:
+            return
+
+        if collection_lidvid not in self._update_records:
+            self._update_records[collection_lidvid] = ProductUpdateRecord(product=collection_lidvid)
+        self._update_records[collection_lidvid].add_direct_ancestor_ref(bundle_lidvid)
+
+    @property
+    def update_records(self) -> Iterable[ProductUpdateRecord]:
+        return self._update_records.values()
+
+
+def split_collections_docs_by_ancestry_version(collections_docs: Iterable[Dict]) -> Tuple[List[Dict], List[Dict]]:
+    """Split collection docs into (pending, stamped), where stamped docs carry the current ancestry version or newer."""
+    pending: List[Dict] = []
+    stamped: List[Dict] = []
+    for doc in collections_docs:
+        (stamped if get_ancestry_version(doc) >= SWEEPERS_ANCESTRY_VERSION else pending).append(doc)
+
+    return pending, stamped
+
+
 def process_collection_bundle_ancestry(
         client: OpenSearch) -> Iterable[ProductUpdateRecord]:
     """
@@ -75,7 +147,13 @@ def process_collection_bundle_ancestry(
 
     log.info(limit_log_length("Generating ProductUpdateRecords for collections' bundle-ancestries..."))
     bundles_docs = list(query_for_pending_bundles(client))
-    collections_docs = list(query_for_pending_collections(client))
+
+    # Collections which already carry the current ancestry version are not reprocessed, but a bundle which was loaded
+    # after they were stamped must still be added to their ancestor refs, so they are retrieved alongside the pending ones.
+    collections_docs, stamped_collections_docs = split_collections_docs_by_ancestry_version(
+        query_for_all_collections(client)
+    )
+    stamped_collection_links = StampedCollectionBundleLinks(stamped_collections_docs)
 
     # Prepare empty ancestry records for collections, with fast access by LID or LIDVID
     collection_update_records_by_collection_lidvid: Mapping[PdsLidVid, ProductUpdateRecord] = get_ancestry_by_collection_lidvid(
@@ -107,12 +185,15 @@ def process_collection_bundle_ancestry(
         # For each collection identifier
         #   - if a LIDVID is specified, add bundle to that LIDVID's record
         #   - else if a LID is specified, add bundle to the record of every LIDVID with that LID
+        # Pending collections always receive the bundle.  Collections which are already stamped receive it only if
+        # they do not already list it.
         for identifier in referenced_collection_identifiers:
             if isinstance(identifier, PdsLidVid):
-                try:
-                    collection_record = collection_update_records_by_collection_lidvid[identifier]
-                    collection_record.add_direct_ancestor_ref(bundle_lidvid)
-                except KeyError:
+                if identifier in collection_update_records_by_collection_lidvid:
+                    collection_update_records_by_collection_lidvid[identifier].add_direct_ancestor_ref(bundle_lidvid)
+                elif stamped_collection_links.has_lidvid(identifier):
+                    stamped_collection_links.link(identifier, bundle_lidvid)
+                else:
                     log.warning(
                         limit_log_length(
                             f"Collection {identifier} referenced by bundle {bundle_lidvid} "
@@ -121,10 +202,14 @@ def process_collection_bundle_ancestry(
                         # TODO: need to defer this update per https://github.com/NASA-PDS/registry-sweepers/issues/188
                     )
             elif isinstance(identifier, PdsLid):
-                try:
-                    for collection_record in collection_update_records_by_collection_lid[identifier.lid]:
-                        collection_record.add_direct_ancestor_ref(bundle_lidvid)
-                except KeyError:
+                pending_collection_records = collection_update_records_by_collection_lid.get(identifier.lid, set())
+                stamped_collection_lidvids = stamped_collection_links.lidvids_for_lid(identifier.lid)
+                for collection_record in pending_collection_records:
+                    collection_record.add_direct_ancestor_ref(bundle_lidvid)
+                for stamped_collection_lidvid in stamped_collection_lidvids:
+                    stamped_collection_links.link(stamped_collection_lidvid, bundle_lidvid)
+
+                if not pending_collection_records and not stamped_collection_lidvids:
                     log.warning(
                         limit_log_length(
                             f"No versions of collection {identifier} referenced by bundle {bundle_lidvid} "
@@ -140,7 +225,20 @@ def process_collection_bundle_ancestry(
                 )
         bundle_update_record.mark_processed()
 
-    collection_and_bundle_update_records = chain(collection_update_records_by_collection_lidvid.values(), bundle_update_records_by_bundle_lidvid.values())
+    stamped_collection_update_records = list(stamped_collection_links.update_records)
+    if stamped_collection_update_records:
+        log.info(
+            limit_log_length(
+                f"Adding bundles to the ancestor refs of {len(stamped_collection_update_records)} collections "
+                f"which already carry ancestry version {SWEEPERS_ANCESTRY_VERSION}"
+            )
+        )
+
+    collection_and_bundle_update_records = chain(
+        collection_update_records_by_collection_lidvid.values(),
+        stamped_collection_update_records,
+        bundle_update_records_by_bundle_lidvid.values(),
+    )
     return collection_and_bundle_update_records
 
 
