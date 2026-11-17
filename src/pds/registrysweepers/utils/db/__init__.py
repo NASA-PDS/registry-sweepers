@@ -378,9 +378,12 @@ def write_updated_docs(
         bulk_updates_buffer.extend(update_statement_strs)
         total_update_count += 1
 
-    if buffered_updates_count > 0:
+    # buffered_updates_count was last computed before the final update was appended, so it cannot be used to decide
+    # whether anything remains to be written (it is 0 when the whole run consisted of a single update).
+    remaining_updates_count = len(bulk_updates_buffer) // 2
+    if remaining_updates_count > 0:
         log.debug(
-            limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
+            limit_log_length(f"Writing documents updates for {remaining_updates_count} remaining products to db...")
         )
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer,
                                   update_deferral_tracker=update_deferral_tracker)
