@@ -78,7 +78,7 @@ def get_ancestry_version(doc: Dict) -> int:
 
 class StampedCollectionBundleLinks:
     """
-    Tracks the collections which already carry the current ancestry version, so that a bundle which was loaded (or
+    Tracks the collections which already carry the current ancestry version (not a newer one), so that a bundle which was loaded (or
     re-harvested) after its collection was processed can still be added to that collection's ancestor refs.
 
     A stamped collection is only given an update record when a bundle LIDVID is missing from its existing ancestor refs,
@@ -127,11 +127,30 @@ class StampedCollectionBundleLinks:
 
 
 def split_collections_docs_by_ancestry_version(collections_docs: Iterable[Dict]) -> Tuple[List[Dict], List[Dict]]:
-    """Split collection docs into (pending, stamped), where stamped docs carry the current ancestry version or newer."""
+    """
+    Split collection docs into (pending, stamped).  Pending docs carry an older ancestry version than the current one;
+    stamped docs carry exactly the current version.  A doc stamped by a newer sweeper version (for example after a
+    rollback) is in neither list: it was not pending before, and linking a bundle would overwrite its newer stamp with
+    the current one, so it is left alone.
+    """
     pending: List[Dict] = []
     stamped: List[Dict] = []
+    newer = 0
     for doc in collections_docs:
-        (stamped if get_ancestry_version(doc) >= SWEEPERS_ANCESTRY_VERSION else pending).append(doc)
+        version = get_ancestry_version(doc)
+        if version < SWEEPERS_ANCESTRY_VERSION:
+            pending.append(doc)
+        elif version == SWEEPERS_ANCESTRY_VERSION:
+            stamped.append(doc)
+        else:
+            newer += 1
+
+    if newer:
+        log.warning(
+            limit_log_length(
+                f"Skipped {newer} collections stamped with an ancestry version newer than {SWEEPERS_ANCESTRY_VERSION}"
+            )
+        )
 
     return pending, stamped
 
