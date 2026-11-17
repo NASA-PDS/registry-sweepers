@@ -37,7 +37,7 @@ def _run_driver_with_args(monkeypatch, args, sweeper_kwargs=None):
 def test_run_with_no_flags_runs_default_sweepers(monkeypatch):
     sweeper_calls = _run_driver_with_args(monkeypatch, [])
 
-    assert sweeper_calls == ["provenance", "ancestry", "reindexer"]
+    assert sweeper_calls == ["provenance", "ancestry", "ancestry-orphan-repair", "reindexer"]
 
 
 def test_run_only_single_sweeper(monkeypatch):
@@ -58,8 +58,12 @@ def test_run_only_legacy_sync(monkeypatch):
     assert sweeper_calls == ["legacy-sync"]
 
 
-def test_orphan_repair_is_not_part_of_the_default_suite(monkeypatch):
-    assert "ancestry-orphan-repair" not in _run_driver_with_args(monkeypatch, [])
+def test_orphan_repair_is_part_of_the_default_suite_and_a_dry_run_unless_applied(monkeypatch):
+    kwargs = {}
+    sweeper_calls = _run_driver_with_args(monkeypatch, [], kwargs)
+
+    assert sweeper_calls.index("ancestry-orphan-repair") == sweeper_calls.index("ancestry") + 1
+    assert kwargs["ancestry-orphan-repair"]["apply"] is False
 
 
 def test_run_only_orphan_repair_is_a_dry_run_by_default(monkeypatch):
