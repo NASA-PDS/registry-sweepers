@@ -83,6 +83,10 @@ SWEEPER_REGISTRY = {
 
 DEFAULT_SWEEPERS = ["provenance", "ancestry", "reindexer"]
 
+# The sweepers which implement --dry-run.  Any other sweeper would write for real, so --dry-run is refused unless every
+# selected sweeper is in this list.
+DRY_RUN_SWEEPERS = ["ancestry"]
+
 
 def run():
     configure_logging(filepath=None, log_level=logging.INFO)
@@ -97,13 +101,14 @@ def run():
 
     log_level = parse_log_level(os.environ.get("LOGLEVEL", "INFO"))
 
-    def run_factory(sweeper_f: Callable) -> Callable:
+    def run_factory(sweeper_f: Callable, **sweeper_options) -> Callable:
         return functools.partial(
             sweeper_f,
             client=get_opensearch_client_from_environment(verify_certs=True if not dev_mode else False),
             # enable for development if required - not necessary in production
             # log_filepath='registry-sweepers.log',
             log_level=log_level,
+            **sweeper_options,
         )
 
     def module_name(f: Callable) -> str:
@@ -121,11 +126,39 @@ def run():
         choices=SWEEPER_REGISTRY.keys(),
         help=f"Only run the specified sweeper(s). Choices: {', '.join(SWEEPER_REGISTRY.keys())}",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help=f"Read and generate everything but write nothing to the registry, and report what would be written.  Only "
+        f"supported by: {', '.join(DRY_RUN_SWEEPERS)}.  Every selected sweeper must support it, so combine it with "
+        f"--only.",
+    )
+    parser.add_argument(
+        "--output-file",
+        default=None,
+        help="Only applies to a --dry-run of ancestry: write a TSV of the bundle links it would add to collections "
+        "which already carry the current ancestry version to this file.",
+    )
 
     args = parser.parse_args()
 
     names = args.only if args.only else DEFAULT_SWEEPERS
     sweepers = [SWEEPER_REGISTRY[name] for name in names]
+
+    if args.dry_run:
+        writers = [name for name in names if name not in DRY_RUN_SWEEPERS]
+        if writers:
+            parser.error(
+                f"--dry-run is only supported by {', '.join(DRY_RUN_SWEEPERS)}, and would write for real with "
+                f"{', '.join(writers)}.  Select only the sweepers which support it, e.g. --only {DRY_RUN_SWEEPERS[0]} "
+                f"--dry-run."
+            )
+    elif args.output_file:
+        parser.error("--output-file requires --dry-run")
+
+    # Passed only for a dry run, so that a normal run calls the sweepers exactly as before.
+    dry_run_options = {"dry_run": True, "output_file": args.output_file} if args.dry_run else {}
 
     sweeper_descriptions = [module_name(f) for f in sweepers]
     log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
@@ -134,9 +167,9 @@ def run():
 
     sweeper_execution_duration_strs = []
 
-    for sweeper in sweepers:
+    for name, sweeper in zip(names, sweepers):
         sweeper_execution_begin = datetime.now()
-        run_sweeper_f = run_factory(sweeper)
+        run_sweeper_f = run_factory(sweeper, **(dry_run_options if name in DRY_RUN_SWEEPERS else {}))
 
         run_sweeper_f()
 
