@@ -117,6 +117,18 @@ class TestStampedCollectionBundleLinking:
         assert BUNDLE_LIDVID in refs_written(updates[collection_lidvid])
         assert BUNDLE_LIDVID not in updates  # the stamped bundle itself is not rewritten
 
+    def test_collection_stamped_by_a_newer_sweeper_version_is_left_alone(self, mock_opensearch_client):
+        collection_lidvid = f"{COLLECTION_LID}::1.0"
+        register_registry(
+            mock_opensearch_client,
+            bundles=[make_bundle(version=CURRENT)],
+            collections=[make_collection(collection_lidvid, version=CURRENT + 1, ancestor_refs=[])],
+        )
+
+        updates = run_sweeper(mock_opensearch_client)
+
+        assert collection_lidvid not in updates  # linking would overwrite the newer stamp with the current one
+
     def test_already_linked_collection_is_not_written(self, mock_opensearch_client):
         collection_lidvid = f"{COLLECTION_LID}::1.0"
         register_registry(
