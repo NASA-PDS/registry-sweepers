@@ -108,7 +108,7 @@ The tool provides comprehensive statistics including:
 Use `pds-registry-sweepers` to run the sweepers from the command line.
 
 ```bash
-# Run the full default suite (provenance, ancestry, reindexer)
+# Run the full default suite (provenance, ancestry, ancestry orphan repair, reindexer)
 pds-registry-sweepers
 
 # Run a single sweeper
@@ -121,7 +121,7 @@ pds-registry-sweepers --only ancestry provenance
 pds-registry-sweepers --only legacy-sync
 ```
 
-- With no flags, the full default suite runs: `provenance`, `ancestry`, `reindexer`.
+- With no flags, the full default suite runs: `provenance`, `ancestry`, `ancestry-orphan-repair`, `reindexer`. The orphan repair runs right after `ancestry` and is a dry run (it only reports) unless `--apply` is given, so a scheduled run that should repair uses `pds-registry-sweepers --apply`.
 - With `--only <name> [name ...]`, only the named sweeper(s) run. Available names: `provenance`, `ancestry`, `reindexer`, `legacy-sync`, `ancestry-orphan-repair` (a dry run unless `--apply` is given; see above).
 
 `PROV_ENDPOINT` and (for non-AWS OpenSearch) `PROV_CREDENTIALS` environment variables are required. See the Developer Quickstart section for details.

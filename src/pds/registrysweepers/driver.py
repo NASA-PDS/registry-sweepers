@@ -82,11 +82,11 @@ SWEEPER_REGISTRY = {
     "ancestry-orphan-repair": ancestry_orphan_repair.run,
 }
 
-# The orphan repair is a dry run unless --apply is given, so it is selected explicitly with --only rather than being
-# part of the default suite.
-DEFAULT_SWEEPERS = ["provenance", "ancestry", "reindexer"]
-
 ORPHAN_REPAIR_SWEEPER = "ancestry-orphan-repair"
+
+# The orphan repair is part of the default suite and runs right after ancestry. It is a dry run, which reports what it
+# would repair, unless --apply is given.
+DEFAULT_SWEEPERS = ["provenance", "ancestry", ORPHAN_REPAIR_SWEEPER, "reindexer"]
 
 
 def order_sweepers(names: List[str]) -> List[str]:
