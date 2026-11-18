@@ -86,6 +86,9 @@ SWEEPER_REGISTRY = {
 
 ORPHAN_REPAIR_SWEEPER = "ancestry-orphan-repair"
 
+# Sweepers which write a listing to --output-file.
+LISTING_SWEEPERS = ["ancestry", ORPHAN_REPAIR_SWEEPER]
+
 # The orphan repair is part of the default suite and runs right after ancestry.  Like every other sweeper, it writes.
 DEFAULT_SWEEPERS = ["provenance", "ancestry", ORPHAN_REPAIR_SWEEPER, "reindexer"]
 
@@ -178,6 +181,16 @@ def run():
                 f"{', '.join(writers)}.  Select only the sweepers which support it, e.g. --only {DRY_RUN_SWEEPERS[0]} "
                 f"--dry-run."
             )
+
+    # --output-file names one path.  The orphan repair lists products in it and the ancestry sweeper (on its own
+    # branch) lists bundle links in it, so it is refused when more than one of them is selected rather than letting
+    # the second overwrite the first.
+    listing_sweepers = [name for name in names if name in LISTING_SWEEPERS]
+    if args.output_file and len(listing_sweepers) > 1:
+        parser.error(
+            f"--output-file would be written by more than one sweeper ({', '.join(listing_sweepers)}), each with a "
+            f"different listing.  Select one of them with --only."
+        )
 
     # Passed only for a dry run, so that a normal run calls the sweepers exactly as before.
     dry_run_options = {"dry_run": True} if args.dry_run else {}

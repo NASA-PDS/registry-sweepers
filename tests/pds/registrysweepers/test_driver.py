@@ -78,11 +78,11 @@ def test_run_only_orphan_repair_writes_by_default(monkeypatch):
 
 def test_orphan_repair_receives_output_options_and_other_sweepers_do_not(monkeypatch):
     kwargs = {}
-    args = ["--only", "ancestry", "ancestry-orphan-repair", "--output-file", "/tmp/x.tsv", "--output-all"]
+    args = ["--only", "provenance", "ancestry-orphan-repair", "--output-file", "/tmp/x.tsv", "--output-all"]
     _run_driver_with_args(monkeypatch, args, kwargs)
 
     assert kwargs["ancestry-orphan-repair"] == {"output_file": "/tmp/x.tsv", "output_all": True}
-    assert kwargs["ancestry"] == {}
+    assert kwargs["provenance"] == {}
 
 
 def test_dry_run_is_accepted_with_only_the_orphan_repair_and_reaches_nothing_else(monkeypatch):
@@ -147,3 +147,26 @@ def test_orphan_repair_runs_after_ancestry_whatever_the_requested_order(monkeypa
     )
 
     assert sweeper_calls == ["reindexer", "ancestry", "ancestry-orphan-repair", "provenance"]
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [[], ["--only", "ancestry", "ancestry-orphan-repair"]],
+)
+def test_output_file_is_refused_when_more_than_one_listing_sweeper_is_selected(monkeypatch, capsys, selection):
+    sweeper_calls = []
+
+    with pytest.raises(SystemExit) as excinfo:
+        sweeper_calls = _run_driver_with_args(monkeypatch, [*selection, "--output-file", "/tmp/x.tsv"])
+
+    assert excinfo.value.code == 2
+    assert sweeper_calls == []  # nothing ran
+    err = capsys.readouterr().err
+    assert "--output-file would be written by more than one sweeper (ancestry, ancestry-orphan-repair)" in err
+
+
+def test_output_file_is_accepted_with_a_single_listing_sweeper(monkeypatch):
+    kwargs = {}
+    _run_driver_with_args(monkeypatch, ["--only", "ancestry-orphan-repair", "--output-file", "/tmp/x.tsv"], kwargs)
+
+    assert kwargs["ancestry-orphan-repair"]["output_file"] == "/tmp/x.tsv"
