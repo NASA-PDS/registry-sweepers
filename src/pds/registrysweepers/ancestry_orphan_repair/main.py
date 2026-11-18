@@ -31,6 +31,7 @@ additional destination for the same listing, with or without ``dry_run``.
 import logging
 import sys
 from dataclasses import dataclass
+from dataclasses import field
 from typing import Any
 from typing import Dict
 from typing import Iterable
@@ -62,6 +63,7 @@ from pds.registrysweepers.ancestry_orphan_repair.constants import REFS_PRODUCT_F
 from pds.registrysweepers.ancestry_orphan_repair.constants import SUPERSEDED_BY_KEY
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils import parse_args
+from pds.registrysweepers.utils.db import BulkWriteSummary
 from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
@@ -87,12 +89,6 @@ REFS_PAGE_SIZE = 500
 # log progress at INFO every this many examined products
 PROGRESS_LOG_INTERVAL = 100_000
 
-# per-document outcomes of a bulk update
-WRITE_UPDATED = "updated"
-WRITE_NOOP = "noop"
-WRITE_MISSING = "missing"
-WRITE_FAILED = "failed"
-
 
 @dataclass
 class OrphanRepairReport:
@@ -117,6 +113,7 @@ class OrphanRepairReport:
     already_current: int = 0
     vanished_before_write: int = 0
     write_failed: int = 0
+    write_failures_by_type: Dict[str, int] = field(default_factory=dict)
 
     @property
     def unresolved(self) -> int:
@@ -135,7 +132,7 @@ class OrphanRepairReport:
                 f"  repaired: {self.repaired}",
                 f"  already up to date (no change needed): {self.already_current}",
                 f"  vanished between read and write: {self.vanished_before_write}",
-                f"  write failures (see log): {self.write_failed}",
+                f"  write failures: {self.write_failed}" + (f" ({self._failure_types_str()})" if self.write_failed else ""),
             ]
         lines += [
             f"  unresolved (not stamped, nothing written, examined again by every run): {self.unresolved}",
@@ -145,6 +142,8 @@ class OrphanRepairReport:
         ]
         if self.invalid_lidvid:
             lines.append(f"  skipped, unparseable lidvid: {self.invalid_lidvid}")
+        if self.write_failed:
+            lines.append(f"  {self.failure_hint()}")
         if self.pending_deferral:
             lines.append(
                 "  Products with a pending deferral entry are applied by the ancestry sweeper's merge step, which also "
@@ -157,43 +156,21 @@ class OrphanRepairReport:
             )
         return lines
 
-    def absorb_write_outcomes(self, outcomes: Dict[str, str]) -> None:
-        values = list(outcomes.values())
-        self.repaired = values.count(WRITE_UPDATED)
-        self.already_current = values.count(WRITE_NOOP)
-        self.vanished_before_write = values.count(WRITE_MISSING)
-        self.write_failed = values.count(WRITE_FAILED)
+    def _failure_types_str(self) -> str:
+        return ", ".join(f"{error_type}: {count}" for error_type, count in sorted(self.write_failures_by_type.items()))
 
+    def failure_hint(self) -> str:
+        return (
+            f"{self.write_failed} writes failed ({self._failure_types_str()}); those products were not repaired. "
+            "Re-run to repair the remaining products; the repair is idempotent."
+        )
 
-class _BulkOutcomeRecorder:
-    """
-    Wraps the client handed to write_updated_docs() so that the per-document outcome of each bulk response can be
-    reported, since write_updated_docs() itself only logs them.  Outcomes are keyed by document id, so a chunk which
-    is resubmitted by the write path's retry is not counted twice.
-    """
-
-    def __init__(self, client: OpenSearch):
-        self._client = client
-        self.outcomes: Dict[str, str] = {}
-
-    def bulk(self, *args, **kwargs):
-        response = self._client.bulk(*args, **kwargs)
-        for item in response.get("items", []):
-            result = item.get("update", {})
-            doc_id = result.get("_id")
-            if doc_id is None:
-                continue
-            if "error" in result:
-                error_type = str(result["error"].get("type", ""))
-                self.outcomes[doc_id] = WRITE_MISSING if error_type.startswith("document_missing") else WRITE_FAILED
-            elif result.get("result") == "noop":
-                self.outcomes[doc_id] = WRITE_NOOP
-            else:
-                self.outcomes[doc_id] = WRITE_UPDATED
-        return response
-
-    def __getattr__(self, name: str):
-        return getattr(self._client, name)
+    def absorb_write_summary(self, summary: BulkWriteSummary) -> None:
+        self.repaired = summary.succeeded
+        self.already_current = summary.noop
+        self.vanished_before_write = summary.missing
+        self.write_failed = summary.failed
+        self.write_failures_by_type = dict(summary.failed_by_type)
 
 
 class _ListingSink:
@@ -528,9 +505,7 @@ def run(
             for metadata_key in [ANCESTOR_REFS_KEY, ANCESTRY_VERSION_KEY]:
                 ensure_index_mapping(client, registry_index, metadata_key, "keyword")
 
-            recorder = _BulkOutcomeRecorder(client)
-            write_updated_docs(recorder, updates, index_name=registry_index)  # type: ignore[arg-type]
-            report.absorb_write_outcomes(recorder.outcomes)
+            report.absorb_write_summary(write_updated_docs(client, updates, index_name=registry_index))
         else:
             for _ in updates:
                 pass
@@ -546,11 +521,15 @@ def run(
         outcome = f"{report.repairable} repairable"
     else:
         outcome = f"{report.repaired} repaired"
+    failed = f", {report.write_failed} failed" if report.write_failed else ""
     log.info(
         limit_log_length(
-            f"Orphan repair complete: {report.products_examined} examined, {outcome}, {report.unresolved} unresolved"
+            f"Orphan repair complete: {report.products_examined} examined, {outcome}{failed}, "
+            f"{report.unresolved} unresolved"
         )
     )
+    if report.write_failed:
+        log.error(limit_log_length(report.failure_hint()))
 
     return report
 

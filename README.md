@@ -29,6 +29,8 @@ How it works (runs right after `ancestry`):
 
 It only repairs where a refs document confirms the parent. A product that no refs document lists, or that is listed only under a collection not in the registry, is *unresolved*: it is never written or stamped, it is counted separately in the summary, and it is examined again on every run, so it is repaired as soon as a refs document appears.
 
+The summary counts the outcome of every write from the bulk responses (repaired, already up to date, vanished, failed with the error type); failed writes are reported and the run does not abort, so a re-run repairs the remaining products.
+
 **Interaction with the deferral index.** The deferral merge runs inside the ancestry sweeper, so it has finished before the repair starts: products that were missing when their collection was swept are already merged and are not selected. What remains is a product overwritten by Harvest after its sweep, or listed in refs after its collection was stamped. A product that still has a pending deferral entry (the merge failed for it) is skipped: not written, not stamped, counted as *left to the deferral merge*. The merge writes its entry as a partial document that replaces `ancestor_refs`, so a repair write in between would be overwritten or leave the entry behind.
 
 | Flag | Effect |

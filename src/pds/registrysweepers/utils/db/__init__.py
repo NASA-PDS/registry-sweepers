@@ -2,6 +2,8 @@ import json
 import logging
 import math
 import sys
+from dataclasses import dataclass
+from dataclasses import field
 from itertools import chain
 from typing import Any
 from typing import Callable
@@ -11,6 +13,7 @@ from typing import List
 from typing import Mapping
 from typing import Optional
 from typing import Set
+from typing import Tuple
 from typing import Union
 
 from opensearchpy import OpenSearch
@@ -28,6 +31,96 @@ from retry.api import retry_call
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
+
+# per-document outcomes of a bulk update
+WRITE_UPDATED = "updated"
+WRITE_NOOP = "noop"
+WRITE_MISSING = "missing"
+WRITE_FAILED = "failed"
+
+# (outcome, error type or None)
+ItemOutcome = Tuple[str, Optional[str]]
+
+# When a chunk is submitted more than once, a document which was written by one submission must not be reported as
+# anything less because a later response says "noop", "missing" or an error.
+_OUTCOME_RANK = {WRITE_FAILED: 0, WRITE_MISSING: 1, WRITE_NOOP: 2, WRITE_UPDATED: 3}
+
+
+@dataclass
+class BulkWriteSummary:
+    """
+    What write_updated_docs() did, counted per item of the bulk responses: attempted is always the sum of the outcomes.
+    Updates which were not sent at all (skip_write) are counted in skipped.  When missing documents are deferred, the
+    updates which targeted a missing document are counted as deferred instead of missing, unless writing them to the
+    deferral index failed, in which case they are counted as failed.
+    """
+
+    succeeded: int = 0
+    noop: int = 0
+    missing: int = 0
+    deferred: int = 0
+    failed: int = 0
+    skipped: int = 0
+    failed_by_type: Dict[str, int] = field(default_factory=dict)
+
+    @property
+    def attempted(self) -> int:
+        return self.succeeded + self.noop + self.missing + self.deferred + self.failed
+
+    def _count_failure(self, error_type: Optional[str]) -> None:
+        self.failed += 1
+        self.failed_by_type[str(error_type)] = self.failed_by_type.get(str(error_type), 0) + 1
+
+    def add_chunk_outcomes(self, outcomes: Iterable[Optional[ItemOutcome]], missing_are_deferred: bool = False) -> None:
+        for outcome in outcomes:
+            kind, error_type = outcome if outcome is not None else (WRITE_FAILED, "missing_from_bulk_response")
+            if kind == WRITE_UPDATED:
+                self.succeeded += 1
+            elif kind == WRITE_NOOP:
+                self.noop += 1
+            elif kind == WRITE_MISSING:
+                if missing_are_deferred:
+                    self.deferred += 1
+                else:
+                    self.missing += 1
+            else:
+                self._count_failure(error_type)
+
+    def add_deferral_write_outcomes(self, outcomes: Iterable[Optional[ItemOutcome]]) -> None:
+        """Account for the write of deferred updates to the deferral index: those which did not succeed are failures"""
+        for outcome in outcomes:
+            kind, error_type = outcome if outcome is not None else (WRITE_FAILED, "missing_from_bulk_response")
+            if kind in (WRITE_FAILED, WRITE_MISSING):
+                self.deferred = max(self.deferred - 1, 0)
+                self._count_failure(error_type)
+
+    def failed_types_str(self) -> str:
+        return ", ".join(f"{error_type}: {count}" for error_type, count in sorted(self.failed_by_type.items()))
+
+
+def _classify_bulk_item(item: Dict) -> ItemOutcome:
+    result = item.get("update", {})
+    if "error" in result:
+        error_type = str(result["error"].get("type", ""))
+        return (WRITE_MISSING if error_type.startswith("document_missing") else WRITE_FAILED), error_type
+    return (WRITE_NOOP if result.get("result") == "noop" else WRITE_UPDATED), None
+
+
+def _record_bulk_response(outcomes: List[Optional[ItemOutcome]], response_content: Dict) -> None:
+    """Record the outcome of each item of a bulk response at the position of the update which was sent."""
+    items = response_content.get("items", [])
+    for position, item in enumerate(items[: len(outcomes)]):
+        outcome = _classify_bulk_item(item)
+        previous = outcomes[position]
+        if previous is None or _OUTCOME_RANK[outcome[0]] >= _OUTCOME_RANK[previous[0]]:
+            outcomes[position] = outcome
+
+    # a response which does not itemise the updates is trusted only if it reports no errors
+    for position in range(len(items), len(outcomes)):
+        if outcomes[position] is None:
+            outcomes[position] = (
+                (WRITE_FAILED, "missing_from_bulk_response") if response_content.get("errors") else (WRITE_UPDATED, None)
+            )
 
 
 def query_registry_db_with_scroll(
@@ -302,14 +395,13 @@ def write_updated_docs(
         bulk_chunk_max_update_count: Union[int, None] = None,
         as_upsert: bool = False,
         defer_on_missing_document=False
-):
+) -> BulkWriteSummary:
     if as_upsert and defer_on_missing_document:
         raise RuntimeError('"as_upsert" and "defer_on_missing_document" may not both be set as they are mutually-exclusive')
 
     log.info(limit_log_length("Writing document updates..."))
     buffered_updates_count = 0
-    total_update_count = 0
-    total_deferred_update_count = 0
+    summary = BulkWriteSummary()
     total_writes_skipped = 0
 
     if defer_on_missing_document:
@@ -354,17 +446,19 @@ def write_updated_docs(
                     f"Bulk update buffer has reached {threshold_log_str} threshold - writing {buffered_updates_count} document updates to db..."
                 )
             )
-            _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer,
-                                      update_deferral_tracker=update_deferral_tracker)
+            summary.add_chunk_outcomes(
+                _write_chunk_and_get_outcomes(client, index_name, bulk_updates_buffer,
+                                              update_deferral_tracker=update_deferral_tracker),
+                missing_are_deferred=update_deferral_tracker is not None)
 
             # TODO: eliminate duplication of this block - it's already proven brittle - edunn 20260818
             if update_deferral_tracker is not None:
                 deferred_updates = list(update_deferral_tracker.flush())
-                total_deferred_update_count += len(deferred_updates)
                 deferred_update_statements = [statement
                                               for deferred_update in deferred_updates
                                               for statement in update_as_statements(deferred_update, as_upsert=True)]
-                _write_bulk_updates_chunk(client, deferred_index_name, deferred_update_statements)
+                summary.add_deferral_write_outcomes(
+                    _write_chunk_and_get_outcomes(client, deferred_index_name, deferred_update_statements))
 
             bulk_updates_buffer = []
             bulk_buffer_size_mb = 0.0
@@ -376,7 +470,6 @@ def write_updated_docs(
             bulk_buffer_size_mb += sys.getsizeof(s) / 1024 ** 2
 
         bulk_updates_buffer.extend(update_statement_strs)
-        total_update_count += 1
 
     # buffered_updates_count was last computed before the final update was appended, so it cannot be used to decide
     # whether anything remains to be written (it is 0 when the whole run consisted of a single update).
@@ -385,24 +478,31 @@ def write_updated_docs(
         log.debug(
             limit_log_length(f"Writing documents updates for {remaining_updates_count} remaining products to db...")
         )
-        _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer,
-                                  update_deferral_tracker=update_deferral_tracker)
+        summary.add_chunk_outcomes(
+            _write_chunk_and_get_outcomes(client, index_name, bulk_updates_buffer,
+                                          update_deferral_tracker=update_deferral_tracker),
+            missing_are_deferred=update_deferral_tracker is not None)
 
         # this duplicates earlier implementation - refactor at some point - edunn 20260918
         if update_deferral_tracker is not None:
             deferred_updates = list(update_deferral_tracker.flush())
-            total_deferred_update_count += len(deferred_updates)
             deferred_update_statements = [statement
                                           for deferred_update in deferred_updates
                                           for statement in update_as_statements(deferred_update, as_upsert=True)]
-            _write_bulk_updates_chunk(client, deferred_index_name, deferred_update_statements)
+            summary.add_deferral_write_outcomes(
+                _write_chunk_and_get_outcomes(client, deferred_index_name, deferred_update_statements))
 
-    log_msg = f"Wrote {total_update_count} doc updates"
-    if total_update_count > 0:
-        log_msg += f" ({total_deferred_update_count} deferred)"
-    if total_writes_skipped > 0:
-        log_msg += f" and skipped {total_writes_skipped} doc updates"
-    log.info(limit_log_length(log_msg))
+    summary.skipped = total_writes_skipped
+    failed_str = f"{summary.failed} failed" + (f" ({summary.failed_types_str()})" if summary.failed else "")
+    deferred_str = f"{summary.deferred} deferred, " if update_deferral_tracker is not None else ""
+    log.info(
+        limit_log_length(
+            f"Document updates for {summary.attempted} products: {summary.succeeded} updated, "
+            f"{summary.noop} already up to date, {summary.missing} vanished (document missing), {deferred_str}"
+            f"{failed_str}; skipped {summary.skipped} doc updates"
+        )
+    )
+    return summary
 
 
 def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[str]:
@@ -439,11 +539,24 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
     return updates_strs
 
 
+def _write_chunk_and_get_outcomes(client: OpenSearch, index_name: str, bulk_updates: List[str],
+                                  update_deferral_tracker: Optional[UpdateDeferralTracker] = None
+                                  ) -> List[Optional[ItemOutcome]]:
+    # the list outlives the retries of _write_bulk_updates_chunk, so that what an earlier submission achieved is kept
+    outcomes: List[Optional[ItemOutcome]] = [None] * (len(bulk_updates) // 2)
+    _write_bulk_updates_chunk(client, index_name, bulk_updates, update_deferral_tracker=update_deferral_tracker,
+                              outcomes=outcomes)
+    return outcomes
+
+
 @retry(tries=6, delay=15, backoff=2, logger=log)
 def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str],
-                              update_deferral_tracker: Optional[UpdateDeferralTracker] = None) -> Dict:
+                              update_deferral_tracker: Optional[UpdateDeferralTracker] = None,
+                              outcomes: Optional[List[Optional[ItemOutcome]]] = None) -> Dict:
     """
-    TODO: Flesh out function docs
+    Submit one chunk and return the bulk response.  When outcomes (one slot per update of the chunk) is given, the
+    outcome of each update is recorded in it as soon as each response arrives, so that a retry (which calls this
+    function again with the same chunk) keeps what the earlier submission achieved.
     """
     if len(bulk_updates) == 0:
         log.debug(limit_log_length("_write_bulk_updates_chunk received empty arg bulk_updates - skipping"))
@@ -458,6 +571,8 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
 
     request_timeout = 180
     response_content = client.bulk(index=index_name, body=bulk_data, request_timeout=request_timeout)
+    if outcomes is not None:
+        _record_bulk_response(outcomes, response_content)
 
     deferring_updates_to_missing_docs = update_deferral_tracker is not None
     if deferring_updates_to_missing_docs:

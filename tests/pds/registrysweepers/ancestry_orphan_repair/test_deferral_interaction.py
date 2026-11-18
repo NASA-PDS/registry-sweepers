@@ -6,6 +6,7 @@ The real ancestry sweeper (ancestry.main.run, including its orphan/deferral merg
 against the in-memory fake registry; nothing here can reach a real endpoint.
 """
 import copy
+import logging
 import sys
 
 import pytest
@@ -339,6 +340,24 @@ def test_a_single_update_to_an_existing_document_is_written_with_deferral_enable
 
     assert registry.registry[product(1)][STAMP] == SWEEPERS_ANCESTRY_VERSION
     assert registry.deferred == {}
+
+
+def test_updates_to_missing_documents_are_counted_as_deferred_and_the_counts_add_up(registry, caplog):
+    registry.add_product(product(1))
+    updates = [
+        update_from_record(
+            ProductUpdateRecord(PdsLidVid.from_string(product(n)), direct_ancestor_refs=[PdsLidVid.from_string(C1)])
+        )
+        for n in (1, 2, 3)  # products 2 and 3 do not exist
+    ]
+
+    with caplog.at_level(logging.INFO):
+        summary = write_updated_docs(registry, iter(updates), index_name="registry", defer_on_missing_document=True)
+
+    assert (summary.succeeded, summary.deferred, summary.missing, summary.failed) == (1, 2, 0, 0)
+    assert summary.attempted == 3
+    line = next(r.getMessage() for r in caplog.records if r.getMessage().startswith("Document updates for"))
+    assert "3 products" in line and "1 updated" in line and "2 deferred" in line and "0 failed" in line
 
 
 def test_deferral_entries_are_looked_up_per_chunk_of_a_batch(registry, monkeypatch):
