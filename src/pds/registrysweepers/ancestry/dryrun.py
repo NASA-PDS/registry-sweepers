@@ -74,8 +74,8 @@ class AncestryDryRunReport:
             f"    pending collections marked complete (second update, after their non-aggregates): "
             f"{self.collection_completions}",
             f"    bundles: {self.bundles}",
-            f"    collections which already carry v{SWEEPERS_ANCESTRY_VERSION} and only get a bundle link added "
-            f"(#301): {self.stamped_collections_linked} ({self.stamped_collection_links} bundle links)",
+            f"    collections which already carry v{SWEEPERS_ANCESTRY_VERSION} and only get a bundle link added: "
+            f"{self.stamped_collections_linked} ({self.stamped_collection_links} bundle links)",
             f"    non-aggregate products: {self.nonaggregates}",
         ]
         if self.unclassified:

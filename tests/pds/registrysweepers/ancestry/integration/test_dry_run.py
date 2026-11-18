@@ -3,7 +3,7 @@ Tests for the ancestry sweeper's dry run.
 
 All registry access is mocked.  The scenario has, in one registry:
   - a pending collection (C1) with a pending bundle (B1) and two non-aggregate products (P1, P2) in its refs
-  - a collection which already carries the current version but lacks its bundle link (C2, bundle B2): the #301 case
+  - a collection which already carries the current version but lacks its bundle link (C2, bundle B2)
 """
 import runpy
 import sys
@@ -107,7 +107,7 @@ class TestDryRun:
         out = capsys.readouterr().out
         assert "DRY RUN (nothing was written to the registry)" in out
         assert "document updates a real run would write: 6" in out
-        assert "only get a bundle link added (#301): 1 (1 bundle links)" in out
+        assert "only get a bundle link added: 1 (1 bundle links)" in out
         assert "non-aggregate products: 2" in out
         assert any("document updates a real run would write: 6" in line for line in logged)
 

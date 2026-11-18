@@ -1,5 +1,5 @@
 """
-Tests for linking a bundle to a collection which already carries the current ancestry version (issue #301).
+Tests for linking a bundle to a collection which already carries the current ancestry version.
 
 All registry access is mocked.  The mock client does not interpret query filters, so queries are distinguished here by
 whether they exclude already-stamped collections (the pending-collections query) or not (the all-collections query).
