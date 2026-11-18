@@ -1,6 +1,7 @@
 import copy
 import json
 import logging
+import sys
 
 import pytest
 from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
@@ -509,3 +510,212 @@ def test_output_file_lists_repairable_products_and_optionally_the_rest(registry,
         f"no_refs_listing\t{product(2)}\t",
         f"collection_not_in_registry\t{product(3)}\t{MISSING_COLLECTION}",
     ]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# --dry-run (listing on stdout), --apply, neither; --output-file as an additional destination
+# ---------------------------------------------------------------------------------------------------------------------
+
+HEADER = "status\tproduct_lidvid\tcollection_lidvids"
+
+
+def _populate_mixed(registry: FakeRegistry) -> None:
+    registry.add_collection(C1)
+    registry.add_product(product(1))  # repairable
+    registry.add_product(product(2))  # no refs listing
+    registry.add_product(product(3))  # listed only under a collection which is not in the registry
+    registry.add_refs(C1, [product(1)])
+    registry.add_refs(MISSING_COLLECTION, [product(3)])
+
+
+def _split_stdout(text: str):
+    """The listing lines (up to the first line of the summary) and the summary lines."""
+    lines = text.splitlines()
+    summary_start = next(i for i, line in enumerate(lines) if line.startswith("Ancestry orphan repair"))
+    return lines[:summary_start], lines[summary_start:]
+
+
+def test_dry_run_lists_repairable_products_to_stdout_then_the_summary_and_writes_nothing(registry, capsys):
+    _populate_mixed(registry)
+    before = snapshot(registry)
+
+    report = run(registry, dry_run=True)
+
+    listing, summary = _split_stdout(capsys.readouterr().out)
+    assert listing == [HEADER, f"repairable\t{product(1)}\t{C1}"]
+    assert summary == report.summary_lines()  # the summary is last
+    assert "DRY RUN" in summary[0]
+    assert "--output-file" not in "\n".join(summary)
+    assert (report.repairable, report.repaired) == (1, 0)
+    assert registry.bulk_calls == [] and registry.written_ids == []
+    assert registry.registry == before
+    assert registry.indices.put_mapping_calls == []
+
+
+def test_dry_run_stdout_is_not_interleaved_with_log_lines(registry, capsys):
+    _populate_mixed(registry)
+
+    run(registry, dry_run=True, log_level=logging.DEBUG)
+
+    captured = capsys.readouterr()
+    assert "Starting ancestry orphan repair" not in captured.out  # log records go to stderr only
+    assert "::INFO::" not in captured.out
+    assert "::INFO::Starting ancestry orphan repair" in captured.err
+
+
+def test_dry_run_with_output_all_lists_the_unresolved_products_too(registry, capsys):
+    _populate_mixed(registry)
+
+    run(registry, dry_run=True, output_all=True)
+
+    listing, _ = _split_stdout(capsys.readouterr().out)
+    assert listing[1:] == [
+        f"repairable\t{product(1)}\t{C1}",
+        f"no_refs_listing\t{product(2)}\t",
+        f"collection_not_in_registry\t{product(3)}\t{MISSING_COLLECTION}",
+    ]
+
+
+def test_dry_run_with_output_file_writes_identical_content_to_stdout_and_the_file(registry, capsys, tmp_path):
+    _populate_mixed(registry)
+    out = tmp_path / "listing.tsv"
+
+    run(registry, dry_run=True, output_file=str(out), output_all=True)
+
+    listing, _ = _split_stdout(capsys.readouterr().out)
+    assert out.read_text().splitlines() == listing
+    assert out.read_text().startswith(HEADER + "\n")
+    assert len(listing) == 4
+    assert registry.bulk_calls == []
+
+
+def test_neither_flag_prints_no_listing_and_no_summary_from_run(registry, capsys):
+    _populate_mixed(registry)
+    before = snapshot(registry)
+
+    report = run(registry)
+
+    assert capsys.readouterr().out == ""
+    assert not report.apply and report.repairable == 1
+    assert registry.registry == before and registry.bulk_calls == []
+
+
+def test_neither_flag_with_output_file_writes_the_file_only(registry, capsys, tmp_path):
+    _populate_mixed(registry)
+    out = tmp_path / "listing.tsv"
+
+    run(registry, output_file=str(out))
+
+    assert capsys.readouterr().out == ""
+    assert out.read_text().splitlines() == [HEADER, f"repairable\t{product(1)}\t{C1}"]
+    assert registry.bulk_calls == []
+
+
+def test_apply_prints_no_listing_and_writes_the_repairs(registry, capsys):
+    _populate_mixed(registry)
+
+    report = run(registry, apply=True)
+
+    assert capsys.readouterr().out == ""
+    assert report.repaired == 1 and registry.written_ids == [product(1)]
+
+
+def test_apply_with_output_file_lists_the_repaired_products(registry, capsys, tmp_path):
+    _populate_mixed(registry)
+    out = tmp_path / "repaired.tsv"
+
+    report = run(registry, apply=True, output_file=str(out))
+
+    assert capsys.readouterr().out == ""
+    assert out.read_text().splitlines() == [HEADER, f"repairable\t{product(1)}\t{C1}"]
+    assert report.repaired == 1 and registry.written_ids == [product(1)]  # the listed product is the one written
+
+
+def test_apply_with_output_file_and_output_all_adds_the_unresolved_products(registry, tmp_path):
+    _populate_mixed(registry)
+    out = tmp_path / "all.tsv"
+
+    run(registry, apply=True, output_file=str(out), output_all=True)
+
+    assert out.read_text().splitlines()[1:] == [
+        f"repairable\t{product(1)}\t{C1}",
+        f"no_refs_listing\t{product(2)}\t",
+        f"collection_not_in_registry\t{product(3)}\t{MISSING_COLLECTION}",
+    ]
+
+
+def test_run_rejects_dry_run_together_with_apply(registry):
+    _populate_mixed(registry)
+
+    with pytest.raises(ValueError):
+        run(registry, dry_run=True, apply=True)
+
+    assert registry.bulk_calls == [] and registry.search_calls == []
+
+
+def test_output_file_help_does_not_imply_a_dry_run():
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    orphan_repair._configure_cli(ap)
+    help_text = {a.dest: a.help for a in ap._actions}
+
+    assert "dry run" not in help_text["output_file"].lower()
+    assert "also" in help_text["output_file"] and "with --dry-run or --apply or neither" in help_text["output_file"]
+    assert "stdout" in help_text["dry_run"]
+
+
+# the module command line
+
+
+def _run_cli(monkeypatch, registry, *args):
+    monkeypatch.setattr(orphan_repair, "get_userpass_opensearch_client", lambda **kwargs: registry)
+    monkeypatch.setattr(sys, "argv", ["ancestry_orphan_repair", "--base-URL", "http://registry.invalid", *args])
+    orphan_repair.main()
+
+
+def test_cli_dry_run_prints_the_listing_then_the_summary_once(monkeypatch, registry, capsys):
+    _populate_mixed(registry)
+
+    _run_cli(monkeypatch, registry, "--dry-run")
+
+    out = capsys.readouterr().out
+    listing, summary = _split_stdout(out)
+    assert listing == [HEADER, f"repairable\t{product(1)}\t{C1}"]
+    assert out.count("Ancestry orphan repair - DRY RUN") == 1
+    assert registry.bulk_calls == []
+
+
+def test_cli_without_flags_prints_the_counts_only(monkeypatch, registry, capsys):
+    _populate_mixed(registry)
+
+    _run_cli(monkeypatch, registry)
+
+    out = capsys.readouterr().out
+    assert out.splitlines()[0].startswith("Ancestry orphan repair - DRY RUN")
+    assert HEADER not in out and "repairable\t" not in out
+    assert registry.bulk_calls == []
+
+
+def test_cli_apply_with_output_file(monkeypatch, registry, capsys, tmp_path):
+    _populate_mixed(registry)
+    out_file = tmp_path / "repaired.tsv"
+
+    _run_cli(monkeypatch, registry, "--apply", "--output-file", str(out_file))
+
+    out = capsys.readouterr().out
+    assert out.splitlines()[0].startswith("Ancestry orphan repair - APPLIED")
+    assert HEADER not in out
+    assert out_file.read_text().splitlines() == [HEADER, f"repairable\t{product(1)}\t{C1}"]
+    assert registry.written_ids == [product(1)]
+
+
+def test_cli_rejects_dry_run_with_apply(monkeypatch, registry, capsys):
+    _populate_mixed(registry)
+
+    with pytest.raises(SystemExit) as excinfo:
+        _run_cli(monkeypatch, registry, "--dry-run", "--apply")
+
+    assert excinfo.value.code == 2
+    assert "not allowed with argument" in capsys.readouterr().err
+    assert registry.bulk_calls == [] and registry.search_calls == []

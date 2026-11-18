@@ -414,3 +414,23 @@ def test_the_selection_uses_the_same_stamp_predicate_as_the_deferral_merge():
 
     # every document the merge treats as orphaned (stamp missing or below current) is selected by the repair, too
     assert {"bool": {"must_not": [merge_predicate]}} in should
+
+
+def test_dry_run_lists_the_product_left_to_the_deferral_merge_only_with_output_all(registry, capsys, tmp_path):
+    sweep_then_harvest(registry)
+    out = tmp_path / "listing.tsv"
+    entry_before = copy.deepcopy(registry.deferred[DEFERRED])
+    writes_before = len(registry.written_ids)
+
+    repair(registry, dry_run=True)
+    only_repairable = capsys.readouterr().out
+    repair(registry, dry_run=True, output_all=True, output_file=str(out))
+    everything = capsys.readouterr().out
+
+    assert f"pending_deferral\t{DEFERRED}\t" not in only_repairable
+    assert f"pending_deferral\t{DEFERRED}\t" in everything.splitlines()
+    listing_lines = out.read_text().splitlines()
+    assert everything.splitlines()[: len(listing_lines)] == listing_lines  # file and stdout listing are identical
+    assert everything.splitlines()[len(listing_lines)].startswith("Ancestry orphan repair - DRY RUN")  # summary last
+    assert registry.deferred[DEFERRED] == entry_before  # untouched
+    assert len(registry.written_ids) == writes_before

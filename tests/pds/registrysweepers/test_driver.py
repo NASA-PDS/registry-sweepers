@@ -1,6 +1,7 @@
 import logging
 import sys
 
+import pytest
 from pds.registrysweepers import driver
 
 
@@ -71,7 +72,12 @@ def test_run_only_orphan_repair_is_a_dry_run_by_default(monkeypatch):
     sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "ancestry-orphan-repair"], kwargs)
 
     assert sweeper_calls == ["ancestry-orphan-repair"]
-    assert kwargs["ancestry-orphan-repair"] == {"apply": False, "output_file": None, "output_all": False}
+    assert kwargs["ancestry-orphan-repair"] == {
+        "apply": False,
+        "dry_run": False,
+        "output_file": None,
+        "output_all": False,
+    }
 
 
 def test_orphan_repair_receives_apply_and_output_options_and_other_sweepers_do_not(monkeypatch):
@@ -79,8 +85,69 @@ def test_orphan_repair_receives_apply_and_output_options_and_other_sweepers_do_n
     args = ["--only", "ancestry", "ancestry-orphan-repair", "--apply", "--output-file", "/tmp/x.tsv", "--output-all"]
     _run_driver_with_args(monkeypatch, args, kwargs)
 
-    assert kwargs["ancestry-orphan-repair"] == {"apply": True, "output_file": "/tmp/x.tsv", "output_all": True}
+    assert kwargs["ancestry-orphan-repair"] == {
+        "apply": True,
+        "dry_run": False,
+        "output_file": "/tmp/x.tsv",
+        "output_all": True,
+    }
     assert kwargs["ancestry"] == {}
+
+
+def test_dry_run_is_accepted_with_only_the_orphan_repair_and_reaches_nothing_else(monkeypatch):
+    kwargs = {}
+    sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "ancestry-orphan-repair", "--dry-run"], kwargs)
+
+    assert sweeper_calls == ["ancestry-orphan-repair"]
+    assert kwargs["ancestry-orphan-repair"] == {
+        "apply": False,
+        "dry_run": True,
+        "output_file": None,
+        "output_all": False,
+    }
+
+
+def test_dry_run_with_output_file_reaches_the_orphan_repair(monkeypatch):
+    kwargs = {}
+    args = ["--only", "ancestry-orphan-repair", "--dry-run", "--output-file", "/tmp/x.tsv", "--output-all"]
+    _run_driver_with_args(monkeypatch, args, kwargs)
+
+    assert kwargs["ancestry-orphan-repair"] == {
+        "apply": False,
+        "dry_run": True,
+        "output_file": "/tmp/x.tsv",
+        "output_all": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        [],  # the default suite includes sweepers which write
+        ["--only", "ancestry", "ancestry-orphan-repair"],
+        ["--only", "provenance"],
+        ["--only", "ancestry"],
+        ["--only", "reindexer"],
+        ["--only", "legacy-sync"],
+    ],
+)
+def test_dry_run_is_rejected_when_sweepers_which_write_are_selected(monkeypatch, capsys, selection):
+    sweeper_calls = []
+
+    with pytest.raises(SystemExit) as excinfo:
+        sweeper_calls = _run_driver_with_args(monkeypatch, [*selection, "--dry-run"])
+
+    assert excinfo.value.code == 2
+    assert sweeper_calls == []  # nothing ran
+    assert "--only ancestry-orphan-repair" in capsys.readouterr().err
+
+
+def test_dry_run_and_apply_are_mutually_exclusive(monkeypatch, capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        _run_driver_with_args(monkeypatch, ["--only", "ancestry-orphan-repair", "--dry-run", "--apply"])
+
+    assert excinfo.value.code == 2
+    assert "mutually exclusive" in capsys.readouterr().err
 
 
 def test_orphan_repair_runs_after_ancestry_whatever_the_requested_order(monkeypatch):

@@ -24,9 +24,12 @@ written after its collection was stamped.
 A product whose parent cannot be confirmed by a refs document is never guessed: nothing is written to it (in particular
 it is not stamped), so every later run examines it again and repairs it as soon as a refs document appears.
 
-Dry run is the default.  Nothing is written unless ``apply=True`` (``--apply`` on the command line).
+Dry run is the default.  Nothing is written unless ``apply=True`` (``--apply`` on the command line).  ``dry_run=True``
+(``--dry-run``) is the explicit dry run: it also lists the products that would be repaired on stdout, followed by the
+summary.  ``output_file`` (``--output-file``) is an additional destination for the same listing, in any mode.
 """
 import logging
+import sys
 from dataclasses import dataclass
 from typing import Any
 from typing import Dict
@@ -34,6 +37,7 @@ from typing import Iterable
 from typing import Iterator
 from typing import List
 from typing import Optional
+from typing import Sequence
 from typing import Set
 from typing import TextIO
 
@@ -193,20 +197,27 @@ class _BulkOutcomeRecorder:
 
 
 class _ListingSink:
-    """Optional TSV of examined products (status, product lidvid, confirmed collection lidvids)."""
+    """
+    Optional TSV of examined products (status, product lidvid, confirmed collection lidvids), written identically to
+    every destination (stdout and/or a file).  Without destinations nothing is listed.
+    """
 
-    def __init__(self, handle: Optional[TextIO], include_unresolved: bool):
-        self._handle = handle
+    HEADER = "status\tproduct_lidvid\tcollection_lidvids\n"
+
+    def __init__(self, handles: Sequence[TextIO], include_unresolved: bool):
+        self._handles = list(handles)
         self._include_unresolved = include_unresolved
-        if handle is not None:
-            handle.write("status\tproduct_lidvid\tcollection_lidvids\n")
+        for handle in self._handles:
+            handle.write(self.HEADER)
 
     def record(self, status: str, product: PdsLidVid, collections: Iterable[str]) -> None:
-        if self._handle is None:
+        if not self._handles:
             return
         if status != STATUS_REPAIRABLE and not self._include_unresolved:
             return
-        self._handle.write(f"{status}\t{product}\t{','.join(sorted(collections))}\n")
+        line = f"{status}\t{product}\t{','.join(sorted(collections))}\n"
+        for handle in self._handles:
+            handle.write(line)
 
 
 def build_orphan_products_query(include_superseded: bool = False) -> Dict:
@@ -477,6 +488,7 @@ def run(
     log_filepath: Optional[str] = None,
     log_level: int = logging.INFO,
     apply: bool = False,
+    dry_run: bool = False,
     output_file: Optional[str] = None,
     output_all: bool = False,
     batch_size: int = DEFAULT_BATCH_SIZE,
@@ -485,13 +497,20 @@ def run(
     """
     Repair non-aggregate products which lack ancestry where a registry-refs document confirms their parent collection.
 
-    @param apply: write the repairs.  The default is a dry run which only reports.
-    @param output_file: optional path of a TSV listing the repairable products (status, product, collections)
-    @param output_all: also list the unresolved products and those left to the deferral merge in output_file
+    @param apply: write the repairs.  Without it (and without dry_run) the run is a dry run which only logs counts.
+    @param dry_run: explicit dry run: nothing is written; the products that would be repaired are listed on stdout as
+        TSV, followed by the summary.  Mutually exclusive with apply.
+    @param output_file: optional path to which the same TSV listing (status, product, collections) is also written,
+        whatever the mode
+    @param output_all: also list the unresolved products and those left to the deferral merge in the listing (stdout
+        and output_file)
     @param batch_size: products examined and refs terms looked up per round trip (1..10,000)
     @param include_superseded: also repair superseded versions (they are skipped by default)
     """
     configure_logging(filepath=log_filepath, log_level=log_level)
+
+    if apply and dry_run:
+        raise ValueError("dry_run and apply are mutually exclusive")
 
     if not 1 <= batch_size <= MAX_PAGE_SIZE:
         raise ValueError(f"batch_size must be between 1 and {MAX_PAGE_SIZE} (got {batch_size})")
@@ -501,9 +520,11 @@ def run(
 
     report = OrphanRepairReport(apply=apply)
 
-    handle = open(output_file, "w", encoding="utf-8") if output_file else None
+    file_handle = open(output_file, "w", encoding="utf-8") if output_file else None
     try:
-        sink = _ListingSink(handle, include_unresolved=output_all)
+        # logging goes to stderr, so the listing and the summary on stdout stay parseable
+        handles: List[TextIO] = [h for h in (sys.stdout if dry_run else None, file_handle) if h is not None]
+        sink = _ListingSink(handles, include_unresolved=output_all)
         updates = _generate_updates(client, report, sink, batch_size, include_superseded)
 
         if apply:
@@ -519,33 +540,46 @@ def run(
             for _ in updates:
                 pass
     finally:
-        if handle is not None:
-            handle.close()
+        if file_handle is not None:
+            file_handle.close()
 
     for line in report.summary_lines():
         log.info(limit_log_length(line))
+
+    if dry_run:
+        # the listing has been written; the summary comes last
+        print("\n".join(report.summary_lines()), flush=True)
 
     return report
 
 
 def _configure_cli(ap) -> None:
-    ap.add_argument(
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="write nothing; print the products which would be repaired to stdout as TSV (status, product lidvid, "
+        "collection lidvids), followed by the summary",
+    )
+    mode.add_argument(
         "--apply",
         action="store_true",
         default=False,
-        help="write the repairs; without this flag the run is a dry run which only reports counts",
+        help="write the repairs; with neither --dry-run nor --apply the run is a dry run which only reports counts",
     )
     ap.add_argument(
         "--output-file",
         default=None,
-        help="write a TSV of the repairable products (status, product lidvid, collection lidvids) to this file",
+        help="also write the listing of the repairable products (the same TSV as --dry-run prints) to this file, "
+        "with --dry-run or --apply or neither",
     )
     ap.add_argument(
         "--output-all",
         action="store_true",
         default=False,
         help="also list the unresolved products (no refs listing / collection not in registry) and the products left "
-        "to the deferral merge (pending deferral entry) in --output-file",
+        "to the deferral merge (pending deferral entry) in the listing (stdout with --dry-run, and --output-file)",
     )
     ap.add_argument(
         "--batch-size",
@@ -568,8 +602,8 @@ def main() -> None:
 
     Writes exactly what the ancestry sweeper writes.  Products whose parent cannot be confirmed are reported and left
     untouched (not stamped), as are products with a pending entry in the deferral index (the ancestry sweeper's merge
-    step applies those).  Dry run unless --apply is given.  Run it after the ancestry sweeper, with no other sweeper
-    running on the node.
+    step applies those).  Dry run unless --apply is given; --dry-run also lists the products to stdout.  Run it after
+    the ancestry sweeper, with no other sweeper running on the node.
     """
     args = parse_args(description=cli_description, configure_parser=_configure_cli)
     client = get_userpass_opensearch_client(
@@ -581,12 +615,14 @@ def main() -> None:
         log_level=args.log_level,
         log_filepath=args.log_file,
         apply=args.apply,
+        dry_run=args.dry_run,
         output_file=args.output_file,
         output_all=args.output_all,
         batch_size=args.batch_size,
         include_superseded=args.include_superseded,
     )
-    print("\n".join(report.summary_lines()))
+    if not args.dry_run:  # with --dry-run, run() has already printed it after the listing
+        print("\n".join(report.summary_lines()))
 
 
 if __name__ == "__main__":
