@@ -2,6 +2,8 @@ import json
 import logging
 import math
 import sys
+from dataclasses import dataclass
+from dataclasses import field
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -9,6 +11,7 @@ from typing import Iterable
 from typing import List
 from typing import Mapping
 from typing import Optional
+from typing import Tuple
 from typing import Union
 
 from opensearchpy import OpenSearch
@@ -22,6 +25,79 @@ from retry.api import retry_call
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
+
+# per-document outcomes of a bulk update
+WRITE_UPDATED = "updated"
+WRITE_NOOP = "noop"
+WRITE_MISSING = "missing"
+WRITE_FAILED = "failed"
+
+# (outcome, error type or None)
+ItemOutcome = Tuple[str, Optional[str]]
+
+# When a chunk is submitted more than once, a document which was written by one submission must not be reported as
+# anything less because a later response says "noop", "missing" or an error.
+_OUTCOME_RANK = {WRITE_FAILED: 0, WRITE_MISSING: 1, WRITE_NOOP: 2, WRITE_UPDATED: 3}
+
+
+@dataclass
+class BulkWriteSummary:
+    """
+    What write_updated_docs() did, counted per item of the bulk responses: attempted is always the sum of the four
+    outcomes.  Updates which were not sent at all (skip_write, or no statements) are counted in skipped.
+    """
+
+    succeeded: int = 0
+    noop: int = 0
+    missing: int = 0
+    failed: int = 0
+    skipped: int = 0
+    failed_by_type: Dict[str, int] = field(default_factory=dict)
+
+    @property
+    def attempted(self) -> int:
+        return self.succeeded + self.noop + self.missing + self.failed
+
+    def add_chunk_outcomes(self, outcomes: Iterable[Optional[ItemOutcome]]) -> None:
+        for outcome in outcomes:
+            kind, error_type = outcome if outcome is not None else (WRITE_FAILED, "missing_from_bulk_response")
+            if kind == WRITE_UPDATED:
+                self.succeeded += 1
+            elif kind == WRITE_NOOP:
+                self.noop += 1
+            elif kind == WRITE_MISSING:
+                self.missing += 1
+            else:
+                self.failed += 1
+                self.failed_by_type[str(error_type)] = self.failed_by_type.get(str(error_type), 0) + 1
+
+    def failed_types_str(self) -> str:
+        return ", ".join(f"{error_type}: {count}" for error_type, count in sorted(self.failed_by_type.items()))
+
+
+def _classify_bulk_item(item: Dict) -> ItemOutcome:
+    result = item.get("update", {})
+    if "error" in result:
+        error_type = str(result["error"].get("type", ""))
+        return (WRITE_MISSING if error_type.startswith("document_missing") else WRITE_FAILED), error_type
+    return (WRITE_NOOP if result.get("result") == "noop" else WRITE_UPDATED), None
+
+
+def _record_bulk_response(outcomes: List[Optional[ItemOutcome]], response_content: Dict) -> None:
+    """Record the outcome of each item of a bulk response at the position of the update which was sent."""
+    items = response_content.get("items", [])
+    for position, item in enumerate(items[: len(outcomes)]):
+        outcome = _classify_bulk_item(item)
+        previous = outcomes[position]
+        if previous is None or _OUTCOME_RANK[outcome[0]] >= _OUTCOME_RANK[previous[0]]:
+            outcomes[position] = outcome
+
+    # a response which does not itemise the updates is trusted only if it reports no errors
+    for position in range(len(items), len(outcomes)):
+        if outcomes[position] is None:
+            outcomes[position] = (
+                (WRITE_FAILED, "missing_from_bulk_response") if response_content.get("errors") else (WRITE_UPDATED, None)
+            )
 
 
 def query_registry_db_with_scroll(
@@ -295,10 +371,10 @@ def write_updated_docs(
     index_name: str,
     bulk_chunk_max_update_count: Union[int, None] = None,
     as_upsert: bool = False,
-):
+) -> BulkWriteSummary:
     log.info(limit_log_length("Writing document updates..."))
     buffered_updates_count = 0
-    updated_doc_count = 0
+    summary = BulkWriteSummary()
     total_writes_skipped = 0
 
     bulk_buffer_max_size_mb = 30.0
@@ -330,31 +406,38 @@ def write_updated_docs(
                     f"Bulk update buffer has reached {threshold_log_str} threshold - writing {buffered_updates_count} document updates to db..."
                 )
             )
-            _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
+            summary.add_chunk_outcomes(_write_chunk_and_get_outcomes(client, index_name, bulk_updates_buffer))
             bulk_updates_buffer = []
             bulk_buffer_size_mb = 0.0
             writes_skipped_since_flush = 0
 
         update_statement_strs = update_as_statements(update, as_upsert=as_upsert)
+        if not update_statement_strs:  # nothing to send for this update
+            total_writes_skipped += 1
+            continue
 
         for s in update_statement_strs:
             bulk_buffer_size_mb += sys.getsizeof(s) / 1024**2
 
         bulk_updates_buffer.extend(update_statement_strs)
-        updated_doc_count += 1
 
     # buffered_updates_count was last computed before the final update was appended, so it cannot be used to decide
     # whether anything remains to be written (it is 0 when the whole run consisted of a single update).
     remaining_updates_count = len(bulk_updates_buffer) // 2
     if remaining_updates_count > 0:
         log.debug(limit_log_length(f"Writing documents updates for {remaining_updates_count} remaining products to db..."))
-        _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer)
+        summary.add_chunk_outcomes(_write_chunk_and_get_outcomes(client, index_name, bulk_updates_buffer))
 
+    summary.skipped = total_writes_skipped
+    failed_str = f"{summary.failed} failed" + (f" ({summary.failed_types_str()})" if summary.failed else "")
     log.info(
         limit_log_length(
-            f"Wrote document updates for {updated_doc_count} products and skipped {total_writes_skipped} doc updates"
+            f"Document updates for {summary.attempted} products: {summary.succeeded} updated, "
+            f"{summary.noop} already up to date, {summary.missing} vanished (document missing), {failed_str}; "
+            f"skipped {summary.skipped} doc updates"
         )
     )
+    return summary
 
 
 def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[str]:
@@ -393,15 +476,37 @@ def update_as_statements(update: Update, as_upsert: bool = False) -> Iterable[st
     return updates_strs
 
 
+def _write_chunk_and_get_outcomes(
+    client: OpenSearch, index_name: str, bulk_updates: List[str]
+) -> List[Optional[ItemOutcome]]:
+    # the list outlives the retries of _write_bulk_updates_chunk, so that what an earlier submission achieved is kept
+    outcomes: List[Optional[ItemOutcome]] = [None] * (len(bulk_updates) // 2)
+    return _write_bulk_updates_chunk(client, index_name, bulk_updates, outcomes)
+
+
 @retry(tries=6, delay=15, backoff=2, logger=log)
-def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates: List[str]):
+def _write_bulk_updates_chunk(
+    client: OpenSearch,
+    index_name: str,
+    bulk_updates: List[str],
+    outcomes: Optional[List[Optional[ItemOutcome]]] = None,
+) -> List[Optional[ItemOutcome]]:
+    """
+    Submit one chunk and return the outcome of each of its updates, in order.  The outcomes are recorded in the
+    list as soon as each response arrives, so that a retry (which calls this function again with the same chunk) keeps
+    what the earlier submission achieved.
+    """
     if len(bulk_updates) == 0:
         log.debug(limit_log_length("_write_bulk_updates_chunk received empty arg bulk_updates - skipping"))
+
+    if outcomes is None:
+        outcomes = [None] * (len(bulk_updates) // 2)
 
     bulk_data = "\n".join(bulk_updates) + "\n"
 
     request_timeout = 180
     response_content = client.bulk(index=index_name, body=bulk_data, request_timeout=request_timeout)
+    _record_bulk_response(outcomes, response_content)
 
     if response_content.get("errors"):
         warn_types = {
@@ -446,6 +551,8 @@ def _write_bulk_updates_chunk(client: OpenSearch, index_name: str, bulk_updates:
                     )
     else:
         log.debug(limit_log_length("Successfully wrote bulk update chunk"))
+
+    return outcomes
 
 
 def aggregate_update_error_types(items: Iterable[Dict]) -> Mapping[str, Dict[str, List[str]]]:

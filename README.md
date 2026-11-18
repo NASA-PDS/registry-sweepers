@@ -27,6 +27,8 @@ How it works (runs right after `ancestry`):
 
 It only repairs where a refs document confirms the parent. A product that no refs document lists, or that is listed only under a collection not in the registry, is *unresolved*: it is never written or stamped, it is counted separately in the summary, and it is examined again on every run, so it is repaired as soon as a refs document appears.
 
+The summary counts the outcome of every write from the bulk responses (repaired, already up to date, vanished, failed with the error type); failed writes are reported and the run does not abort, so a re-run repairs the remaining products.
+
 | Flag | Effect |
 |---|---|
 | none | Writes the repairs. stdout holds the summary only. |

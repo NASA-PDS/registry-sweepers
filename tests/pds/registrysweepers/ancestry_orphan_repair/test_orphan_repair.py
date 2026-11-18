@@ -16,6 +16,8 @@ from pds.registrysweepers.ancestry_orphan_repair.main import build_orphan_produc
 from pds.registrysweepers.ancestry_orphan_repair.main import iterate_pages_search_after
 from pds.registrysweepers.ancestry_orphan_repair.main import OrphanRepairReport
 from pds.registrysweepers.ancestry_orphan_repair.main import run
+from pds.registrysweepers.utils.db import write_updated_docs
+from pds.registrysweepers.utils.db.update import Update
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 from .fake_registry import FakeRegistry
@@ -344,29 +346,143 @@ def test_a_single_repairable_product_is_written(registry):
     assert run(registry).repaired == 1
 
 
-def test_write_outcomes_distinguish_noop_from_updated():
-    recorder = orphan_repair._BulkOutcomeRecorder(
-        type(
-            "C",
-            (),
-            {
-                "bulk": lambda self, **kw: {
-                    "errors": True,
-                    "items": [
-                        {"update": {"_id": "a", "result": "updated"}},
-                        {"update": {"_id": "b", "result": "noop"}},
-                        {"update": {"_id": "c", "error": {"type": "document_missing_exception", "reason": "x"}}},
-                        {"update": {"_id": "d", "error": {"type": "mapper_parsing_exception", "reason": "x"}}},
-                    ],
-                }
-            },
-        )()
-    )
-    recorder.bulk(index="registry", body="")
+class FlakyRegistry(FakeRegistry):
+    """A registry whose bulk endpoint refuses some documents, as OpenSearch Serverless does at its OCU limit."""
+
+    def __init__(self):
+        super().__init__()
+        self.blocked = set()  # refused with indexing_block_exception on every submission
+        self.throttle_once = set()  # refused with circuit_breaking_exception on the first submission only
+
+    def bulk(self, index, body, request_timeout=None):
+        lines = body.splitlines()
+        pairs = list(zip(lines[::2], lines[1::2]))
+        refused = {}
+        allowed = []
+        for action, content in pairs:
+            doc_id = json.loads(action)["update"]["_id"]
+            if doc_id in self.blocked:
+                refused[doc_id] = (429, "indexing_block_exception", "blocked by: [maximum OCU capacity reached]")
+            elif doc_id in self.throttle_once:
+                self.throttle_once.discard(doc_id)
+                refused[doc_id] = (429, "circuit_breaking_exception", "throttled")
+            else:
+                allowed.append((action, content))
+
+        response = super().bulk(index, "\n".join(line for pair in allowed for line in pair) + "\n", request_timeout)
+        by_id = {item["update"]["_id"]: item for item in response["items"]}
+        items = []
+        for action, _ in pairs:
+            doc_id = json.loads(action)["update"]["_id"]
+            if doc_id in refused:
+                status, error_type, reason = refused[doc_id]
+                items.append({"update": {"_id": doc_id, "status": status, "error": {"type": error_type, "reason": reason}}})
+            else:
+                items.append(by_id[doc_id])
+        return {"errors": any("error" in item["update"] for item in items), "items": items}
+
+
+def _write_in_chunks_of(monkeypatch, chunk_size):
+    original = orphan_repair.write_updated_docs
+
+    def chunked_write(client, updates, index_name, **kwargs):
+        return original(client, updates, index_name, bulk_chunk_max_update_count=chunk_size, **kwargs)
+
+    monkeypatch.setattr(orphan_repair, "write_updated_docs", chunked_write)
+
+
+def test_failed_items_across_several_chunks_are_counted_per_item(monkeypatch):
+    registry = FlakyRegistry()
+    registry.add_collection(C1)
+    for n in range(12):
+        registry.add_product(product(n))
+    registry.add_refs(C1, [product(n) for n in range(12)])
+    registry.blocked = {product(3), product(4), product(9)}
+    registry.vanish_before_bulk = {product(6)}
+    _write_in_chunks_of(monkeypatch, 5)
+
+    report = run(registry)
+
+    assert len(registry.bulk_calls) == 3
+    assert report.repairable == 12
+    assert (report.repaired, report.already_current, report.vanished_before_write, report.write_failed) == (8, 0, 1, 3)
+    assert report.repairable == report.repaired + report.already_current + report.vanished_before_write + report.write_failed
+    assert report.write_failures_by_type == {"indexing_block_exception": 3}
+    assert all(REFS not in registry.registry[product(n)] for n in (3, 4, 9))
+
+
+def test_failures_are_stated_in_the_summary_and_the_completion_line(monkeypatch, capsys):
+    flaky = FlakyRegistry()
+    flaky.add_collection(C1)
+    for n in range(4):
+        flaky.add_product(product(n))
+    flaky.add_product(product(10))  # unresolved
+    flaky.add_refs(C1, [product(n) for n in range(4)])
+    flaky.blocked = {product(1), product(2)}
+    messages = _capture_info(monkeypatch)
+
+    _run_cli(monkeypatch, flaky)
+
+    out = capsys.readouterr().out
+    assert "  repaired: 2" in out
+    assert "  write failures: 2 (indexing_block_exception: 2)" in out
+    assert "Re-run to repair the remaining products; the repair is idempotent." in out
+    completion = [m for m in messages if m.startswith("Orphan repair complete")]
+    assert completion == ["Orphan repair complete: 5 examined, 2 repaired, 2 failed, 1 unresolved"]
+
+
+def test_a_rerun_repairs_what_failed_and_the_summary_has_no_failure_text_when_nothing_failed(monkeypatch):
+    registry = FlakyRegistry()
+    registry.add_collection(C1)
+    for n in range(6):
+        registry.add_product(product(n))
+    registry.add_refs(C1, [product(n) for n in range(6)])
+    registry.blocked = {product(2), product(5)}
+
+    first = run(registry)
+    registry.blocked = set()
+    second = run(registry)
+
+    assert (first.repaired, first.write_failed, second.repaired, second.write_failed) == (4, 2, 2, 0)
+    assert "Re-run" not in "\n".join(second.summary_lines())
+    assert "  write failures: 0\n" in "\n".join(second.summary_lines()) + "\n"
+
+
+def test_documents_written_before_a_throttled_chunk_was_resubmitted_are_still_reported_as_repaired(monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda seconds: None)
+    registry = FlakyRegistry()
+    registry.add_collection(C1)
+    for n in range(5):
+        registry.add_product(product(n))
+    registry.add_refs(C1, [product(n) for n in range(5)])
+    registry.throttle_once = {product(4)}
+
+    report = run(registry)
+
+    assert len(registry.bulk_calls) == 2  # the chunk was submitted twice
+    assert (report.repaired, report.already_current, report.write_failed) == (5, 0, 0)
+
+
+def test_write_outcomes_distinguish_noop_from_updated_vanished_and_failed():
+    class Client:
+        def bulk(self, **kwargs):
+            return {
+                "errors": True,
+                "items": [
+                    {"update": {"_id": "a", "result": "updated"}},
+                    {"update": {"_id": "b", "result": "noop"}},
+                    {"update": {"_id": "c", "status": 404, "error": {"type": "document_missing_exception", "reason": "x"}}},
+                    {"update": {"_id": "d", "status": 400, "error": {"type": "mapper_parsing_exception", "reason": "x"}}},
+                ],
+            }
+
+    updates = [Update(id=i, content={"k": "v"}) for i in "abcd"]
+    summary = write_updated_docs(Client(), updates, index_name="registry")
     report = OrphanRepairReport(dry_run=False)
-    report.absorb_write_outcomes(recorder.outcomes)
+    report.absorb_write_summary(summary)
 
     assert (report.repaired, report.already_current, report.vanished_before_write, report.write_failed) == (1, 1, 1, 1)
+    assert report.write_failures_by_type == {"mapper_parsing_exception": 1}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
