@@ -4,6 +4,8 @@ import sys
 import time
 from typing import Any
 from typing import Dict
+from typing import Iterator
+from typing import List
 from typing import Optional
 from typing import Set
 
@@ -31,6 +33,9 @@ MAX_RETRIES = 5
 MIN_PRUNE_RATIO = 0.9
 PRUNE_REQUEST_TIMEOUT_SECONDS = 3600
 DRY_RUN_STALE_SAMPLE_SIZE = 20
+# OpenSearch Serverless caps a page at 10,000 hits
+EXISTING_IDS_PAGE_SIZE = 5000
+EXISTING_IDS_REQUEST_TIMEOUT_SECONDS = 120
 
 
 def get_online_resources() -> Dict[str, str]:
@@ -67,6 +72,34 @@ def create_legacy_registry_index(es_conn: OpenSearch) -> None:
         log.info("create index %s", OS_INDEX)
         es_conn.indices.create(index=OS_INDEX, body={})
     log.info("index created %s", OS_INDEX)
+
+
+def iterate_existing_ids(client: OpenSearch, page_size: int = EXISTING_IDS_PAGE_SIZE) -> Iterator[str]:
+    """
+    Streams the ids of every document in the legacy_registry index, one page at a time.
+
+    Pages with search_after sorted on _id, as the scroll API is not usable on OpenSearch Serverless. An empty index
+    yields nothing.
+
+    @param client: OpenSearch client from the opensearchpy library
+    @param page_size: number of hits requested per page, at most 10,000
+    """
+    search_after: Optional[List[Any]] = None
+    while True:
+        body: Dict[str, Any] = {"query": {"match_all": {}}, "sort": [{"_id": "asc"}], "_source": False}
+        if search_after is not None:
+            body["search_after"] = search_after
+
+        response = client.search(
+            index=OS_INDEX, body=body, size=page_size, request_timeout=EXISTING_IDS_REQUEST_TIMEOUT_SECONDS
+        )
+        hits = response["hits"]["hits"]
+        for hit in hits:
+            yield hit["_id"]
+
+        if len(hits) < page_size:
+            return
+        search_after = hits[-1]["sort"]
 
 
 def prune_guard_passes(docs_written: int, docs_before: int) -> bool:
@@ -142,10 +175,7 @@ def preview_sync(client: OpenSearch, force: bool = False) -> Dict[str, Any]:
     existing_ids: Set[str] = set()
     if client.indices.exists(OS_INDEX):
         log.info("Reading existing document ids from %s", OS_INDEX)
-        existing_ids = {
-            hit["_id"]
-            for hit in opensearchpy.helpers.scan(client, index=OS_INDEX, query={"query": {"match_all": {}}}, _source=False)
-        }
+        existing_ids = set(iterate_existing_ids(client))
 
     es_actions = build_solr_actions(client, force=force, run_id=int(time.time() * 1000))
 

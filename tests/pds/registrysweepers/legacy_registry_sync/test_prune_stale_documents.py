@@ -1,8 +1,10 @@
+import copy
 import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from pds.registrysweepers.legacy_registry_sync import legacy_registry_sync
+from pds.registrysweepers.legacy_registry_sync.legacy_registry_sync import iterate_existing_ids
 from pds.registrysweepers.legacy_registry_sync.legacy_registry_sync import MIN_PRUNE_RATIO
 from pds.registrysweepers.legacy_registry_sync.legacy_registry_sync import OS_INDEX
 from pds.registrysweepers.legacy_registry_sync.legacy_registry_sync import preview_sync
@@ -44,6 +46,15 @@ class TestPruneStaleDocuments(unittest.TestCase):
             kwargs["body"],
         )
 
+    def test_prune_does_not_use_scroll(self):
+        self.client.scroll.side_effect = ScrollNotSupportedError("scroll is not usable on OpenSearch Serverless")
+        self.client.clear_scroll.side_effect = ScrollNotSupportedError("scroll is not usable on OpenSearch Serverless")
+        self.client.search.side_effect = ScrollNotSupportedError("prune must not list documents")
+
+        deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
+
+        self.assertEqual(7, deleted)
+
     def test_refreshes_before_deleting(self):
         order = []
         self.client.indices.refresh.side_effect = lambda **_: order.append("refresh")
@@ -83,14 +94,82 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class ScrollNotSupportedError(RuntimeError):
+    """Raised by fake clients on any use of the scroll API, which OpenSearch Serverless does not support."""
+
+
+class FakeIndexClient:
+    """Serves search_after pages of the given ids sorted on _id, and fails on any scroll request."""
+
+    def __init__(self, ids):
+        self.ids = sorted(ids)
+        self.requests = []
+
+    def search(self, index=None, body=None, size=10, **kwargs):
+        if "scroll" in kwargs:
+            raise ScrollNotSupportedError("scroll is not usable on OpenSearch Serverless")
+        self.requests.append({"index": index, "body": copy.deepcopy(body), "size": size})
+        after = body.get("search_after")
+        remaining = [i for i in self.ids if after is None or i > after[0]]
+        hits = [{"_id": i, "sort": [i]} for i in remaining[:size]]
+        return {"hits": {"hits": hits}}
+
+    def scroll(self, *args, **kwargs):
+        raise ScrollNotSupportedError("scroll is not usable on OpenSearch Serverless")
+
+    clear_scroll = scroll
+
+
+class TestIterateExistingIds(unittest.TestCase):
+    def test_pages_until_exhausted_and_passes_last_sort_value(self):
+        ids = [f"id-{i}" for i in range(7)]
+        client = FakeIndexClient(ids)
+
+        result = list(iterate_existing_ids(client, page_size=3))
+
+        self.assertEqual(sorted(ids), result)
+        self.assertEqual(3, len(client.requests))
+        self.assertEqual([None, ["id-2"], ["id-5"]], [r["body"].get("search_after") for r in client.requests])
+        for request in client.requests:
+            self.assertEqual(OS_INDEX, request["index"])
+            self.assertEqual(3, request["size"])
+            self.assertEqual([{"_id": "asc"}], request["body"]["sort"])
+            self.assertIs(False, request["body"]["_source"])
+
+    def test_extra_request_when_ids_fill_the_last_page_exactly(self):
+        client = FakeIndexClient(["a", "b", "c", "d"])
+
+        result = list(iterate_existing_ids(client, page_size=2))
+
+        self.assertEqual(["a", "b", "c", "d"], result)
+        self.assertEqual(3, len(client.requests))
+
+    def test_empty_index_yields_nothing(self):
+        client = FakeIndexClient([])
+
+        self.assertEqual([], list(iterate_existing_ids(client)))
+        self.assertEqual(1, len(client.requests))
+
+    def test_is_streaming(self):
+        client = FakeIndexClient([str(i) for i in range(10)])
+
+        iterator = iterate_existing_ids(client, page_size=4)
+        next(iterator)
+
+        self.assertEqual(1, len(client.requests))
+
+    def test_default_page_size_is_within_serverless_limit(self):
+        self.assertLessEqual(legacy_registry_sync.EXISTING_IDS_PAGE_SIZE, 10000)
+
+
 class TestPreviewSync(unittest.TestCase):
     def _preview(self, existing_ids, solr_ids, index_exists=True):
         client = MagicMock()
         client.indices.exists.return_value = index_exists
-        with patch.object(legacy_registry_sync.opensearchpy.helpers, "scan") as scan, patch.object(
-            legacy_registry_sync, "build_solr_actions"
-        ) as build_solr_actions:
-            scan.return_value = [{"_id": _id} for _id in existing_ids]
+        client.search.side_effect = FakeIndexClient(existing_ids).search
+        client.scroll.side_effect = ScrollNotSupportedError("scroll is not usable on OpenSearch Serverless")
+        client.clear_scroll.side_effect = ScrollNotSupportedError("scroll is not usable on OpenSearch Serverless")
+        with patch.object(legacy_registry_sync, "build_solr_actions") as build_solr_actions:
             build_solr_actions.return_value = [{"_id": _id} for _id in solr_ids]
             stats = preview_sync(client)
         return client, stats
@@ -110,6 +189,14 @@ class TestPreviewSync(unittest.TestCase):
         client.indices.create.assert_not_called()
         client.indices.refresh.assert_not_called()
         client.bulk.assert_not_called()
+
+    def test_pages_existing_ids_across_several_requests(self):
+        existing_ids = [f"id-{i:05d}" for i in range(legacy_registry_sync.EXISTING_IDS_PAGE_SIZE * 2 + 1)]
+        client, stats = self._preview(existing_ids=existing_ids, solr_ids=existing_ids)
+
+        self.assertEqual(len(existing_ids), stats["docs_before"])
+        self.assertEqual([], stats["stale_ids"])
+        self.assertEqual(3, client.search.call_count)
 
     def test_reports_when_prune_guard_would_skip(self):
         _, stats = self._preview(existing_ids=[str(i) for i in range(100)], solr_ids=["0"])
