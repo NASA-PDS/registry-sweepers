@@ -12,8 +12,26 @@ from uuid import uuid4
 
 import pytest
 from opensearchpy import OpenSearch
+from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
+from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 
 log = logging.getLogger(__name__)
+
+# Fields the sweepers add to the registry at runtime (via ensure_index_mapping) rather than shipping
+# in the static mappings. Pre-create them so each test starts from a registry the sweeper has already
+# run on, as production is. Without this, the mappings' "dynamic": false means a seed doc carrying,
+# e.g., the ancestry version is stored but not indexed, so version-filter queries cannot see it.
+# Types must match ancestry/main.py; if they drift, the sweeper raises UnexpectedMappingTypeError.
+_SWEEPER_RUNTIME_MAPPINGS: Dict[str, Dict[str, str]] = {
+    "registry": {
+        ANCESTRY_REFS_METADATA_KEY: "keyword",
+        SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: "keyword",
+    },
+    "registry-refs": {
+        SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: "keyword",
+    },
+}
 
 MAPPINGS_DIR = Path(__file__).parent.parent / "resources" / "mappings"
 MAPPING_FILES = {
@@ -137,6 +155,8 @@ def registry_db(opensearch_url, opensearch_client, monkeypatch):
         else:
             body = _merge_replica_setting(mappings[logical])
             opensearch_client.indices.create(index=physical, body=body)
+            for field, field_type in _SWEEPER_RUNTIME_MAPPINGS.get(logical, {}).items():
+                ensure_index_mapping(opensearch_client, physical, field, field_type)
 
     db = RegistryDb(
         client=opensearch_client,

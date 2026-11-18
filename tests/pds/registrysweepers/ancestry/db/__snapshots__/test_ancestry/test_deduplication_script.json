@@ -1,0 +1,59 @@
+[
+  {
+    "_id": "urn:nasa:pds:dedup_bundle::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:dedup_bundle::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Bundle",
+      "ref_lid_collection": [
+        "urn:nasa:pds:dedup_collection"
+      ],
+      "title": "Dedup bundle"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:dedup_collection::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:dedup_collection::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:dedup_bundle",
+        "urn:nasa:pds:dedup_bundle::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Dedup collection v1"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:dedup_collection::2.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:dedup_collection::2.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:dedup_bundle",
+        "urn:nasa:pds:dedup_bundle::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Test Collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:dedup_collection:product::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:dedup_collection:product::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:dedup_collection",
+        "urn:nasa:pds:dedup_collection::1.0",
+        "urn:nasa:pds:dedup_collection::2.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Observational",
+      "title": "Dedup product"
+    }
+  }
+]

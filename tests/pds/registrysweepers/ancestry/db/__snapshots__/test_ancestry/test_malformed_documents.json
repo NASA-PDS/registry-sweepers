@@ -1,0 +1,64 @@
+[
+  {
+    "_id": "urn:nasa:pds:malformed:bad_ref_bundle::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:malformed:bad_ref_bundle::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Bundle",
+      "ref_lid_collection": "not_a_valid_identifier",
+      "title": "Bundle with an invalid ref_lid_collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:malformed:bundle::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:malformed:bundle::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Bundle",
+      "ref_lid_collection": [
+        "urn:nasa:pds:malformed:collection"
+      ],
+      "title": "Valid bundle"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:malformed:collection::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:malformed:collection::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:malformed:bundle",
+        "urn:nasa:pds:malformed:bundle::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Valid collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:malformed:collection:product::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:malformed:collection:product::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:malformed:collection",
+        "urn:nasa:pds:malformed:collection::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Observational",
+      "title": "Valid product"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:malformed:no_class::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:malformed:no_class::1.0",
+      "title": "Product with no product_class"
+    }
+  }
+]

@@ -9,6 +9,8 @@ snapshot (syrupy JSON) for regression. Regenerate snapshots with
 import pytest
 from pds.registrysweepers.ancestry import main as ancestry_main
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
+from pds.registrysweepers.ancestry.queries import get_orphaned_documents
+from pds.registrysweepers.ancestry.queries import query_for_pending_collections
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
@@ -17,6 +19,7 @@ from tests.support.builders import build_bundle
 from tests.support.builders import build_collection
 from tests.support.builders import build_product
 from tests.support.builders import CollectionRefsBuilder
+from tests.support.builders import ProductDocumentBuilder
 
 
 # ---------------------------------------------------------------------------
@@ -279,3 +282,218 @@ def test_empty_database(registry_db):
 
     assert registry_db.dump("registry") == []
     assert registry_db.dump("registry-refs") == []
+
+
+# ---------------------------------------------------------------------------
+# Ported coverage (plan §3.2): DB counterparts of mock-based tests in
+# ancestry/integration/ and ancestry/scenarios/, where the real database checks
+# behaviour the mock either fakes or cannot observe. The mock tests are kept.
+# ---------------------------------------------------------------------------
+
+def _bundle(lidvid: str, *collection_lids: str) -> dict:
+    builder = ProductDocumentBuilder(lidvid=lidvid, product_class="Product_Bundle")
+    for lid in collection_lids:
+        builder = builder.with_collection_lid_reference(lid)
+    return builder.build()
+
+
+def _lid(lidvid: str) -> str:
+    return lidvid.split("::")[0]
+
+
+# Scenario 8: version filtering ---------------------------------------------
+
+def test_version_filtering(registry_db, snapshot):
+    """
+    Only collections below the current ancestry version are processed; the filter is
+    a range clause in the OpenSearch query, which the mock never executes.
+
+    Ports: integration/test_full_pipeline.py::test_version_skipping,
+           scenarios/test_edge_cases.py::test_mix_of_versioned_and_unversioned
+    """
+    unversioned = "urn:nasa:pds:vf:unversioned::1.0"
+    old_version = "urn:nasa:pds:vf:old::1.0"
+    current = "urn:nasa:pds:vf:current::1.0"
+    bundle = "urn:nasa:pds:vf:bundle::1.0"
+
+    registry_db.load(
+        [_bundle(bundle, _lid(unversioned), _lid(old_version), _lid(current)),
+         build_collection(unversioned),
+         build_collection(old_version, ancestry_version=SWEEPERS_ANCESTRY_VERSION - 1),
+         build_collection(current, ancestry_version=SWEEPERS_ANCESTRY_VERSION),
+         build_product(f"{_lid(current)}:p1::1.0")],
+        index="registry",
+    )
+    registry_db.load([CollectionRefsBuilder(current).with_product(f"{_lid(current)}:p1::1.0").to_seed()])
+
+    ancestry_main.run(client=registry_db.client)
+    registry_db.refresh()
+    reg_docs = registry_db.dump("registry")
+
+    for coll_id in (unversioned, old_version):
+        src = _source_by_id(reg_docs, coll_id)
+        assert src[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY] == SWEEPERS_ANCESTRY_VERSION
+        assert _refs(src) == {bundle, _lid(bundle)}, f"{coll_id} should have been processed"
+
+    # Already-current collection is skipped entirely: no bundle ancestry, and its
+    # members are not processed either.
+    assert ANCESTRY_REFS_METADATA_KEY not in _source_by_id(reg_docs, current)
+    assert ANCESTRY_REFS_METADATA_KEY not in _source_by_id(reg_docs, f"{_lid(current)}:p1::1.0")
+
+    assert reg_docs == snapshot
+
+
+# Scenario 9: Painless deduplication script ---------------------------------
+
+def test_deduplication_script(registry_db, snapshot):
+    """
+    Duplicate refs within a run, and refs already present from an earlier run, are not
+    duplicated in the stored ancestor_refs. Deduplication happens in a Painless script
+    executed by OpenSearch, which the mock cannot run.
+
+    Ports: scenarios/test_edge_cases.py::test_duplicate_product_references,
+           integration/test_full_pipeline.py::test_deduplication_script_included
+    """
+    collection_lid = "urn:nasa:pds:dedup_collection"
+    product = f"{collection_lid}:product::1.0"
+
+    registry_db.load_json("ancestry/duplicate_refs.json")  # refs list the product 3 times
+    ancestry_main.run(client=registry_db.client)
+    registry_db.refresh()
+
+    refs_after_run_1 = _source_by_id(registry_db.dump("registry"), product)[ANCESTRY_REFS_METADATA_KEY]
+    assert sorted(refs_after_run_1) == sorted([collection_lid, f"{collection_lid}::1.0"])
+
+    # A new collection version also lists the product. Its LID ref is already present.
+    registry_db.load([build_collection(f"{collection_lid}::2.0")], index="registry")
+    registry_db.load([CollectionRefsBuilder(f"{collection_lid}::2.0").with_products([product, product]).to_seed()])
+    ancestry_main.run(client=registry_db.client)
+    registry_db.refresh()
+    reg_docs = registry_db.dump("registry")
+
+    refs_after_run_2 = _source_by_id(reg_docs, product)[ANCESTRY_REFS_METADATA_KEY]
+    assert sorted(refs_after_run_2) == sorted([collection_lid, f"{collection_lid}::1.0", f"{collection_lid}::2.0"])
+
+    assert reg_docs == snapshot
+
+
+# Scenario 10: several updates to one document ------------------------------
+
+def test_multiple_updates_merge_into_one_document(registry_db, snapshot):
+    """
+    Two bundles referencing one collection, and one bundle referencing two collections:
+    every link survives the bulk script updates into the stored document.
+
+    Ports: integration/test_bundle_processing.py::test_multiple_bundles_reference_same_collection,
+           integration/test_bundle_processing.py::test_bundle_references_multiple_collections
+    """
+    shared = "urn:nasa:pds:merge:shared::1.0"
+    coll_x = "urn:nasa:pds:merge:x::1.0"
+    coll_y = "urn:nasa:pds:merge:y::1.0"
+    bundle_1 = "urn:nasa:pds:merge:bundle1::1.0"
+    bundle_2 = "urn:nasa:pds:merge:bundle2::1.0"
+    bundle_xy = "urn:nasa:pds:merge:bundle_xy::1.0"
+
+    registry_db.load(
+        [_bundle(bundle_1, _lid(shared)),
+         _bundle(bundle_2, _lid(shared)),
+         _bundle(bundle_xy, _lid(coll_x), _lid(coll_y)),
+         build_collection(shared),
+         build_collection(coll_x),
+         build_collection(coll_y)],
+        index="registry",
+    )
+
+    ancestry_main.run(client=registry_db.client)
+    registry_db.refresh()
+    reg_docs = registry_db.dump("registry")
+
+    assert _refs(_source_by_id(reg_docs, shared)) == {bundle_1, _lid(bundle_1), bundle_2, _lid(bundle_2)}
+    for coll_id in (coll_x, coll_y):
+        assert _refs(_source_by_id(reg_docs, coll_id)) == {bundle_xy, _lid(bundle_xy)}
+
+    assert reg_docs == snapshot
+
+
+# Scenario 11: unlinked aggregates are still stamped ------------------------
+
+def test_unlinked_aggregates_are_stamped(registry_db, snapshot):
+    """
+    Bundles and collections with nothing to link to still get the ancestry version written,
+    so the next run no longer treats them as pending. The mock tests only check that
+    an in-memory record is generated, not that the stamp is stored.
+
+    Ports: integration/test_bundle_processing.py::test_bundle_without_collections,
+           scenarios/test_edge_cases.py::test_bundle_references_nonexistent_collection,
+           integration/test_bundle_processing.py::test_collection_without_bundles,
+           integration/test_collection_processing.py::test_collection_with_no_members
+    """
+    bundle_alone = "urn:nasa:pds:unlinked:bundle_alone::1.0"
+    bundle_dangling = "urn:nasa:pds:unlinked:bundle_dangling::1.0"
+    bundle_parent = "urn:nasa:pds:unlinked:bundle_parent::1.0"
+    coll_no_bundle = "urn:nasa:pds:unlinked:coll_no_bundle::1.0"
+    coll_no_members = "urn:nasa:pds:unlinked:coll_no_members::1.0"
+    member = f"{_lid(coll_no_bundle)}:p1::1.0"
+
+    registry_db.load(
+        [_bundle(bundle_alone),
+         _bundle(bundle_dangling, "urn:nasa:pds:unlinked:does_not_exist"),
+         _bundle(bundle_parent, _lid(coll_no_members)),
+         build_collection(coll_no_bundle),
+         build_collection(coll_no_members),
+         build_product(member)],
+        index="registry",
+    )
+    registry_db.load([CollectionRefsBuilder(coll_no_bundle).with_product(member).to_seed()])
+
+    ancestry_main.run(client=registry_db.client)
+    registry_db.refresh()
+    reg_docs = registry_db.dump("registry")
+
+    for agg_id in (bundle_alone, bundle_dangling, bundle_parent, coll_no_bundle, coll_no_members):
+        assert _source_by_id(reg_docs, agg_id).get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY) == SWEEPERS_ANCESTRY_VERSION, (
+            f"{agg_id} was not stamped with the ancestry version"
+        )
+    assert _refs(_source_by_id(reg_docs, coll_no_bundle)) == set()
+    assert _refs(_source_by_id(reg_docs, member)) == {_lid(coll_no_bundle), coll_no_bundle}
+
+    # The sweeper's own "not at current version" query. (query_for_pending_bundles is not
+    # used here: it deliberately returns every bundle and skips up-to-date ones in Python.)
+    assert [d["_id"] for d in get_orphaned_documents(registry_db.client, registry_db.index_names["registry"])] == []
+    assert list(query_for_pending_collections(registry_db.client)) == []
+    assert registry_db.dump("deferred-updates") == [], "nothing should be deferred: every target exists"
+
+    assert reg_docs == snapshot
+
+
+# Scenario 12: malformed documents ------------------------------------------
+
+def test_malformed_documents(registry_db, snapshot):
+    """
+    A product with no product_class and a bundle whose ref_lid_collection is not a valid
+    identifier do not stop the run; the valid hierarchy alongside them is processed.
+
+    Ports: scenarios/test_edge_cases.py::test_document_missing_product_class (skipped as a
+           mock test: "mock is incompatible with PR #256"),
+           scenarios/test_edge_cases.py::test_bundle_with_invalid_ref_lid_collection
+    """
+    registry_db.load_json("ancestry/malformed_docs.json")
+
+    ancestry_main.run(client=registry_db.client)
+    registry_db.refresh()
+    reg_docs = registry_db.dump("registry")
+
+    collection = "urn:nasa:pds:malformed:collection::1.0"
+    bundle = "urn:nasa:pds:malformed:bundle::1.0"
+    assert _refs(_source_by_id(reg_docs, collection)) == {bundle, _lid(bundle)}
+    assert _refs(_source_by_id(reg_docs, "urn:nasa:pds:malformed:collection:product::1.0")) == {
+        _lid(collection), collection,
+    }
+
+    bad_ref_bundle = _source_by_id(reg_docs, "urn:nasa:pds:malformed:bad_ref_bundle::1.0")
+    assert bad_ref_bundle.get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY) == SWEEPERS_ANCESTRY_VERSION
+
+    # Unreferenced and unclassified: nothing should touch it.
+    assert ANCESTRY_REFS_METADATA_KEY not in _source_by_id(reg_docs, "urn:nasa:pds:malformed:no_class::1.0")
+
+    assert reg_docs == snapshot
