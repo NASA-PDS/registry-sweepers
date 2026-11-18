@@ -103,6 +103,9 @@ NODE_ID = {
 
 DEFAULT_MODIFICATION_DATE = datetime(1950, 1, 1, 0, 0, 0)
 
+# Field stamped on every document written by a sync run, used to identify documents no longer present in Solr
+SYNC_RUN_ID_FIELD = "sweepers_legacy_sync_run_id"
+
 
 class MissingIdentifierError(Exception):
     pass
@@ -165,6 +168,7 @@ class SolrOsWrapperIter:
         found_ids: Optional[Dict[str, Optional[str]]] = None,
         online_resources: Optional[Dict[str, str]] = None,
         force: bool = False,
+        run_id: Optional[int] = None,
     ):
         """
         Iterable on the Solr legacy registry documents returning the migrated document for each iteration (next).
@@ -177,6 +181,8 @@ class SolrOsWrapperIter:
         @param es_index: OpenSearch/ElasticSearch index name
         @param found_ids: dict mapping lidvid to ops:Harvest_Info/ops:node_name for products already in the new registry
         @param rolls_over_target: artificially increase the number entries by re-running the loop n times
+        @param run_id: identifier of the sync run, stamped on every document so that documents not written by the
+        run can be identified as stale. Not stamped if None.
         """
         self.index = es_index
         self.type = "update"
@@ -184,6 +190,7 @@ class SolrOsWrapperIter:
         self.found_ids = found_ids
         self.online_resources = online_resources
         self.force = force
+        self.run_id = run_id
         self._solr_itr = iter(solr_itr)
         self._seen_domains: Set[str] = set()
         self._seen_node_ids: Set[str] = set()
@@ -292,6 +299,10 @@ class SolrOsWrapperIter:
         new_doc["_source"]["found_in_registry"] = "true" if self.found_ids is not None and doc_id in self.found_ids else "false"
 
         new_doc["_source"]["node"] = self._get_node(doc)
+
+        if self.run_id is not None:
+            new_doc["_source"][SYNC_RUN_ID_FIELD] = self.run_id
+
         return new_doc
 
     def __next__(self) -> Dict[str, Any]:

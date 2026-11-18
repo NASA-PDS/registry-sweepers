@@ -21,7 +21,7 @@ The ancestry sweeper generates membership metadata for each product, i.e. which 
 The reindexer sweeper ensures that the registry index mappings are updated with all fields available in the registry-dd index, and then triggers reindexation on all products which have not yet been successfully processed previously.  This ensures that all products are searchable on all fields, provided a field type mapping is defined in the registry-dd index at the time of processing.
 
 #### [Legacy Registry Sync](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/legacy_registry_sync/legacy_registry_sync.py)
-The legacy registry sync tool migrates data from the legacy Solr-based PDS registry to the new OpenSearch-based registry. It includes a dry-run mode for testing Solr data retrieval without affecting OpenSearch.
+The legacy registry sync tool migrates data from the legacy Solr-based PDS registry to the new OpenSearch-based registry. Every run writes all Solr documents to the `en-legacy-registry` index, then prunes documents which are no longer in Solr. Pruning is skipped if any document failed to write, or if the run wrote fewer than 90% of the documents already in the index.
 
 **Console Script Usage:**
 
@@ -29,42 +29,31 @@ The legacy registry sync tool migrates data from the legacy Solr-based PDS regis
 # Install the package first
 pip install -e .
 
-# Run dry-run mode (Solr data retrieval only, no OpenSearch operations)
-pds-legacy-registry-sync --dry-run --max-docs 10
+# Report what would be written and pruned, without modifying OpenSearch
+pds-legacy-registry-sync --dry-run
 
-# Comprehensive dry-run with logging
-pds-legacy-registry-sync --dry-run --max-docs 100 --log-file dry_run.log
+# Full sync
+pds-legacy-registry-sync
 
-# Dry-run without showing sample documents
-pds-legacy-registry-sync --dry-run --max-docs 50 --no-samples
-
-# Dry-run with more sample documents
-pds-legacy-registry-sync --dry-run --max-docs 20 --sample-size 10
-
-# Dry-run with payload output for offline inspection
-pds-legacy-registry-sync --dry-run --max-docs 100 --output-file /tmp/payload.jsonl
+# Full sync, overwriting the node of documents which already have one
+pds-legacy-registry-sync --force --log-file sync.log
 
 # Get help
-pds-legacy-registry-sync --dry-run --help
+pds-legacy-registry-sync --help
 ```
 
-**Dry-Run Features:**
-- **Solr-only operations**: No OpenSearch connection required
-- **Data analysis**: Shows node distribution, product class breakdown, and data quality metrics
-- **Sample documents**: Displays sample documents with key fields
-- **Progress tracking**: Logs progress every 1000 documents
-- **Error handling**: Continues processing and reports errors
-- **Payload export**: Optionally writes OpenSearch payloads as JSON lines to a file for offline inspection (default: `/tmp/legacy_registry_sync_payload.jsonl`)
+The sweepers driver accepts the same flag:
 
-**Dry-Run Output:**
-The tool provides comprehensive statistics including:
-- Total documents processed
-- Documents with/without lidvid
-- Node distribution (PDS_ENG, PDS_IMG, etc.)
-- Product class distribution
-- Node-by-product-class breakdown with percentages
-- Sample documents with key fields
-- Domain and node ID analysis
+```bash
+python ./docker/sweepers_driver.py --only legacy-sync --dry-run
+```
+
+**Dry-Run Behavior:**
+- OpenSearch is read but never modified: the index is not created, written to, or pruned
+- Reads the full Solr index and the document ids currently in `en-legacy-registry`
+- Logs the number of documents that would be written, how many of those are new, and how many would be pruned
+- Logs a sample of the lidvids that would be pruned
+- Warns if the prune would be skipped by the 90% safeguard
 
 **Full synchronization** (Solr + OpenSearch) is available programmatically via the `run()` function but is not yet implemented as a console script option.
 
