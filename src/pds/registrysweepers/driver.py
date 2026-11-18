@@ -87,7 +87,7 @@ SWEEPER_REGISTRY = {
 ORPHAN_REPAIR_SWEEPER = "ancestry-orphan-repair"
 
 # The orphan repair is part of the default suite and runs right after ancestry. It is a dry run, which reports what it
-# would repair, unless --apply is given.
+# would repair, unless --apply is given.  --dry-run is the explicit dry run, which also lists the products on stdout.
 DEFAULT_SWEEPERS = ["provenance", "ancestry", ORPHAN_REPAIR_SWEEPER, "reindexer"]
 
 
@@ -142,30 +142,54 @@ def run():
         help=f"Only run the specified sweeper(s). Choices: {', '.join(SWEEPER_REGISTRY.keys())}",
     )
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER} (select it with --only {ORPHAN_REPAIR_SWEEPER}): write nothing "
+        "and print the products it would repair to stdout as TSV, followed by the summary.",
+    )
+    parser.add_argument(
         "--apply",
         action="store_true",
         default=False,
-        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: write the repairs.  Without it that sweeper is a dry run which "
-        "only reports counts.",
+        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: write the repairs.  With neither --dry-run nor --apply that "
+        "sweeper is a dry run which only reports counts.",
     )
     parser.add_argument(
         "--output-file",
         default=None,
-        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: write a TSV of the products it can repair to this file.",
+        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: also write the listing of the products it repairs (or, with "
+        "--dry-run, would repair) as TSV to this file.",
     )
     parser.add_argument(
         "--output-all",
         action="store_true",
         default=False,
-        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: also list the unresolved products in --output-file.",
+        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: also list the unresolved products in the listing.",
     )
 
     args = parser.parse_args()
 
+    if args.dry_run and args.apply:
+        parser.error("--dry-run and --apply are mutually exclusive")
+
     names = order_sweepers(args.only if args.only else DEFAULT_SWEEPERS)
+    if args.dry_run and names != [ORPHAN_REPAIR_SWEEPER]:
+        # the other sweepers write and would not be dry runs, so --dry-run would give a false assurance
+        parser.error(
+            f"--dry-run only applies to {ORPHAN_REPAIR_SWEEPER} and the other selected sweepers would write "
+            f"({', '.join(n for n in names if n != ORPHAN_REPAIR_SWEEPER)}); select it alone with "
+            f"--only {ORPHAN_REPAIR_SWEEPER}"
+        )
+
     sweepers = [SWEEPER_REGISTRY[name] for name in names]
 
-    orphan_repair_options = {"apply": args.apply, "output_file": args.output_file, "output_all": args.output_all}
+    orphan_repair_options = {
+        "apply": args.apply,
+        "dry_run": args.dry_run,
+        "output_file": args.output_file,
+        "output_all": args.output_all,
+    }
     if ORPHAN_REPAIR_SWEEPER not in names and (args.apply or args.output_file or args.output_all):
         log.warning(limit_log_length(f"--apply/--output-file/--output-all have no effect without {ORPHAN_REPAIR_SWEEPER}"))
 
