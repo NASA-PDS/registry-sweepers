@@ -2,6 +2,9 @@
 DB-backed ancestry sweeper tests.
 
 Each test follows: arrange (load seed docs) → act (ancestry.main.run) → refresh → assert.
+Assertions are targeted checks for the behaviour under test, plus a whole-state
+snapshot (syrupy JSON) for regression. Regenerate snapshots with
+`pytest -m db -n 0 --snapshot-update` (syrupy cannot update reliably under xdist).
 """
 import pytest
 from pds.registrysweepers.ancestry import main as ancestry_main
@@ -35,7 +38,7 @@ def _refs(source: dict) -> set:
 # Scenario 1: basic hierarchy
 # ---------------------------------------------------------------------------
 
-def test_basic_hierarchy(registry_db):
+def test_basic_hierarchy(registry_db, snapshot):
     """Bundle → Collection → 2 Products — verify ancestry is set on all docs."""
     bundle_lidvid = "urn:nasa:pds:basic:bundle::1.0"
     collection_lid = "urn:nasa:pds:basic:collection"
@@ -75,12 +78,14 @@ def test_basic_hierarchy(registry_db):
         assert collection_lid in prod_refs
         assert collection_lidvid in prod_refs
 
+    assert reg_docs == snapshot
+
 
 # ---------------------------------------------------------------------------
 # Scenario 2: LID reference resolves to all collection versions
 # ---------------------------------------------------------------------------
 
-def test_lid_ref_resolves_to_all_collection_versions(registry_db):
+def test_lid_ref_resolves_to_all_collection_versions(registry_db, snapshot):
     """Bundle with a LID-only collection ref gets ancestry written to both v1.0 and v2.0."""
     registry_db.load_json("ancestry/lid_ref_hierarchy.json")
 
@@ -103,12 +108,14 @@ def test_lid_ref_resolves_to_all_collection_versions(registry_db):
     assert "urn:nasa:pds:lid_ref_collection" in prod_b_refs
     assert "urn:nasa:pds:lid_ref_collection::2.0" in prod_b_refs
 
+    assert reg_docs == snapshot
+
 
 # ---------------------------------------------------------------------------
 # Scenario 3: multiple collection versions
 # ---------------------------------------------------------------------------
 
-def test_multiple_collection_versions(registry_db):
+def test_multiple_collection_versions(registry_db, snapshot):
     """Two collection versions with separate products each get correct ancestry."""
     bundle_lidvid = "urn:nasa:pds:multi_version:bundle::1.0"
     collection_lid = "urn:nasa:pds:multi_version:collection"
@@ -146,12 +153,14 @@ def test_multiple_collection_versions(registry_db):
     p2_refs = _refs(_source_by_id(reg_docs, prod_v2))
     assert coll_v2 in p2_refs and collection_lid in p2_refs
 
+    assert reg_docs == snapshot
+
 
 # ---------------------------------------------------------------------------
 # Scenario 4: refs pagination
 # ---------------------------------------------------------------------------
 
-def test_refs_pagination(registry_db, monkeypatch):
+def test_refs_pagination(registry_db, monkeypatch, snapshot):
     """With page_size=1, multiple ref-query pages are needed; all products still get ancestry."""
     monkeypatch.setattr(AncestryRuntimeConstants, "nonaggregate_ancestry_records_query_page_size", 1)
 
@@ -170,12 +179,14 @@ def test_refs_pagination(registry_db, monkeypatch):
         assert collection_lidvid in prod_refs, f"product_{i} missing collection LIDVID ref"
         assert collection_lid in prod_refs, f"product_{i} missing collection LID ref"
 
+    assert reg_docs == snapshot
+
 
 # ---------------------------------------------------------------------------
 # Scenario 5: idempotency
 # ---------------------------------------------------------------------------
 
-def test_idempotency(registry_db):
+def test_idempotency(registry_db, snapshot):
     """Running the sweeper twice produces the same result as running it once."""
     bundle_lidvid = "urn:nasa:pds:idem:bundle::1.0"
     collection_lid = "urn:nasa:pds:idem:collection"
@@ -192,10 +203,13 @@ def test_idempotency(registry_db):
 
     ancestry_main.run(client=registry_db.client)
     registry_db.refresh()
+    after_first_run = registry_db.dump("registry")
+
     ancestry_main.run(client=registry_db.client)
     registry_db.refresh()
-
     reg_docs = registry_db.dump("registry")
+
+    assert reg_docs == after_first_run, "second run changed registry state"
 
     prod_refs = _refs(_source_by_id(reg_docs, product_id))
     assert prod_refs == {collection_lid, collection_lidvid}
@@ -205,12 +219,14 @@ def test_idempotency(registry_db):
 
     assert _source_by_id(reg_docs, bundle_lidvid)[SWEEPERS_ANCESTRY_VERSION_METADATA_KEY] == SWEEPERS_ANCESTRY_VERSION
 
+    assert reg_docs == snapshot
+
 
 # ---------------------------------------------------------------------------
 # Scenario 6: deferred updates (orphan processing)
 # ---------------------------------------------------------------------------
 
-def test_deferred_updates(registry_db):
+def test_deferred_updates(registry_db, snapshot):
     """
     Product exists in registry-refs but NOT in registry during first run.
     Its update is deferred.  After the product is added to registry, a second
@@ -237,6 +253,7 @@ def test_deferred_updates(registry_db):
     deferred_docs = registry_db.dump("deferred-updates")
     deferred_ids = {d["_id"] for d in deferred_docs}
     assert orphan_product_id in deferred_ids
+    assert deferred_docs == snapshot(name="deferred_after_first_run")
 
     # Add the product to registry and re-run
     registry_db.load([build_product(orphan_product_id)], index="registry", validate=False)
@@ -247,6 +264,8 @@ def test_deferred_updates(registry_db):
     prod_refs = _refs(_source_by_id(reg_docs, orphan_product_id))
     assert collection_lidvid in prod_refs
     assert collection_lid in prod_refs
+
+    assert reg_docs == snapshot(name="registry_after_second_run")
 
 
 # ---------------------------------------------------------------------------

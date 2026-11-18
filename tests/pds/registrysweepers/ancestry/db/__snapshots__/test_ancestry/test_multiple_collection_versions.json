@@ -1,0 +1,72 @@
+[
+  {
+    "_id": "urn:nasa:pds:multi_version:bundle::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:multi_version:bundle::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Bundle",
+      "ref_lid_collection": [
+        "urn:nasa:pds:multi_version:collection"
+      ],
+      "title": "Test Bundle"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:multi_version:collection::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:multi_version:collection::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:multi_version:bundle",
+        "urn:nasa:pds:multi_version:bundle::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Test Collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:multi_version:collection::2.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:multi_version:collection::2.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:multi_version:bundle",
+        "urn:nasa:pds:multi_version:bundle::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Test Collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:multi_version:collection:p1::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:multi_version:collection:p1::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:multi_version:collection",
+        "urn:nasa:pds:multi_version:collection::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Observational",
+      "title": "Test Product"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:multi_version:collection:p1::2.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:multi_version:collection:p1::2.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:multi_version:collection",
+        "urn:nasa:pds:multi_version:collection::2.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Observational",
+      "title": "Test Product"
+    }
+  }
+]
