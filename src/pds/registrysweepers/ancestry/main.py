@@ -13,6 +13,8 @@ from typing import Union
 
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
+from pds.registrysweepers.ancestry.bundlelinks import open_links_file
+from pds.registrysweepers.ancestry.bundlelinks import tee_bundle_links
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.dryrun import AncestryDryRunReport
 from pds.registrysweepers.ancestry.dryrun import summarise_dry_run
@@ -48,13 +50,10 @@ def run(
 ) -> Optional[AncestryDryRunReport]:
     """
     @param dry_run: read and generate everything, but write nothing to the registry; report what would be written
-    @param output_file: dry run only - path of a TSV listing the bundle links which would be added to collections which
-        already carry the current ancestry version
+    @param output_file: path of a TSV (collection_lidvid, bundle_lidvid_added) listing the bundle links added to
+        collections which already carry the current ancestry version - the links which would be added, in a dry run
     """
     configure_logging(filepath=log_filepath, log_level=log_level)
-
-    if output_file and not dry_run:
-        raise ValueError("output_file is only supported with dry_run")
 
     if dry_run:
         # Everything below this point, including the reads, goes through a client which cannot write.
@@ -67,40 +66,13 @@ def run(
     if dry_run:
         return summarise_dry_run(client, product_update_records_to_write, output_file=output_file)
 
-    updates = convert_records_to_updates(
-        product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
-    )
+    with open_links_file(output_file) as links_handle:
+        if links_handle is not None:
+            product_update_records_to_write = tee_bundle_links(product_update_records_to_write, links_handle)
 
-    if bulk_updates_sink is None:
-        log.info("Ensuring metadata keys are present in database index...")
-        for metadata_key in [
-            ANCESTRY_REFS_METADATA_KEY,
-            SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
-        ]:
-            ensure_index_mapping(client, resolve_multitenant_index_name(client, "registry"), metadata_key, "keyword")
-
-        for metadata_key in [
-            # TODO: need to check whether values for these are actually updated for the refs docs, and whether they
-            #  should even be - edunn 20251112
-            #  Update: appears not to be, but no time to confirm right now - edunn 20260630
-            SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
-        ]:
-            ensure_index_mapping(
-                client, resolve_multitenant_index_name(client, "registry-refs"), metadata_key, "keyword"
-            )
-
-        log.info("Writing bulk updates to database...")
-        write_updated_docs(
-            client,
-            updates,
-            index_name=resolve_multitenant_index_name(client, "registry"),
-            defer_on_missing_document=True,
+        _write_updates(
+            client, product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
         )
-
-    else:
-        # consume generator to dump bulk updates to sink
-        for _ in updates:
-            pass
 
     # Give any orphan documents their previously-resolved metadata
     # TODO: extract this to function edunn 20260916
@@ -155,6 +127,47 @@ def run(
     return None
 
 
+def _write_updates(
+        client: OpenSearch,
+        update_records: Iterable[ProductUpdateRecord],
+        ancestry_records_accumulator: Optional[List[AncestryRecord]],
+        bulk_updates_sink: Optional[List[Tuple[str, Dict[str, List]]]],
+) -> None:
+    """Convert the records to document updates and write them to the registry (or dump them to the sink)"""
+    updates = convert_records_to_updates(update_records, ancestry_records_accumulator, bulk_updates_sink)
+
+    if bulk_updates_sink is None:
+        log.info("Ensuring metadata keys are present in database index...")
+        for metadata_key in [
+            ANCESTRY_REFS_METADATA_KEY,
+            SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
+        ]:
+            ensure_index_mapping(client, resolve_multitenant_index_name(client, "registry"), metadata_key, "keyword")
+
+        for metadata_key in [
+            # TODO: need to check whether values for these are actually updated for the refs docs, and whether they
+            #  should even be - edunn 20251112
+            #  Update: appears not to be, but no time to confirm right now - edunn 20260630
+            SWEEPERS_ANCESTRY_VERSION_METADATA_KEY,
+        ]:
+            ensure_index_mapping(
+                client, resolve_multitenant_index_name(client, "registry-refs"), metadata_key, "keyword"
+            )
+
+        log.info("Writing bulk updates to database...")
+        write_updated_docs(
+            client,
+            updates,
+            index_name=resolve_multitenant_index_name(client, "registry"),
+            defer_on_missing_document=True,
+        )
+
+    else:
+        # consume generator to dump bulk updates to sink
+        for _ in updates:
+            pass
+
+
 def generate_product_update_records(client: OpenSearch) -> Iterable[ProductUpdateRecord]:
     """Generate the records of every document update the sweeper needs to write (the reads only; nothing is written)"""
     log.info("Updating bundle ancestries for collections...")
@@ -206,8 +219,8 @@ def _configure_cli(ap: argparse.ArgumentParser) -> None:
     ap.add_argument(
         "--output-file",
         default=None,
-        help="with --dry-run, write a TSV of the bundle links which would be added to collections which already carry "
-        "the current ancestry version (collection_lidvid, bundle_lidvid_added) to this file",
+        help="write a TSV (collection_lidvid, bundle_lidvid_added) of the bundle links added to collections which "
+        "already carry the current ancestry version to this file; with --dry-run, the links which would be added",
     )
 
 
@@ -222,8 +235,6 @@ def main() -> None:
     """
 
     args = parse_args(description=cli_description, configure_parser=_configure_cli)
-    if args.output_file and not args.dry_run:
-        raise SystemExit("error: --output-file requires --dry-run")
 
     client = get_userpass_opensearch_client(
         endpoint_url=args.base_URL, username=args.username, password=args.password, verify_certs=not args.insecure
