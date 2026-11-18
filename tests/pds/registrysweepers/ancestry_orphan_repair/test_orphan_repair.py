@@ -93,7 +93,7 @@ def test_repairs_a_product_whose_collection_is_already_stamped(registry):
     registry.add_product(product(1))
     registry.add_refs(C1, [product(1)])
 
-    report = run(registry, apply=True)
+    report = run(registry)
 
     assert report.repairable == 1 and report.repaired == 1
     assert sorted(registry.registry[product(1)][REFS]) == sorted([C1, C1_LID])
@@ -138,7 +138,7 @@ def test_repair_is_identical_to_a_normal_ancestry_run(registry):
     ]
     normal.bulk("registry", _bulk_body(product_updates))
 
-    run(registry, apply=True)
+    run(registry)
 
     for n in range(1, 4):
         assert sorted(registry.registry[product(n)][REFS]) == sorted(normal.registry[product(n)][REFS])
@@ -160,7 +160,7 @@ def test_update_sent_is_the_ancestry_sweepers_own_update(registry, monkeypatch):
 
     monkeypatch.setattr(orphan_repair, "write_updated_docs", spy)
 
-    run(registry, apply=True)
+    run(registry)
 
     expected = update_from_record(
         ProductUpdateRecord(PdsLidVid.from_string(product(1)), direct_ancestor_refs=[PdsLidVid.from_string(C1)])
@@ -176,7 +176,7 @@ def test_product_listed_under_two_collection_versions_gets_both(registry):
     registry.add_refs(C1, [product(1)])
     registry.add_refs(C2, [product(1)])
 
-    report = run(registry, apply=True)
+    report = run(registry)
 
     assert report.repairable == 1 and report.products_examined == 1
     assert sorted(registry.registry[product(1)][REFS]) == sorted([C1, C2, C1_LID])
@@ -189,7 +189,7 @@ def test_only_collections_in_the_registry_are_written(registry):
     registry.add_refs(C1, [product(1)])
     registry.add_refs(MISSING_COLLECTION, [product(1)])
 
-    run(registry, apply=True)
+    run(registry)
 
     assert sorted(registry.registry[product(1)][REFS]) == sorted([C1, C1_LID])
 
@@ -199,8 +199,8 @@ def test_only_collections_in_the_registry_are_written(registry):
 # ---------------------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("apply", [False, True])
-def test_unresolved_products_are_counted_and_left_untouched(registry, apply):
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_unresolved_products_are_counted_and_left_untouched(registry, dry_run):
     registry.add_collection(C1)
     registry.add_product(product(1))  # nothing lists it
     registry.add_product(product(2), stamp=3)  # old stamp, nothing lists it
@@ -209,7 +209,7 @@ def test_unresolved_products_are_counted_and_left_untouched(registry, apply):
     registry.add_refs(C1, [product(99)])  # lists some other product
     before = snapshot(registry)
 
-    report = run(registry, apply=apply)
+    report = run(registry, dry_run=dry_run)
 
     assert report.products_examined == 3
     assert report.no_refs_listing == 2
@@ -228,7 +228,7 @@ def test_resolved_products_are_repaired_next_to_unresolved_ones_and_only_they_ar
     registry.add_product(product(2))
     registry.add_refs(C1, [product(2)])
 
-    report = run(registry, apply=True)
+    report = run(registry)
 
     assert (report.repaired, report.unresolved) == (1, 1)
     assert registry.written_ids == [product(2)]
@@ -239,9 +239,9 @@ def test_unresolved_product_is_repaired_once_a_refs_document_appears(registry):
     registry.add_collection(C1)
     registry.add_product(product(1))
 
-    assert run(registry, apply=True).unresolved == 1
+    assert run(registry).unresolved == 1
     registry.add_refs(C1, [product(1)])
-    report = run(registry, apply=True)
+    report = run(registry)
 
     assert report.repaired == 1 and report.unresolved == 0
 
@@ -251,8 +251,8 @@ def test_summary_reports_unresolved_separately_with_a_hint(registry):
     registry.add_product(product(2))
     registry.add_refs(MISSING_COLLECTION, [product(2)])
 
-    for apply in (False, True):
-        text = "\n".join(run(registry, apply=apply).summary_lines())
+    for dry_run in (True, False):
+        text = "\n".join(run(registry, dry_run=dry_run).summary_lines())
         assert "no refs document lists the product: 1" in text
         assert "not in the registry: 1" in text
         assert "unresolved" in text and "data problems for the node" in text
@@ -270,9 +270,9 @@ def test_dry_run_writes_nothing_and_reports_counts(registry):
     registry.add_refs(C1, [product(1)])
     before = snapshot(registry)
 
-    report = run(registry)  # no apply
+    report = run(registry, dry_run=True)
 
-    assert not report.apply
+    assert report.dry_run
     assert (report.products_examined, report.repairable, report.repaired) == (2, 1, 0)
     assert registry.bulk_calls == []
     assert registry.registry == before
@@ -280,16 +280,16 @@ def test_dry_run_writes_nothing_and_reports_counts(registry):
     assert "DRY RUN" in report.summary_lines()[0]
 
 
-def test_second_apply_run_writes_nothing(registry):
+def test_second_run_writes_nothing(registry):
     registry.add_collection(C1)
     for n in range(1, 4):
         registry.add_product(product(n))
     registry.add_refs(C1, [product(n) for n in range(1, 4)])
 
-    first = run(registry, apply=True)
+    first = run(registry)
     bulks_after_first = len(registry.bulk_calls)
     state_after_first = snapshot(registry)
-    second = run(registry, apply=True)
+    second = run(registry)
 
     assert first.repaired == 3
     assert second.products_examined == 0 and second.repairable == 0 and second.repaired == 0
@@ -302,7 +302,7 @@ def test_a_product_with_an_old_stamp_and_current_refs_just_gets_stamped(registry
     registry.add_product(product(1), stamp=6, ancestor_refs=[C1, C1_LID])
     registry.add_refs(C1, [product(1)])
 
-    run(registry, apply=True)
+    run(registry)
 
     assert registry.registry[product(1)][REFS] == [C1, C1_LID]  # nothing duplicated
     assert registry.registry[product(1)][STAMP] == SWEEPERS_ANCESTRY_VERSION
@@ -313,7 +313,7 @@ def test_existing_refs_are_kept_and_only_missing_ones_added(registry):
     registry.add_product(product(1), stamp=6, ancestor_refs=["urn:nasa:pds:other::1.0"])
     registry.add_refs(C1, [product(1)])
 
-    run(registry, apply=True)
+    run(registry)
 
     assert registry.registry[product(1)][REFS][0] == "urn:nasa:pds:other::1.0"
     assert set(registry.registry[product(1)][REFS]) == {"urn:nasa:pds:other::1.0", C1, C1_LID}
@@ -327,7 +327,7 @@ def test_product_vanishing_between_read_and_write_does_not_abort_the_run(registr
     registry.vanish_before_bulk = {product(2)}
 
     with caplog.at_level(logging.WARNING):
-        report = run(registry, apply=True)
+        report = run(registry)
 
     assert report.repairable == 3
     assert report.repaired == 2
@@ -341,7 +341,7 @@ def test_a_single_repairable_product_is_written(registry):
     registry.add_product(product(1))
     registry.add_refs(C1, [product(1)])
 
-    assert run(registry, apply=True).repaired == 1
+    assert run(registry).repaired == 1
 
 
 def test_write_outcomes_distinguish_noop_from_updated():
@@ -363,7 +363,7 @@ def test_write_outcomes_distinguish_noop_from_updated():
         )()
     )
     recorder.bulk(index="registry", body="")
-    report = OrphanRepairReport(apply=True)
+    report = OrphanRepairReport(dry_run=False)
     report.absorb_write_outcomes(recorder.outcomes)
 
     assert (report.repaired, report.already_current, report.vanished_before_write, report.write_failed) == (1, 1, 1, 1)
@@ -381,7 +381,7 @@ def test_pages_beyond_one_page_are_all_examined(registry):
         registry.add_product(product(n))
     registry.add_refs(C1, [product(n) for n in range(count)])
 
-    report = run(registry, apply=True, batch_size=10)
+    report = run(registry, batch_size=10)
 
     assert report.products_examined == count and report.repaired == count
     product_pages = [c for c in registry.search_calls if c["index"] == "registry" and "lidvid" == c["sort"][0]]
@@ -397,7 +397,7 @@ def test_unresolved_products_beyond_one_page_do_not_end_paging_early(registry):
         registry.add_product(product(n))
     registry.add_refs(C1, [product(n) for n in range(0, 30, 2)])  # every other product is listed
 
-    report = run(registry, apply=True, batch_size=5)
+    report = run(registry, batch_size=5)
 
     assert report.products_examined == 30
     assert report.repaired == 15 and report.unresolved == 15
@@ -434,7 +434,7 @@ def test_refs_are_looked_up_per_batch_not_per_product(registry):
         registry.add_product(product(n))
     registry.add_refs(C1, [product(n) for n in range(40)])
 
-    run(registry, apply=True, batch_size=10)
+    run(registry, batch_size=10)
 
     refs_queries = [c for c in registry.search_calls if c["index"] == "registry-refs"]
     product_pages = [
@@ -467,7 +467,7 @@ def test_refs_matching_more_documents_than_a_page_are_paged(registry, monkeypatc
         registry.add_product(product(n))
         registry.add_refs(C1, [product(n)], batch_id=n)  # seven refs documents match one batch
 
-    report = run(registry, apply=True, batch_size=10)
+    report = run(registry, batch_size=10)
 
     assert report.repaired == 7
 
@@ -477,7 +477,7 @@ def test_nothing_is_held_for_unresolved_products(registry):
     for n in range(50):
         registry.add_product(product(n))
 
-    report = run(registry, apply=True, batch_size=7)
+    report = run(registry, batch_size=7)
 
     assert report.unresolved == 50
     assert registry.bulk_calls == []
@@ -498,8 +498,8 @@ def test_output_file_lists_repairable_products_and_optionally_the_rest(registry,
 
     only_repairable = tmp_path / "repairable.tsv"
     everything = tmp_path / "all.tsv"
-    run(registry, output_file=str(only_repairable))
-    run(registry, output_file=str(everything), output_all=True)
+    run(registry, dry_run=True, output_file=str(only_repairable))
+    run(registry, dry_run=True, output_file=str(everything), output_all=True)
 
     assert only_repairable.read_text().splitlines() == [
         "status\tproduct_lidvid\tcollection_lidvids",
@@ -513,7 +513,7 @@ def test_output_file_lists_repairable_products_and_optionally_the_rest(registry,
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# --dry-run (listing on stdout), --apply, neither; --output-file as an additional destination
+# --dry-run (listing on stdout) and the default (writing); --output-file as an additional destination
 # ---------------------------------------------------------------------------------------------------------------------
 
 HEADER = "status\tproduct_lidvid\tcollection_lidvids"
@@ -589,53 +589,28 @@ def test_dry_run_with_output_file_writes_identical_content_to_stdout_and_the_fil
     assert registry.bulk_calls == []
 
 
-def test_neither_flag_prints_no_listing_and_no_summary_from_run(registry, capsys):
-    _populate_mixed(registry)
-    before = snapshot(registry)
-
-    report = run(registry)
-
-    assert capsys.readouterr().out == ""
-    assert not report.apply and report.repairable == 1
-    assert registry.registry == before and registry.bulk_calls == []
 
 
-def test_neither_flag_with_output_file_writes_the_file_only(registry, capsys, tmp_path):
-    _populate_mixed(registry)
-    out = tmp_path / "listing.tsv"
-
-    run(registry, output_file=str(out))
-
-    assert capsys.readouterr().out == ""
-    assert out.read_text().splitlines() == [HEADER, f"repairable\t{product(1)}\t{C1}"]
-    assert registry.bulk_calls == []
 
 
-def test_apply_prints_no_listing_and_writes_the_repairs(registry, capsys):
-    _populate_mixed(registry)
-
-    report = run(registry, apply=True)
-
-    assert capsys.readouterr().out == ""
-    assert report.repaired == 1 and registry.written_ids == [product(1)]
 
 
-def test_apply_with_output_file_lists_the_repaired_products(registry, capsys, tmp_path):
+def test_output_file_without_dry_run_lists_the_repaired_products(registry, capsys, tmp_path):
     _populate_mixed(registry)
     out = tmp_path / "repaired.tsv"
 
-    report = run(registry, apply=True, output_file=str(out))
+    report = run(registry, output_file=str(out))
 
     assert capsys.readouterr().out == ""
     assert out.read_text().splitlines() == [HEADER, f"repairable\t{product(1)}\t{C1}"]
     assert report.repaired == 1 and registry.written_ids == [product(1)]  # the listed product is the one written
 
 
-def test_apply_with_output_file_and_output_all_adds_the_unresolved_products(registry, tmp_path):
+def test_output_file_without_dry_run_and_output_all_adds_the_unresolved_products(registry, tmp_path):
     _populate_mixed(registry)
     out = tmp_path / "all.tsv"
 
-    run(registry, apply=True, output_file=str(out), output_all=True)
+    run(registry, output_file=str(out), output_all=True)
 
     assert out.read_text().splitlines()[1:] == [
         f"repairable\t{product(1)}\t{C1}",
@@ -644,13 +619,6 @@ def test_apply_with_output_file_and_output_all_adds_the_unresolved_products(regi
     ]
 
 
-def test_run_rejects_dry_run_together_with_apply(registry):
-    _populate_mixed(registry)
-
-    with pytest.raises(ValueError):
-        run(registry, dry_run=True, apply=True)
-
-    assert registry.bulk_calls == [] and registry.search_calls == []
 
 
 def test_output_file_help_does_not_imply_a_dry_run():
@@ -661,7 +629,7 @@ def test_output_file_help_does_not_imply_a_dry_run():
     help_text = {a.dest: a.help for a in ap._actions}
 
     assert "dry run" not in help_text["output_file"].lower()
-    assert "also" in help_text["output_file"] and "with --dry-run or --apply or neither" in help_text["output_file"]
+    assert help_text["output_file"].startswith("also write the listing")
     assert "stdout" in help_text["dry_run"]
 
 
@@ -686,36 +654,62 @@ def test_cli_dry_run_prints_the_listing_then_the_summary_once(monkeypatch, regis
     assert registry.bulk_calls == []
 
 
-def test_cli_without_flags_prints_the_counts_only(monkeypatch, registry, capsys):
+
+
+
+def test_default_run_writes_the_repairs_and_prints_only_the_summary_from_the_cli(monkeypatch, registry, capsys):
     _populate_mixed(registry)
 
     _run_cli(monkeypatch, registry)
 
     out = capsys.readouterr().out
-    assert out.splitlines()[0].startswith("Ancestry orphan repair - DRY RUN")
+    assert out.splitlines()[0].startswith("Ancestry orphan repair - APPLIED")
     assert HEADER not in out and "repairable\t" not in out
-    assert registry.bulk_calls == []
+    assert registry.written_ids == [product(1)]
 
 
-def test_cli_apply_with_output_file(monkeypatch, registry, capsys, tmp_path):
+def test_default_run_prints_no_listing_and_no_summary_from_run(registry, capsys):
+    _populate_mixed(registry)
+
+    report = run(registry)
+
+    assert capsys.readouterr().out == ""
+    assert not report.dry_run and report.repaired == 1
+    assert registry.written_ids == [product(1)]
+
+
+def test_cli_output_file_without_dry_run_lists_the_repaired_products(monkeypatch, registry, capsys, tmp_path):
     _populate_mixed(registry)
     out_file = tmp_path / "repaired.tsv"
 
-    _run_cli(monkeypatch, registry, "--apply", "--output-file", str(out_file))
+    _run_cli(monkeypatch, registry, "--output-file", str(out_file))
 
     out = capsys.readouterr().out
-    assert out.splitlines()[0].startswith("Ancestry orphan repair - APPLIED")
     assert HEADER not in out
     assert out_file.read_text().splitlines() == [HEADER, f"repairable\t{product(1)}\t{C1}"]
     assert registry.written_ids == [product(1)]
 
 
-def test_cli_rejects_dry_run_with_apply(monkeypatch, registry, capsys):
+def test_cli_dry_run_with_output_file_writes_identical_content_to_stdout_and_the_file(
+    monkeypatch, registry, capsys, tmp_path
+):
+    _populate_mixed(registry)
+    out_file = tmp_path / "listing.tsv"
+
+    _run_cli(monkeypatch, registry, "--dry-run", "--output-file", str(out_file), "--output-all")
+
+    listing, _ = _split_stdout(capsys.readouterr().out)
+    assert out_file.read_text().splitlines() == listing
+    assert len(listing) == 4
+    assert registry.bulk_calls == []
+
+
+def test_apply_is_not_a_recognised_argument(monkeypatch, registry, capsys):
     _populate_mixed(registry)
 
     with pytest.raises(SystemExit) as excinfo:
-        _run_cli(monkeypatch, registry, "--dry-run", "--apply")
+        _run_cli(monkeypatch, registry, "--apply")
 
     assert excinfo.value.code == 2
-    assert "not allowed with argument" in capsys.readouterr().err
+    assert "unrecognized arguments: --apply" in capsys.readouterr().err
     assert registry.bulk_calls == [] and registry.search_calls == []

@@ -24,9 +24,9 @@ written after its collection was stamped.
 A product whose parent cannot be confirmed by a refs document is never guessed: nothing is written to it (in particular
 it is not stamped), so every later run examines it again and repairs it as soon as a refs document appears.
 
-Dry run is the default.  Nothing is written unless ``apply=True`` (``--apply`` on the command line).  ``dry_run=True``
-(``--dry-run``) is the explicit dry run: it also lists the products that would be repaired on stdout, followed by the
-summary.  ``output_file`` (``--output-file``) is an additional destination for the same listing, in any mode.
+The repairs are written by default.  ``dry_run=True`` (``--dry-run`` on the command line) writes nothing: it lists the
+products that would be repaired on stdout, followed by the summary.  ``output_file`` (``--output-file``) is an optional
+additional destination for the same listing, with or without ``dry_run``.
 """
 import logging
 import sys
@@ -98,7 +98,7 @@ WRITE_FAILED = "failed"
 class OrphanRepairReport:
     """Counts describing one run.  Every examined product is counted in exactly one of the outcome categories."""
 
-    apply: bool = False
+    dry_run: bool = False
     products_examined: int = 0
     invalid_lidvid: int = 0
 
@@ -112,7 +112,7 @@ class OrphanRepairReport:
     no_refs_listing: int = 0
     listed_only_under_collection_not_in_registry: int = 0
 
-    # write outcomes (apply only), taken from the bulk responses
+    # write outcomes (not in a dry run), taken from the bulk responses
     repaired: int = 0
     already_current: int = 0
     vanished_before_write: int = 0
@@ -124,13 +124,13 @@ class OrphanRepairReport:
 
     def summary_lines(self) -> List[str]:
         lines = [
-            "Ancestry orphan repair - " + ("APPLIED" if self.apply else "DRY RUN (nothing was written; use --apply)"),
+            "Ancestry orphan repair - " + ("DRY RUN (nothing was written)" if self.dry_run else "APPLIED"),
             f"  products examined (no ancestry, or ancestry stamp below v{CURRENT_ANCESTRY_VERSION}): {self.products_examined}",
             f"  left to the deferral merge (a deferral entry is pending; not written, not stamped): "
             f"{self.pending_deferral}",
             f"  repairable (a refs document lists the product under a collection in the registry): {self.repairable}",
         ]
-        if self.apply:
+        if not self.dry_run:
             lines += [
                 f"  repaired: {self.repaired}",
                 f"  already up to date (no change needed): {self.already_current}",
@@ -487,7 +487,6 @@ def run(
     client: OpenSearch,
     log_filepath: Optional[str] = None,
     log_level: int = logging.INFO,
-    apply: bool = False,
     dry_run: bool = False,
     output_file: Optional[str] = None,
     output_all: bool = False,
@@ -497,11 +496,10 @@ def run(
     """
     Repair non-aggregate products which lack ancestry where a registry-refs document confirms their parent collection.
 
-    @param apply: write the repairs.  Without it (and without dry_run) the run is a dry run which only logs counts.
-    @param dry_run: explicit dry run: nothing is written; the products that would be repaired are listed on stdout as
-        TSV, followed by the summary.  Mutually exclusive with apply.
-    @param output_file: optional path to which the same TSV listing (status, product, collections) is also written,
-        whatever the mode
+    @param dry_run: write nothing; list the products that would be repaired on stdout as TSV, followed by the summary.
+        Without it the repairs are written.
+    @param output_file: optional path to which the same TSV listing (status, product, collections) is also written:
+        the products that would be repaired with dry_run, the products that are repaired otherwise
     @param output_all: also list the unresolved products and those left to the deferral merge in the listing (stdout
         and output_file)
     @param batch_size: products examined and refs terms looked up per round trip (1..10,000)
@@ -509,16 +507,13 @@ def run(
     """
     configure_logging(filepath=log_filepath, log_level=log_level)
 
-    if apply and dry_run:
-        raise ValueError("dry_run and apply are mutually exclusive")
-
     if not 1 <= batch_size <= MAX_PAGE_SIZE:
         raise ValueError(f"batch_size must be between 1 and {MAX_PAGE_SIZE} (got {batch_size})")
 
-    mode = "apply" if apply else "dry run"
+    mode = "dry run" if dry_run else "writing"
     log.info(limit_log_length(f"Starting ancestry orphan repair for ancestry v{CURRENT_ANCESTRY_VERSION} ({mode})..."))
 
-    report = OrphanRepairReport(apply=apply)
+    report = OrphanRepairReport(dry_run=dry_run)
 
     file_handle = open(output_file, "w", encoding="utf-8") if output_file else None
     try:
@@ -527,7 +522,7 @@ def run(
         sink = _ListingSink(handles, include_unresolved=output_all)
         updates = _generate_updates(client, report, sink, batch_size, include_superseded)
 
-        if apply:
+        if not dry_run:
             # as in the ancestry sweeper, which has normally already ensured these
             registry_index = resolve_multitenant_index_name(client, "registry")
             for metadata_key in [ANCESTOR_REFS_KEY, ANCESTRY_VERSION_KEY]:
@@ -554,25 +549,18 @@ def run(
 
 
 def _configure_cli(ap) -> None:
-    mode = ap.add_mutually_exclusive_group()
-    mode.add_argument(
+    ap.add_argument(
         "--dry-run",
         action="store_true",
         default=False,
         help="write nothing; print the products which would be repaired to stdout as TSV (status, product lidvid, "
         "collection lidvids), followed by the summary",
     )
-    mode.add_argument(
-        "--apply",
-        action="store_true",
-        default=False,
-        help="write the repairs; with neither --dry-run nor --apply the run is a dry run which only reports counts",
-    )
     ap.add_argument(
         "--output-file",
         default=None,
-        help="also write the listing of the repairable products (the same TSV as --dry-run prints) to this file, "
-        "with --dry-run or --apply or neither",
+        help="also write the listing of the products (the same TSV as --dry-run prints) to this file: the products "
+        "which would be repaired with --dry-run, the products which are repaired otherwise",
     )
     ap.add_argument(
         "--output-all",
@@ -602,8 +590,8 @@ def main() -> None:
 
     Writes exactly what the ancestry sweeper writes.  Products whose parent cannot be confirmed are reported and left
     untouched (not stamped), as are products with a pending entry in the deferral index (the ancestry sweeper's merge
-    step applies those).  Dry run unless --apply is given; --dry-run also lists the products to stdout.  Run it after
-    the ancestry sweeper, with no other sweeper running on the node.
+    step applies those).  Writes the repairs unless --dry-run is given, which lists the products to stdout instead.
+    Run it after the ancestry sweeper, with no other sweeper running on the node.
     """
     args = parse_args(description=cli_description, configure_parser=_configure_cli)
     client = get_userpass_opensearch_client(
@@ -614,7 +602,6 @@ def main() -> None:
         client=client,
         log_level=args.log_level,
         log_filepath=args.log_file,
-        apply=args.apply,
         dry_run=args.dry_run,
         output_file=args.output_file,
         output_all=args.output_all,

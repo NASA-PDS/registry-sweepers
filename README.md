@@ -29,7 +29,7 @@ The ancestry sweeper reaches a non-aggregate product only through the `registry-
 
 It **only repairs where a refs document confirms the parent**. A product that no refs document lists, or which is listed only under a collection that is not in the registry, is never guessed: nothing is written to it and it is not stamped, so every run examines it again and repairs it as soon as a refs document appears. These products are counted and reported separately as *unresolved*; they are data problems for the node (a collection inventory that was never loaded or that does not list them). Re-examining them costs a product query and a refs query per batch on every run.
 
-It is **a dry run by default**: it reports counts (products examined, left to the deferral merge, repairable, unresolved by reason, and when applying, repaired / already up to date / vanished before write / failed) and writes nothing. Pass `--apply` to write, or `--dry-run` to make the dry run explicit and list the products. A product that vanishes between read and write is counted and does not abort the run.
+Like every other sweeper, it **writes by default**. It reports counts (products examined, left to the deferral merge, repairable, unresolved by reason, and repaired / already up to date / vanished before write / failed). Pass `--dry-run` to write nothing and list the products which would be repaired instead. A product that vanishes between read and write is counted and does not abort the run.
 
 ##### Interaction with the deferral
 When the ancestry sweeper writes ancestry for a product that is not yet in the registry, the update is stored in the deferral index (`<registry index>-deferred-updates`, keyed by product LIDVID). At the end of every ancestry run, inside the ancestry sweeper, a merge step applies each stored update to its product once the product document exists and then deletes the entry. The orphan repair is ordered after the ancestry sweeper, so:
@@ -38,37 +38,34 @@ When the ancestry sweeper writes ancestry for a product that is not yet in the r
 - A product that still has a deferral entry when the repair examines it (the merge failed for it, or the repair was run out of order) is left to the merge: it is not written, not stamped, and counted as *left to the deferral merge*. The merge applies its entry as a partial document, which replaces `ancestor_refs`, and deletes the entry; a repair write in between would be overwritten by it, or leave the entry behind. If the count does not fall after an ancestry run, the merge is failing for those products.
 - Everything else is unaffected: the repair writes with the ancestry sweeper's painless script, which only appends missing refs, so a later merge or a second repair run changes nothing it has already written.
 
-The mode is chosen with `--dry-run` or `--apply` (mutually exclusive); `--output-file` and `--output-all` only shape the listing of products.
-
-| Flags | Registry writes | stdout | `--output-file FILE` |
+| Flags | Registry writes | stdout | `--output-file FILE` (optional) |
 |---|---|---|---|
-| neither (default) | none (dry run) | the summary counts only | writes the listing of the repairable products |
+| none (default) | the repairs | the summary counts only | the listing of the repaired products |
 | `--dry-run` | none | the listing of the products which would be repaired (TSV: `status`, `product_lidvid`, `collection_lidvids`), then the summary | the same listing, identical to stdout |
-| `--apply` | the repairs | the summary counts only | writes the listing of the repaired products |
 
 `--output-all` adds the unresolved products (no refs listing, collection not in the registry, and those left to the deferral merge) to the listing, on stdout and in the file. Log messages go to stderr, so stdout holds only the listing and the summary; the summary is always last.
 
 ```bash
-# default: report counts only, nothing written, no listing
+# write the repairs
 python -m pds.registrysweepers.ancestry_orphan_repair --base-URL "${PROV_ENDPOINT}" --log-level INFO
 
-# explicit dry run: print the products which would be repaired to stdout, then the summary
+# write the repairs, keeping a list of the repaired products
+python -m pds.registrysweepers.ancestry_orphan_repair --base-URL "${PROV_ENDPOINT}" --output-file repaired.tsv
+
+# dry run: print the products which would be repaired to stdout, then the summary
 python -m pds.registrysweepers.ancestry_orphan_repair --base-URL "${PROV_ENDPOINT}" --dry-run
 
 # dry run, also saving the listing to a file, and including the unresolved products
 python -m pds.registrysweepers.ancestry_orphan_repair --base-URL "${PROV_ENDPOINT}" --dry-run --output-file repairable.tsv --output-all
 
-# write the repairs, keeping a list of the repaired products
-python -m pds.registrysweepers.ancestry_orphan_repair --base-URL "${PROV_ENDPOINT}" --apply --output-file repaired.tsv
-
 # through the driver (credentials and MULTITENANCY_NODE_ID from the environment, as for the other sweepers)
+pds-registry-sweepers --only ancestry ancestry-orphan-repair
 pds-registry-sweepers --only ancestry-orphan-repair --dry-run
-pds-registry-sweepers --only ancestry ancestry-orphan-repair --apply
 ```
 
-Through the driver, `--dry-run`, `--apply`, `--output-file` and `--output-all` apply to `ancestry-orphan-repair` only. `--dry-run` is refused unless `ancestry-orphan-repair` is the only sweeper selected (`--only ancestry-orphan-repair`), because the other sweepers write and would not be dry runs.
+Through the driver, `--output-file` and `--output-all` apply to `ancestry-orphan-repair` only. `--dry-run` is accepted only when every selected sweeper supports it (currently only `ancestry-orphan-repair`), so the default suite refuses it; use `--only ancestry-orphan-repair --dry-run`.
 
-Options: `--batch-size` (products examined and refs terms looked up per round trip, default 2000, at most 10000), `--include-superseded` (superseded versions are skipped by default), `--output-file` / `--output-all` (see above). It is part of the default suite and the driver always runs it immediately after `ancestry` when both are selected; as a dry run it only reports, so a scheduled run that should repair uses `pds-registry-sweepers --apply`. As for every sweeper, run it with no other sweeper running on the same node.
+Options: `--batch-size` (products examined and refs terms looked up per round trip, default 2000, at most 10000), `--include-superseded` (superseded versions are skipped by default), `--dry-run`, `--output-file` / `--output-all` (see above). It is part of the default suite, where it writes like the other sweepers, and the driver always runs it immediately after `ancestry` when both are selected. As for every sweeper, run it with no other sweeper running on the same node.
 
 Limits:
 - It cannot repair a product that no refs document lists, nor one whose only listing collection is missing from the registry.
@@ -144,8 +141,8 @@ pds-registry-sweepers --only ancestry provenance
 pds-registry-sweepers --only legacy-sync
 ```
 
-- With no flags, the full default suite runs: `provenance`, `ancestry`, `ancestry-orphan-repair`, `reindexer`. The orphan repair runs right after `ancestry` and is a dry run (it only reports) unless `--apply` is given, so a scheduled run that should repair uses `pds-registry-sweepers --apply`.
-- With `--only <name> [name ...]`, only the named sweeper(s) run. Available names: `provenance`, `ancestry`, `reindexer`, `legacy-sync`, `ancestry-orphan-repair` (a dry run unless `--apply` is given; `--dry-run` is accepted only with `--only ancestry-orphan-repair`; see above).
+- With no flags, the full default suite runs: `provenance`, `ancestry`, `ancestry-orphan-repair`, `reindexer`. The orphan repair runs right after `ancestry` and writes, like the other sweepers.
+- With `--only <name> [name ...]`, only the named sweeper(s) run. Available names: `provenance`, `ancestry`, `reindexer`, `legacy-sync`, `ancestry-orphan-repair` (`--dry-run` is accepted only when every selected sweeper supports it, i.e. with `--only ancestry-orphan-repair`; see above).
 
 `PROV_ENDPOINT` and (for non-AWS OpenSearch) `PROV_CREDENTIALS` environment variables are required. See the Developer Quickstart section for details.
 

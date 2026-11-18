@@ -115,9 +115,7 @@ def test_driver_run_in_default_order_leaves_the_repair_only_what_the_deferral_ca
     monkeypatch.setitem(driver.SWEEPER_REGISTRY, "ancestry-orphan-repair", capture)
     monkeypatch.setattr(driver, "get_opensearch_client_from_environment", lambda verify_certs: registry)
     # the requested order is wrong on purpose: the driver puts the repair right after ancestry
-    monkeypatch.setattr(
-        sys, "argv", ["registry-sweepers", "--only", "ancestry-orphan-repair", "ancestry", "--apply"]
-    )
+    monkeypatch.setattr(sys, "argv", ["registry-sweepers", "--only", "ancestry-orphan-repair", "ancestry"])
     assert list(registry.deferred) == [DEFERRED]
 
     driver.run()
@@ -145,11 +143,11 @@ def test_after_the_ancestry_run_the_repair_repairs_overwritten_and_late_listed_p
     deferred_doc_before = doc(registry, DEFERRED)
     writes_before = len(registry.written_ids)
 
-    dry_run = repair(registry)
+    dry_run = repair(registry, dry_run=True)
     assert (dry_run.products_examined, dry_run.repairable, dry_run.unresolved) == (3, 2, 1)
     assert len(registry.written_ids) == writes_before  # dry run writes nothing
 
-    applied = repair(registry, apply=True)
+    applied = repair(registry)
 
     assert applied.repaired == 2
     assert sorted(registry.written_ids[writes_before:]) == sorted([OVERWRITTEN, LISTED_LATE])
@@ -185,8 +183,8 @@ def test_a_product_with_a_pending_deferral_entry_is_not_touched_by_the_repair(re
     registry.add_refs(C1, [DEFERRED])  # a refs document lists it too, so it would otherwise be repairable
     writes_before = len(registry.written_ids)
 
-    for apply in (False, True):
-        report = repair(registry, apply=apply)
+    for dry_run in (True, False):
+        report = repair(registry, dry_run=dry_run)
 
         assert report.pending_deferral == 1
         assert report.products_examined == 4
@@ -200,13 +198,13 @@ def test_a_product_with_a_pending_deferral_entry_is_not_touched_by_the_repair(re
 
 def test_the_merge_then_completes_what_the_repair_left_and_the_repair_has_nothing_more_to_do(registry):
     sweep_then_harvest(registry)
-    repair(registry, apply=True)
+    repair(registry)
 
     ancestry_main.run(registry)  # merge: DEFERRED is orphaned and has an entry
 
     assert sorted(registry.registry[DEFERRED][REFS]) == sorted([C1, C1_LID])
     assert registry.deferred == {}
-    second = repair(registry, apply=True)
+    second = repair(registry)
     assert second.products_examined == 1  # only UNLISTED remains
     assert second.unresolved == 1 and second.repaired == 0
 
@@ -219,7 +217,7 @@ def test_pending_deferral_is_counted_apart_from_unresolved(registry, listed_in_r
     if listed_in_refs:
         registry.add_refs(C1, [product(10)])
 
-    report = repair(registry, apply=True)
+    report = repair(registry)
 
     assert report.pending_deferral == 1
     assert report.unresolved == 0 and report.repairable == 0
@@ -237,7 +235,7 @@ def test_every_examined_product_is_counted_exactly_once(registry):
     registry.add_refs(MISSING_COLLECTION, [product(3)])
     registry.add_deferral(product(4), [C1, C1_LID])
 
-    report = repair(registry, apply=True)
+    report = repair(registry)
 
     assert report.products_examined == 4
     assert (report.repairable, report.no_refs_listing, report.listed_only_under_collection_not_in_registry) == (1, 1, 1)
@@ -257,8 +255,8 @@ def test_a_product_whose_parent_cannot_be_found_is_never_stamped_next_to_deferre
     registry.add_deferral(product(3), [C1, C1_LID])
     before = copy.deepcopy(registry.registry)
 
-    for apply in (False, True):
-        repair(registry, apply=apply)
+    for dry_run in (True, False):
+        repair(registry, dry_run=dry_run)
 
     assert registry.registry == before
     assert registry.written_ids == [] and registry.bulk_calls == []
@@ -362,7 +360,7 @@ def test_without_a_deferral_index_nothing_is_looked_up(registry):
     registry.add_product(product(1))
     registry.add_refs(C1, [product(1)])
 
-    report = repair(registry, apply=True)
+    report = repair(registry)
 
     assert registry.mget_calls == []
     assert report.pending_deferral == 0 and report.repaired == 1
@@ -376,7 +374,7 @@ def test_multitenant_structured_index_names_are_used_for_every_request(registry,
     registry.add_refs(C1, [product(1)])
     registry.add_deferral(product(2), [C1, C1_LID])
 
-    repair(registry, apply=True)
+    repair(registry)
 
     searched = {c["index"] for c in registry.search_calls}
     assert searched == {"en-registry-structured", "en-registry-structured-refs"}

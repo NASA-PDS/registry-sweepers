@@ -59,38 +59,29 @@ def test_run_only_legacy_sync(monkeypatch):
     assert sweeper_calls == ["legacy-sync"]
 
 
-def test_orphan_repair_is_part_of_the_default_suite_and_a_dry_run_unless_applied(monkeypatch):
+def test_orphan_repair_is_part_of_the_default_suite_and_writes_like_the_other_sweepers(monkeypatch):
     kwargs = {}
     sweeper_calls = _run_driver_with_args(monkeypatch, [], kwargs)
 
     assert sweeper_calls.index("ancestry-orphan-repair") == sweeper_calls.index("ancestry") + 1
-    assert kwargs["ancestry-orphan-repair"]["apply"] is False
+    assert "dry_run" not in kwargs["ancestry-orphan-repair"]
+    assert all(kwargs[name] == {} for name in ("provenance", "ancestry", "reindexer"))
 
 
-def test_run_only_orphan_repair_is_a_dry_run_by_default(monkeypatch):
+def test_run_only_orphan_repair_writes_by_default(monkeypatch):
     kwargs = {}
     sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "ancestry-orphan-repair"], kwargs)
 
     assert sweeper_calls == ["ancestry-orphan-repair"]
-    assert kwargs["ancestry-orphan-repair"] == {
-        "apply": False,
-        "dry_run": False,
-        "output_file": None,
-        "output_all": False,
-    }
+    assert kwargs["ancestry-orphan-repair"] == {"output_file": None, "output_all": False}
 
 
-def test_orphan_repair_receives_apply_and_output_options_and_other_sweepers_do_not(monkeypatch):
+def test_orphan_repair_receives_output_options_and_other_sweepers_do_not(monkeypatch):
     kwargs = {}
-    args = ["--only", "ancestry", "ancestry-orphan-repair", "--apply", "--output-file", "/tmp/x.tsv", "--output-all"]
+    args = ["--only", "ancestry", "ancestry-orphan-repair", "--output-file", "/tmp/x.tsv", "--output-all"]
     _run_driver_with_args(monkeypatch, args, kwargs)
 
-    assert kwargs["ancestry-orphan-repair"] == {
-        "apply": True,
-        "dry_run": False,
-        "output_file": "/tmp/x.tsv",
-        "output_all": True,
-    }
+    assert kwargs["ancestry-orphan-repair"] == {"output_file": "/tmp/x.tsv", "output_all": True}
     assert kwargs["ancestry"] == {}
 
 
@@ -99,12 +90,7 @@ def test_dry_run_is_accepted_with_only_the_orphan_repair_and_reaches_nothing_els
     sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "ancestry-orphan-repair", "--dry-run"], kwargs)
 
     assert sweeper_calls == ["ancestry-orphan-repair"]
-    assert kwargs["ancestry-orphan-repair"] == {
-        "apply": False,
-        "dry_run": True,
-        "output_file": None,
-        "output_all": False,
-    }
+    assert kwargs["ancestry-orphan-repair"] == {"dry_run": True, "output_file": None, "output_all": False}
 
 
 def test_dry_run_with_output_file_reaches_the_orphan_repair(monkeypatch):
@@ -112,26 +98,21 @@ def test_dry_run_with_output_file_reaches_the_orphan_repair(monkeypatch):
     args = ["--only", "ancestry-orphan-repair", "--dry-run", "--output-file", "/tmp/x.tsv", "--output-all"]
     _run_driver_with_args(monkeypatch, args, kwargs)
 
-    assert kwargs["ancestry-orphan-repair"] == {
-        "apply": False,
-        "dry_run": True,
-        "output_file": "/tmp/x.tsv",
-        "output_all": True,
-    }
+    assert kwargs["ancestry-orphan-repair"] == {"dry_run": True, "output_file": "/tmp/x.tsv", "output_all": True}
 
 
 @pytest.mark.parametrize(
-    "selection",
+    "selection, unsupported",
     [
-        [],  # the default suite includes sweepers which write
-        ["--only", "ancestry", "ancestry-orphan-repair"],
-        ["--only", "provenance"],
-        ["--only", "ancestry"],
-        ["--only", "reindexer"],
-        ["--only", "legacy-sync"],
+        ([], "provenance, ancestry, reindexer"),  # the default suite includes sweepers which write
+        (["--only", "ancestry", "ancestry-orphan-repair"], "ancestry"),
+        (["--only", "provenance"], "provenance"),
+        (["--only", "ancestry"], "ancestry"),
+        (["--only", "reindexer"], "reindexer"),
+        (["--only", "legacy-sync"], "legacy-sync"),
     ],
 )
-def test_dry_run_is_rejected_when_sweepers_which_write_are_selected(monkeypatch, capsys, selection):
+def test_dry_run_is_rejected_unless_every_selected_sweeper_supports_it(monkeypatch, capsys, selection, unsupported):
     sweeper_calls = []
 
     with pytest.raises(SystemExit) as excinfo:
@@ -139,15 +120,25 @@ def test_dry_run_is_rejected_when_sweepers_which_write_are_selected(monkeypatch,
 
     assert excinfo.value.code == 2
     assert sweeper_calls == []  # nothing ran
-    assert "--only ancestry-orphan-repair" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "--dry-run is only supported by ancestry-orphan-repair" in err
+    assert f"would write for real with {unsupported}." in err
+    assert "--only ancestry-orphan-repair --dry-run" in err
 
 
-def test_dry_run_and_apply_are_mutually_exclusive(monkeypatch, capsys):
+def test_dry_run_sweepers_is_the_list_the_guard_uses():
+    assert driver.DRY_RUN_SWEEPERS == ["ancestry-orphan-repair"]
+
+
+def test_apply_is_not_a_recognised_argument(monkeypatch, capsys):
+    sweeper_calls = []
+
     with pytest.raises(SystemExit) as excinfo:
-        _run_driver_with_args(monkeypatch, ["--only", "ancestry-orphan-repair", "--dry-run", "--apply"])
+        sweeper_calls = _run_driver_with_args(monkeypatch, ["--only", "ancestry-orphan-repair", "--apply"])
 
     assert excinfo.value.code == 2
-    assert "mutually exclusive" in capsys.readouterr().err
+    assert sweeper_calls == []
+    assert "unrecognized arguments: --apply" in capsys.readouterr().err
 
 
 def test_orphan_repair_runs_after_ancestry_whatever_the_requested_order(monkeypatch):
