@@ -58,7 +58,7 @@ Options: `--batch-size` (products examined and refs terms looked up per round tr
 Limits:
 - It cannot repair a product that no refs document lists, nor one whose only listing collection is missing from the registry.
 - It does not fix a collection that was stamped without a link to its bundle ([#301](https://github.com/NASA-PDS/registry-sweepers/issues/301)); it only writes non-aggregate products.
-- It repairs a product only from the refs documents as they are now: it does not check that the collection's inventory is complete, and a product that already carries the current stamp is not examined, even if it lacks some of its parents.
+- It repairs a product only from the refs documents as they are now: it does not check that the collection's inventory is complete, and a product that already carries the current stamp is not examined, even if it lacks some of its parents ([#308](https://github.com/NASA-PDS/registry-sweepers/issues/308)).
 
 #### [Reindexer](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/reindexer/main.py)
 The reindexer sweeper ensures that the registry index mappings are updated with all fields available in the registry-dd index, and then triggers reindexation on all products which have not yet been successfully processed previously.  This ensures that all products are searchable on all fields, provided a field type mapping is defined in the registry-dd index at the time of processing.
