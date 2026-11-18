@@ -17,7 +17,7 @@ class UpdateKind(Enum):
 
     PENDING_COLLECTION = "pending collection"  # a collection which is not stamped with the current version
     COLLECTION_COMPLETE = "collection complete"  # stamps a pending collection once its non-aggregates are processed
-    STAMPED_COLLECTION_LINK = "stamped collection bundle link"  # adds a bundle to an already-stamped collection (#301)
+    STAMPED_COLLECTION_LINK = "stamped collection bundle link"  # adds a bundle to an already-stamped collection
     BUNDLE = "bundle"
     NONAGGREGATE = "non-aggregate"
 
