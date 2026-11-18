@@ -54,14 +54,14 @@ class AncestryDryRunReport:
     def summary_lines(self) -> List[str]:
         lines = [
             f"Ancestry sweeper v{SWEEPERS_ANCESTRY_VERSION} - DRY RUN (nothing was written to the registry)",
-            f"  document updates a real run would write: {self.total_updates}",
-            f"    pending collections (collection documents, bundle ancestry): {self.pending_collections}",
-            f"    pending collections marked complete (second update, after their non-aggregates): "
-            f"{self.collection_completions}",
-            f"    bundles: {self.bundles}",
-            f"    collections which already carry v{SWEEPERS_ANCESTRY_VERSION} and only get a bundle link added: "
+            "",
+            f"Document updates a real run would write: {self.total_updates}",
+            f"  Pending collections: {self.pending_collections}",
+            f"  Pending collections marked complete afterwards: {self.collection_completions}",
+            f"  Bundles: {self.bundles}",
+            f"  Collections already at v{SWEEPERS_ANCESTRY_VERSION} that only get a bundle link added: "
             f"{self.stamped_collections_linked} ({self.stamped_collection_links} bundle links)",
-            f"    non-aggregate products: {self.nonaggregates}",
+            f"  Non-aggregate products: {self.nonaggregates}",
         ]
         if self.unclassified:
             lines.append(f"    updates of unknown kind: {self.unclassified}")
@@ -90,8 +90,8 @@ def _mapping_report_lines(client) -> List[str]:
                 state = "present"
             else:
                 state = f"mapped as {existing_type} - a real run would fail"
-            lines.append(f"    mapping {key} in {index_name}: {state}")
-    return ["  index mappings (read only):"] + lines
+            lines.append(f"  {index_name}  {key}: {state}")
+    return ["", "Index mappings (read only):"] + lines
 
 
 def summarise_dry_run(
@@ -133,8 +133,9 @@ def summarise_dry_run(
 
     report.mapping_lines = _mapping_report_lines(client)
 
-    for line in report.summary_lines():
-        log.info(limit_log_length(line))
-        print(line)
+    # The report is printed once as a plain block; the log gets a single line, so that a run at INFO level does not
+    # repeat every line of the report behind a timestamp.
+    print("\n".join(report.summary_lines()))
+    log.info(limit_log_length(f"Dry run complete: {report.total_updates} document updates would be written; none were"))
 
     return report
