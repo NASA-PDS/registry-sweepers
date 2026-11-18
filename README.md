@@ -43,7 +43,7 @@ pds-registry-sweepers --only ancestry-orphan-repair
 pds-registry-sweepers --only ancestry ancestry-orphan-repair --apply
 ```
 
-Options: `--batch-size` (products examined and refs terms looked up per round trip, default 2000, at most 10000), `--include-superseded` (superseded versions are skipped by default), `--output-file` / `--output-all`. It is not part of the default suite; when selected together with `ancestry` the driver always runs it immediately after `ancestry`. As for every sweeper, run it with no other sweeper running on the same node.
+Options: `--batch-size` (products examined and refs terms looked up per round trip, default 2000, at most 10000), `--include-superseded` (superseded versions are skipped by default), `--output-file` / `--output-all`. It is part of the default suite in dry-run mode; when selected together with `ancestry` the driver always runs it immediately after `ancestry`. As for every sweeper, run it with no other sweeper running on the same node.
 
 Limits:
 - It cannot repair a product that no refs document lists, nor one whose only listing collection is missing from the registry.
