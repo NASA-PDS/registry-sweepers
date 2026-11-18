@@ -114,7 +114,7 @@ def test_counts_are_taken_from_the_items_of_every_chunk_not_from_the_number_of_a
 
 def test_skipped_updates_are_not_counted_as_attempted(caplog):
     client = _ScriptedClient()
-    updates = _updates("ok1", "ok2") + [Update(id="skipme", content={}, skip_write=True)]
+    updates = _updates("ok1", "ok2") + [Update(id="skipme", content={"k": "v"}, skip_write=True)]
 
     summary = write_updated_docs(client, updates, index_name="registry")
 
