@@ -106,10 +106,10 @@ class TestDryRun:
 
         out = capsys.readouterr().out
         assert "DRY RUN (nothing was written to the registry)" in out
-        assert "document updates a real run would write: 6" in out
+        assert "Document updates a real run would write: 6" in out
         assert "only get a bundle link added: 1 (1 bundle links)" in out
-        assert "non-aggregate products: 2" in out
-        assert any("document updates a real run would write: 6" in line for line in logged)
+        assert "Non-aggregate products: 2" in out
+        assert logged == ["Dry run complete: 6 document updates would be written; none were"]
 
     def test_reports_the_mappings_a_real_run_would_create_without_creating_them(self, mock_opensearch_client, capsys):
         register_scenario(mock_opensearch_client)
