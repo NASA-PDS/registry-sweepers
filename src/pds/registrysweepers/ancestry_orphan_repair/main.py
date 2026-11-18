@@ -470,12 +470,19 @@ def run(
         if file_handle is not None:
             file_handle.close()
 
-    for line in report.summary_lines():
-        log.info(limit_log_length(line))
-
+    # The summary block is printed once as plain text (below for a dry run, by main() otherwise); the log gets a single
+    # line, so that a run at INFO level does not repeat every line of the summary behind a timestamp.
     if dry_run:
         # the listing has been written; the summary comes last
         print("\n".join(report.summary_lines()), flush=True)
+        outcome = f"{report.repairable} repairable"
+    else:
+        outcome = f"{report.repaired} repaired"
+    log.info(
+        limit_log_length(
+            f"Orphan repair complete: {report.products_examined} examined, {outcome}, {report.unresolved} unresolved"
+        )
+    )
 
     return report
 
