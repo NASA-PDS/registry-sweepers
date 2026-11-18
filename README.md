@@ -48,6 +48,7 @@ Options: `--batch-size` (products examined and refs terms looked up per round tr
 Limits:
 - It cannot repair a product that no refs document lists, nor one whose only listing collection is missing from the registry.
 - It does not fix a collection that was stamped without a link to its bundle ([#301](https://github.com/NASA-PDS/registry-sweepers/issues/301)); it only writes non-aggregate products.
+- A product that already has a current stamp and ancestry for one collection is not examined, even if it is also listed by another collection whose refs were written after that collection was stamped, so the second collection is missing from its ancestry. A product that is new to the registry is not affected. Reconciling counts per collection would find these without reading every product ([#308](https://github.com/NASA-PDS/registry-sweepers/issues/308)).
 - It repairs a product only from the refs documents as they are now: it does not check that the collection's inventory is complete.
 
 #### [Reindexer](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/reindexer/main.py)
