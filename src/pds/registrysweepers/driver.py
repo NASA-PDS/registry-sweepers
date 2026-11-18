@@ -86,9 +86,12 @@ SWEEPER_REGISTRY = {
 
 ORPHAN_REPAIR_SWEEPER = "ancestry-orphan-repair"
 
-# The orphan repair is part of the default suite and runs right after ancestry. It is a dry run, which reports what it
-# would repair, unless --apply is given.  --dry-run is the explicit dry run, which also lists the products on stdout.
+# The orphan repair is part of the default suite and runs right after ancestry.  Like every other sweeper, it writes.
 DEFAULT_SWEEPERS = ["provenance", "ancestry", ORPHAN_REPAIR_SWEEPER, "reindexer"]
+
+# The sweepers which implement --dry-run.  Any other sweeper would write for real, so --dry-run is refused unless every
+# selected sweeper is in this list.
+DRY_RUN_SWEEPERS = [ORPHAN_REPAIR_SWEEPER]
 
 
 def order_sweepers(names: List[str]) -> List[str]:
@@ -145,15 +148,9 @@ def run():
         "--dry-run",
         action="store_true",
         default=False,
-        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER} (select it with --only {ORPHAN_REPAIR_SWEEPER}): write nothing "
-        "and print the products it would repair to stdout as TSV, followed by the summary.",
-    )
-    parser.add_argument(
-        "--apply",
-        action="store_true",
-        default=False,
-        help=f"Only applies to {ORPHAN_REPAIR_SWEEPER}: write the repairs.  With neither --dry-run nor --apply that "
-        "sweeper is a dry run which only reports counts.",
+        help=f"Read and generate everything but write nothing to the registry, and report what would be written.  Only "
+        f"supported by: {', '.join(DRY_RUN_SWEEPERS)}.  Every selected sweeper must support it, so combine it with "
+        f"--only.",
     )
     parser.add_argument(
         "--output-file",
@@ -170,28 +167,23 @@ def run():
 
     args = parser.parse_args()
 
-    if args.dry_run and args.apply:
-        parser.error("--dry-run and --apply are mutually exclusive")
-
     names = order_sweepers(args.only if args.only else DEFAULT_SWEEPERS)
-    if args.dry_run and names != [ORPHAN_REPAIR_SWEEPER]:
-        # the other sweepers write and would not be dry runs, so --dry-run would give a false assurance
-        parser.error(
-            f"--dry-run only applies to {ORPHAN_REPAIR_SWEEPER} and the other selected sweepers would write "
-            f"({', '.join(n for n in names if n != ORPHAN_REPAIR_SWEEPER)}); select it alone with "
-            f"--only {ORPHAN_REPAIR_SWEEPER}"
-        )
-
     sweepers = [SWEEPER_REGISTRY[name] for name in names]
 
-    orphan_repair_options = {
-        "apply": args.apply,
-        "dry_run": args.dry_run,
-        "output_file": args.output_file,
-        "output_all": args.output_all,
-    }
-    if ORPHAN_REPAIR_SWEEPER not in names and (args.apply or args.output_file or args.output_all):
-        log.warning(limit_log_length(f"--apply/--output-file/--output-all have no effect without {ORPHAN_REPAIR_SWEEPER}"))
+    if args.dry_run:
+        writers = [name for name in names if name not in DRY_RUN_SWEEPERS]
+        if writers:
+            parser.error(
+                f"--dry-run is only supported by {', '.join(DRY_RUN_SWEEPERS)}, and would write for real with "
+                f"{', '.join(writers)}.  Select only the sweepers which support it, e.g. --only {DRY_RUN_SWEEPERS[0]} "
+                f"--dry-run."
+            )
+
+    # Passed only for a dry run, so that a normal run calls the sweepers exactly as before.
+    dry_run_options = {"dry_run": True} if args.dry_run else {}
+    orphan_repair_options = {"output_file": args.output_file, "output_all": args.output_all}
+    if ORPHAN_REPAIR_SWEEPER not in names and (args.output_file or args.output_all):
+        log.warning(limit_log_length(f"--output-file/--output-all have no effect without {ORPHAN_REPAIR_SWEEPER}"))
 
     sweeper_descriptions = [module_name(f) for f in sweepers]
     log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
@@ -202,7 +194,10 @@ def run():
 
     for name, sweeper in zip(names, sweepers):
         sweeper_execution_begin = datetime.now()
-        run_sweeper_f = run_factory(sweeper, **(orphan_repair_options if name == ORPHAN_REPAIR_SWEEPER else {}))
+        sweeper_options = dict(dry_run_options) if name in DRY_RUN_SWEEPERS else {}
+        if name == ORPHAN_REPAIR_SWEEPER:
+            sweeper_options.update(orphan_repair_options)
+        run_sweeper_f = run_factory(sweeper, **sweeper_options)
 
         run_sweeper_f()
 
