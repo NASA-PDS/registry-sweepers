@@ -11,8 +11,9 @@ from dataclasses import dataclass
 from typing import Iterable
 from typing import List
 from typing import Optional
-from typing import TextIO
 
+from pds.registrysweepers.ancestry.bundlelinks import open_links_file
+from pds.registrysweepers.ancestry.bundlelinks import write_bundle_links
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
 from pds.registrysweepers.ancestry.productupdaterecord import UpdateKind
@@ -23,8 +24,6 @@ from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index
 from pds.registrysweepers.utils.misc import limit_log_length
 
 log = logging.getLogger(__name__)
-
-LINKS_FILE_HEADER = "collection_lidvid\tbundle_lidvid_added"
 
 
 @dataclass
@@ -69,10 +68,6 @@ class AncestryDryRunReport:
         return lines
 
 
-def _bundle_lidvids_added(record: ProductUpdateRecord) -> List[str]:
-    return sorted(str(lidvid) for lidvid in record.direct_ancestor_lidvid_refs)
-
-
 def _mapping_report_lines(client) -> List[str]:
     """Report, by reading the mappings, which ones a real run would create.  Nothing is created."""
     lines = []
@@ -104,11 +99,7 @@ def summarise_dry_run(
     """
     report = AncestryDryRunReport()
 
-    handle: Optional[TextIO] = open(output_file, "w", encoding="utf-8") if output_file else None
-    try:
-        if handle is not None:
-            handle.write(LINKS_FILE_HEADER + "\n")
-
+    with open_links_file(output_file) as handle:
         for record in records:
             if record.kind == UpdateKind.PENDING_COLLECTION:
                 report.pending_collections += 1
@@ -118,18 +109,11 @@ def summarise_dry_run(
                 report.bundles += 1
             elif record.kind == UpdateKind.STAMPED_COLLECTION_LINK:
                 report.stamped_collections_linked += 1
-                bundle_lidvids = _bundle_lidvids_added(record)
-                report.stamped_collection_links += len(bundle_lidvids)
-                if handle is not None:
-                    for bundle_lidvid in bundle_lidvids:
-                        handle.write(f"{record.product}\t{bundle_lidvid}\n")
+                report.stamped_collection_links += write_bundle_links(handle, record)
             elif record.kind == UpdateKind.NONAGGREGATE:
                 report.nonaggregates += 1
             else:
                 report.unclassified += 1
-    finally:
-        if handle is not None:
-            handle.close()
 
     report.mapping_lines = _mapping_report_lines(client)
 

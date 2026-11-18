@@ -137,8 +137,8 @@ def run():
     parser.add_argument(
         "--output-file",
         default=None,
-        help="Only applies to a --dry-run of ancestry: write a TSV of the bundle links it would add to collections "
-        "which already carry the current ancestry version to this file.",
+        help="Only applies to ancestry: write a TSV of the bundle links it adds to collections which already carry the "
+        "current ancestry version to this file (with --dry-run, the links it would add).",
     )
 
     args = parser.parse_args()
@@ -154,11 +154,18 @@ def run():
                 f"{', '.join(writers)}.  Select only the sweepers which support it, e.g. --only {DRY_RUN_SWEEPERS[0]} "
                 f"--dry-run."
             )
-    elif args.output_file:
-        parser.error("--output-file requires --dry-run")
 
-    # Passed only for a dry run, so that a normal run calls the sweepers exactly as before.
-    dry_run_options = {"dry_run": True, "output_file": args.output_file} if args.dry_run else {}
+    if args.output_file and "ancestry" not in names:
+        log.warning(
+            limit_log_length("--output-file only applies to the ancestry sweeper, which is not selected: no effect")
+        )
+
+    # Passed only when given, so that a normal run calls the sweepers exactly as before.
+    ancestry_options = {}
+    if args.dry_run:
+        ancestry_options["dry_run"] = True
+    if args.dry_run or args.output_file:
+        ancestry_options["output_file"] = args.output_file
 
     sweeper_descriptions = [module_name(f) for f in sweepers]
     log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
@@ -169,7 +176,7 @@ def run():
 
     for name, sweeper in zip(names, sweepers):
         sweeper_execution_begin = datetime.now()
-        run_sweeper_f = run_factory(sweeper, **(dry_run_options if name in DRY_RUN_SWEEPERS else {}))
+        run_sweeper_f = run_factory(sweeper, **(ancestry_options if name == "ancestry" else {}))
 
         run_sweeper_f()
 

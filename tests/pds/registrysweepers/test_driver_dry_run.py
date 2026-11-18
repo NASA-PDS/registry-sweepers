@@ -85,9 +85,37 @@ def test_the_error_names_the_sweepers_which_would_write(monkeypatch, capsys):
     assert "would write for real with provenance" in capsys.readouterr().err
 
 
-def test_output_file_requires_dry_run(monkeypatch, capsys):
-    with pytest.raises(SystemExit) as exit_info:
+def test_output_file_without_dry_run_is_passed_to_ancestry(monkeypatch):
+    assert _run_driver_with_args(monkeypatch, ["--only", "ancestry", "--output-file", "links.tsv"]) == [
+        ("ancestry", {"output_file": "links.tsv"})
+    ]
+
+
+def test_output_file_is_passed_to_ancestry_only(monkeypatch):
+    assert _run_driver_with_args(monkeypatch, ["--only", "provenance", "ancestry", "--output-file", "links.tsv"]) == [
+        ("provenance", {}),
+        ("ancestry", {"output_file": "links.tsv"}),
+    ]
+
+
+def test_output_file_with_the_default_suite_is_passed_to_ancestry(monkeypatch):
+    calls = _run_driver_with_args(monkeypatch, ["--output-file", "links.tsv"])
+
+    assert dict(calls)["ancestry"] == {"output_file": "links.tsv"}
+    assert dict(calls)["provenance"] == {}
+    assert dict(calls)["reindexer"] == {}
+
+
+def test_output_file_without_ancestry_warns_that_it_has_no_effect(monkeypatch, caplog):
+    with caplog.at_level(logging.WARNING):
+        calls = _run_driver_with_args(monkeypatch, ["--only", "provenance", "--output-file", "links.tsv"])
+
+    assert calls == [("provenance", {})]
+    assert any("--output-file only applies to the ancestry sweeper" in message for message in caplog.messages)
+
+
+def test_output_file_with_ancestry_does_not_warn(monkeypatch, caplog):
+    with caplog.at_level(logging.WARNING):
         _run_driver_with_args(monkeypatch, ["--only", "ancestry", "--output-file", "links.tsv"])
 
-    assert exit_info.value.code == 2
-    assert "--output-file requires --dry-run" in capsys.readouterr().err
+    assert not any("--output-file" in message for message in caplog.messages)
