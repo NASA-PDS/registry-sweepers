@@ -8,12 +8,15 @@ snapshot (syrupy JSON) for regression. Regenerate snapshots with
 """
 import pytest
 from pds.registrysweepers.ancestry import main as ancestry_main
+from pds.registrysweepers.ancestry import queries as ancestry_queries
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.queries import get_orphaned_documents
+from pds.registrysweepers.ancestry.queries import query_for_collection_nonaggregate_refs
 from pds.registrysweepers.ancestry.queries import query_for_pending_collections
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
 from tests.support.builders import build_bundle
 from tests.support.builders import build_collection
@@ -497,3 +500,54 @@ def test_malformed_documents(registry_db, snapshot):
     assert ANCESTRY_REFS_METADATA_KEY not in _source_by_id(reg_docs, "urn:nasa:pds:malformed:no_class::1.0")
 
     assert reg_docs == snapshot
+
+
+# ---------------------------------------------------------------------------
+# Scenario 13: version comparison on the keyword-typed version field
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("current_version", [8, 9, 10])
+def test_pending_queries_compare_versions_numerically(registry_db, monkeypatch, current_version):
+    """
+    Regression: the ancestry version field is mapped as keyword (ancestry/main.py), so a range
+    query compared versions as strings ("9" >= "10"). Once SWEEPERS_ANCESTRY_VERSION reached 10,
+    every doc stamped 2-9 would have been treated as up to date and silently skipped.
+
+    The pending/orphan queries must treat a doc as pending iff its version is not exactly the
+    current one (so docs from a newer sweeper are reprocessed after a downgrade).
+    """
+    monkeypatch.setattr(ancestry_queries, "SWEEPERS_ANCESTRY_VERSION", current_version)
+
+    stored_versions = [None, 7, 8, 9, 10, 11]
+    lidvid = {v: f"urn:nasa:pds:vcmp:coll_{v if v is not None else 'none'}::1.0" for v in stored_versions}
+    registry_db.load(
+        [build_collection(lidvid[v], ancestry_version=v) for v in stored_versions],
+        index="registry",
+    )
+
+    # One collection whose refs batches carry different versions.
+    refs_collection = "urn:nasa:pds:vcmp:refs_coll::1.0"
+    refs_docs = []
+    for batch_id, v in enumerate(stored_versions, start=1):
+        doc = CollectionRefsBuilder(refs_collection).with_batch_id(batch_id).with_product(
+            f"urn:nasa:pds:vcmp:refs_coll:p_{v if v is not None else 'none'}::1.0"
+        ).build()
+        if v is not None:
+            doc["_source"][SWEEPERS_ANCESTRY_VERSION_METADATA_KEY] = v
+        refs_docs.append(doc)
+    registry_db.load(refs_docs, index="registry-refs")
+
+    expected_pending = {v for v in stored_versions if v != current_version}
+
+    pending_collections = {d["_id"] for d in ancestry_queries.query_for_pending_collections(registry_db.client)}
+    assert pending_collections == {lidvid[v] for v in expected_pending}
+
+    orphans = {d["_id"] for d in get_orphaned_documents(registry_db.client, registry_db.index_names["registry"])}
+    assert orphans == {lidvid[v] for v in expected_pending}
+
+    pending_refs = {
+        str(p) for p in query_for_collection_nonaggregate_refs(registry_db.client, PdsLidVid.from_string(refs_collection))
+    }
+    assert pending_refs == {
+        f"urn:nasa:pds:vcmp:refs_coll:p_{v if v is not None else 'none'}::1.0" for v in expected_pending
+    }

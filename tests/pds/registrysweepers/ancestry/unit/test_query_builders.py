@@ -140,16 +140,17 @@ class TestQueryForPendingCollections:
         must_not = query["query"]["bool"]["must_not"]
         assert len(must_not) >= 1
 
-        # Find the range query for ancestry version
+        # Find the exact-match clause for the current ancestry version. The version field is keyword-typed, so a
+        # range clause would compare as strings ("9" >= "10"); see queries._is_at_current_ancestry_version.
         version_filter = None
         for clause in must_not:
-            if "range" in clause:
+            if "term" in clause:
                 version_filter = clause
                 break
 
         assert version_filter is not None
-        assert SWEEPERS_ANCESTRY_VERSION_METADATA_KEY in version_filter["range"]
-        assert version_filter["range"][SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]["gte"] == SWEEPERS_ANCESTRY_VERSION
+        assert not any("range" in clause for clause in must_not)
+        assert version_filter["term"] == {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: str(SWEEPERS_ANCESTRY_VERSION)}
 
     def test_source_fields_include_lidvid_and_version(self, mock_opensearch_client):
         """Verify query requests lidvid and version fields"""
