@@ -66,20 +66,11 @@ jobs:
         name: 🗄️ DB-backed Tests
         runs-on: ubuntu-latest
         if: github.actor != 'pdsen-ci'
+        timeout-minutes: 20
 
-        services:
-            opensearch:
-                image: opensearchproject/opensearch:2.19.4
-                env:
-                    discovery.type: single-node
-                    DISABLE_SECURITY_PLUGIN: "true"
-                ports:
-                    - 9200:9200
-                options: >-
-                    --health-cmd="curl -s http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"
-                    --health-interval=10s
-                    --health-timeout=5s
-                    --health-retries=12
+        # No services: block. The tests start OpenSearch themselves via testcontainers (Docker is preinstalled on
+        # ubuntu-latest), using the image pinned in tests/support/opensearch_server.py. This is the same path a
+        # developer running `tox -e db` with Docker takes, so CI is what verifies it.
 
         steps:
             -
@@ -103,10 +94,16 @@ jobs:
                     restore-keys: pds-${{runner.os}}-py-
             -
                 name: 🗄️ Run DB Tests
-                env:
-                    TEST_OPENSEARCH_URL: http://localhost:9200
                 run:
                     pip install --editable '.[dev]'
 
                     tox -e db
                 shell: bash
+            -
+                name: 📊 Upload DB Test Coverage
+                if: always()
+                uses: actions/upload-artifact@v4
+                with:
+                    name: db-test-coverage
+                    path: coverage.xml
+                    if-no-files-found: warn
