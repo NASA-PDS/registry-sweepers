@@ -67,6 +67,8 @@ Through the driver, `--output-file` and `--output-all` apply to `ancestry-orphan
 
 Options: `--batch-size` (products examined and refs terms looked up per round trip, default 2000, at most 10000), `--include-superseded` (superseded versions are skipped by default), `--dry-run`, `--output-file` / `--output-all` (see above). It is part of the default suite, where it writes like the other sweepers, and the driver always runs it immediately after `ancestry` when both are selected. As for every sweeper, run it with no other sweeper running on the same node.
 
+Through the driver, `--output-file` is refused when it would be written by more than one sweeper (for example the default suite, or `--only ancestry ancestry-orphan-repair`), because each sweeper lists something different; select one sweeper to use it.
+
 Limits:
 - It cannot repair a product that no refs document lists, nor one whose only listing collection is missing from the registry.
 - It does not fix a collection that was stamped without a link to its bundle ([#301](https://github.com/NASA-PDS/registry-sweepers/issues/301)); it only writes non-aggregate products.
