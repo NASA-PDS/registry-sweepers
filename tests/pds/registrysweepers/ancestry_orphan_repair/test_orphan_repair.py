@@ -678,6 +678,44 @@ def test_default_run_prints_no_listing_and_no_summary_from_run(registry, capsys)
     assert registry.written_ids == [product(1)]
 
 
+def _capture_info(monkeypatch):
+    messages = []
+    monkeypatch.setattr(orphan_repair.log, "info", lambda msg, *a, **k: messages.append(str(msg)))
+    return messages
+
+
+def test_cli_dry_run_prints_the_summary_once_and_logs_a_single_completion_line(monkeypatch, registry, capsys):
+    _populate_mixed(registry)
+    messages = _capture_info(monkeypatch)
+
+    _run_cli(monkeypatch, registry, "--dry-run")
+
+    out = capsys.readouterr().out
+    assert out.count("Ancestry orphan repair - DRY RUN") == 1
+    assert out.count("products examined") == 1
+    assert out.count("data problems for the node") == 1
+    completion = [m for m in messages if m.startswith("Orphan repair complete")]
+    assert completion == ["Orphan repair complete: 3 examined, 1 repairable, 2 unresolved"]
+    assert not [m for m in messages if "products examined" in m or "DRY RUN" in m or "data problems" in m]
+    assert not [m for m in messages if m.startswith("  ")]
+
+
+def test_cli_default_run_prints_the_summary_once_and_logs_a_single_completion_line(monkeypatch, registry, capsys):
+    _populate_mixed(registry)
+    messages = _capture_info(monkeypatch)
+
+    _run_cli(monkeypatch, registry)
+
+    out = capsys.readouterr().out
+    assert out.count("Ancestry orphan repair - APPLIED") == 1
+    assert out.count("  repaired: 1") == 1
+    assert out.count("data problems for the node") == 1
+    completion = [m for m in messages if m.startswith("Orphan repair complete")]
+    assert completion == ["Orphan repair complete: 3 examined, 1 repaired, 2 unresolved"]
+    assert not [m for m in messages if "repaired:" in m or "APPLIED" in m or "data problems" in m]
+    assert not [m for m in messages if m.startswith("  ")]
+
+
 def test_cli_output_file_without_dry_run_lists_the_repaired_products(monkeypatch, registry, capsys, tmp_path):
     _populate_mixed(registry)
     out_file = tmp_path / "repaired.tsv"
