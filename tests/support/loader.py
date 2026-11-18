@@ -1,12 +1,13 @@
 import json
 import logging
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable
+from typing import Optional
 
 from opensearchpy.helpers import bulk
-
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
+
 from tests.support.documents import SeedDoc
 
 log = logging.getLogger(__name__)

@@ -1,4 +1,5 @@
-from typing import List, Optional
+from typing import List
+from typing import Optional
 
 
 # Fields that are volatile across runs and should be dropped during normalisation.

@@ -1,16 +1,13 @@
 """Smoke test: driver.run() with --only ancestry completes without error."""
 import sys
 
+import pds.registrysweepers.driver as driver
 import pytest
 
-import pds.registrysweepers.driver as driver
-
-from tests.support.builders import (
-    build_bundle,
-    build_collection,
-    build_product,
-    CollectionRefsBuilder,
-)
+from tests.support.builders import build_bundle
+from tests.support.builders import build_collection
+from tests.support.builders import build_product
+from tests.support.builders import CollectionRefsBuilder
 
 
 def test_driver_ancestry_smoke(registry_db, monkeypatch):

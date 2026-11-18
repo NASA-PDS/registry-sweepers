@@ -4,19 +4,16 @@ DB-backed ancestry sweeper tests.
 Each test follows: arrange (load seed docs) → act (ancestry.main.run) → refresh → assert.
 """
 import pytest
-
 from pds.registrysweepers.ancestry import main as ancestry_main
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
 from pds.registrysweepers.ancestry.runtimeconstants import AncestryRuntimeConstants
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 
-from tests.support.builders import (
-    build_bundle,
-    build_collection,
-    build_product,
-    CollectionRefsBuilder,
-)
+from tests.support.builders import build_bundle
+from tests.support.builders import build_collection
+from tests.support.builders import build_product
+from tests.support.builders import CollectionRefsBuilder
 
 
 # ---------------------------------------------------------------------------
