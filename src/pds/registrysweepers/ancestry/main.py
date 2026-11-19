@@ -1,3 +1,4 @@
+import argparse
 import logging
 from itertools import chain
 from typing import Callable
@@ -10,7 +11,11 @@ from typing import Union
 
 from opensearchpy import OpenSearch
 from pds.registrysweepers.ancestry.ancestryrecord import AncestryRecord
+from pds.registrysweepers.ancestry.bundlelinks import open_links_file
+from pds.registrysweepers.ancestry.bundlelinks import tee_bundle_links
 from pds.registrysweepers.ancestry.constants import ANCESTRY_REFS_METADATA_KEY
+from pds.registrysweepers.ancestry.dryrun import AncestryDryRunReport
+from pds.registrysweepers.ancestry.dryrun import summarise_dry_run
 from pds.registrysweepers.ancestry.generation import process_collection_ancestries_for_nonaggregates
 from pds.registrysweepers.ancestry.generation import process_collection_bundle_ancestry
 from pds.registrysweepers.ancestry.productupdaterecord import ProductUpdateRecord
@@ -23,6 +28,7 @@ from pds.registrysweepers.utils.db import write_updated_docs
 from pds.registrysweepers.utils.db.client import get_userpass_opensearch_client
 from pds.registrysweepers.utils.db.indexing import ensure_index_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
+from pds.registrysweepers.utils.db.readonly import ReadOnlyOpenSearchClient
 from pds.registrysweepers.utils.db.update import Update
 
 log = logging.getLogger(__name__)
@@ -34,22 +40,75 @@ def run(
         log_level: int = logging.INFO,
         ancestry_records_accumulator: Optional[List[AncestryRecord]] = None,
         bulk_updates_sink: Optional[List[Tuple[str, Dict[str, List]]]] = None,
-):
+        dry_run: bool = False,
+        output_file: Optional[str] = None,
+) -> Optional[AncestryDryRunReport]:
+    """
+    @param dry_run: read and generate everything, but write nothing to the registry; report what would be written
+    @param output_file: path of a TSV (collection_lidvid, bundle_lidvid_added) listing the bundle links added to
+        collections which already carry the current ancestry version - the links which would be added, in a dry run
+    """
     configure_logging(filepath=log_filepath, log_level=log_level)
 
-    log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing...")
+    if dry_run:
+        # Everything below this point, including the reads, goes through a client which cannot write.
+        client = ReadOnlyOpenSearchClient(client)  # type: ignore[assignment]
 
-    log.info("Updating bundle ancestries for collections...")
-    bundle_and_collection_update_records = process_collection_bundle_ancestry(client)
+    log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing{' (DRY RUN)' if dry_run else ''}...")
 
-    logging.info("Updating collection ancestries for non-aggregate products...")
-    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client)
+    product_update_records_to_write = generate_product_update_records(client)
 
-    product_update_records_to_write = filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records,
-                                                                                collection_nonaggregate_refs_updates))
-    updates = convert_records_to_updates(
-        product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
-    )
+    if dry_run:
+        return summarise_dry_run(client, product_update_records_to_write, output_file=output_file)
+
+    with open_links_file(output_file) as links_handle:
+        if links_handle is not None:
+            product_update_records_to_write = tee_bundle_links(product_update_records_to_write, links_handle)
+
+        _write_updates(
+            client, product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
+        )
+
+    # TODO: reimplement orphan checking for ancestry sweeper - edunn 20251112
+    log.critical("Skipping checks for for orphaned documents - requires reimplementation")
+    # index_names = [resolve_multitenant_index_name(client, index_label) for index_label in ["registry", "registry-refs"]]
+    # for index_name in index_names:
+    #     if log.isEnabledFor(logging.DEBUG):
+    #         orphaned_docs = get_orphaned_documents(client, registry_mock_query_f, index_name)
+    #         orphaned_doc_ids = [doc.get("_id") for doc in orphaned_docs]
+    #         orphaned_doc_ids_str = str(orphaned_doc_ids)
+    #         orphaned_doc_count = len(orphaned_doc_ids)
+    #     else:
+    #         orphaned_doc_ids_str = "<run with debug logging enabled to view list of orphaned lidvids>"
+    #
+    #         # Currently, mocks are only implemented for iterating over document collections, not accessing the
+    #         # enclosing query response metadata.  This is a shortcoming which should be addressed, but in the meantime
+    #         # this bandaid will allow functional tests to complete when a client is not provided, i.e. during functional
+    #         # testing.
+    #         # TODO: refactor mock framework to provide access to arbitrary queries, not just the hits themselves
+    #         def orphan_counter_mock(_, __):
+    #             return -1
+    #
+    #         orphan_counter_f = get_orphaned_documents_count if client is not None else orphan_counter_mock
+    #         orphaned_doc_count = orphan_counter_f(client, index_name)
+    #
+    #     if orphaned_doc_count > 0:
+    #         log.warning(
+    #             f'Detected {orphaned_doc_count} orphaned documents in index "{index_name} - please inform developers": {orphaned_doc_ids_str}'
+    #         )
+
+    log.info("Ancestry sweeper processing complete!")
+    return None
+
+
+def _write_updates(
+        client: OpenSearch,
+        update_records: Iterable[ProductUpdateRecord],
+        ancestry_records_accumulator: Optional[List[AncestryRecord]],
+        bulk_updates_sink: Optional[List[Tuple[str, Dict[str, List]]]],
+) -> None:
+    """Convert the records to document updates and write them to the registry (or dump them to the sink)"""
+    updates = convert_records_to_updates(update_records, ancestry_records_accumulator, bulk_updates_sink)
 
     # TODO: BOOKMARK LMAO - CONTINUE WORK HERE VVV
 
@@ -82,35 +141,17 @@ def run(
         for _ in updates:
             pass
 
-    # TODO: reimplement orphan checking for ancestry sweeper - edunn 20251112
-    log.critical("Skipping checks for for orphaned documents - requires reimplementation")
-    # index_names = [resolve_multitenant_index_name(client, index_label) for index_label in ["registry", "registry-refs"]]
-    # for index_name in index_names:
-    #     if log.isEnabledFor(logging.DEBUG):
-    #         orphaned_docs = get_orphaned_documents(client, registry_mock_query_f, index_name)
-    #         orphaned_doc_ids = [doc.get("_id") for doc in orphaned_docs]
-    #         orphaned_doc_ids_str = str(orphaned_doc_ids)
-    #         orphaned_doc_count = len(orphaned_doc_ids)
-    #     else:
-    #         orphaned_doc_ids_str = "<run with debug logging enabled to view list of orphaned lidvids>"
-    #
-    #         # Currently, mocks are only implemented for iterating over document collections, not accessing the
-    #         # enclosing query response metadata.  This is a shortcoming which should be addressed, but in the meantime
-    #         # this bandaid will allow functional tests to complete when a client is not provided, i.e. during functional
-    #         # testing.
-    #         # TODO: refactor mock framework to provide access to arbitrary queries, not just the hits themselves
-    #         def orphan_counter_mock(_, __):
-    #             return -1
-    #
-    #         orphan_counter_f = get_orphaned_documents_count if client is not None else orphan_counter_mock
-    #         orphaned_doc_count = orphan_counter_f(client, index_name)
-    #
-    #     if orphaned_doc_count > 0:
-    #         log.warning(
-    #             f'Detected {orphaned_doc_count} orphaned documents in index "{index_name} - please inform developers": {orphaned_doc_ids_str}'
-    #         )
 
-    log.info("Ancestry sweeper processing complete!")
+def generate_product_update_records(client: OpenSearch) -> Iterable[ProductUpdateRecord]:
+    """Generate the records of every document update the sweeper needs to write (the reads only; nothing is written)"""
+    log.info("Updating bundle ancestries for collections...")
+    bundle_and_collection_update_records = process_collection_bundle_ancestry(client)
+
+    logging.info("Updating collection ancestries for non-aggregate products...")
+    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client)
+
+    return filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records,
+                                                     collection_nonaggregate_refs_updates))
 
 
 def convert_records_to_updates(
@@ -141,15 +182,34 @@ def convert_records_to_updates(
         yield update
 
 
-if __name__ == "__main__":
+def _configure_cli(ap: argparse.ArgumentParser) -> None:
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="read and generate everything but write nothing to the registry; report the counts of updates which "
+        "would be written",
+    )
+    ap.add_argument(
+        "--output-file",
+        default=None,
+        help="write a TSV (collection_lidvid, bundle_lidvid_added) of the bundle links added to collections which "
+        "already carry the current ancestry version to this file; with --dry-run, the links which would be added",
+    )
+
+
+def main() -> None:
     cli_description = f"""
 
     Update registry records for ancestry-pending products with up-to-date direct ancestry metadata ({ANCESTRY_REFS_METADATA_KEY}).
 
     Retrieves existing published LIDVIDs from the registry, determines membership identities for each LID, and writes updated docs back to registry db
+
+    With --dry-run, nothing is written: the counts of the updates which would be written are reported instead.
     """
 
-    args = parse_args(description=cli_description)
+    args = parse_args(description=cli_description, configure_parser=_configure_cli)
+
     client = get_userpass_opensearch_client(
         endpoint_url=args.base_URL, username=args.username, password=args.password, verify_certs=not args.insecure
     )
@@ -158,4 +218,10 @@ if __name__ == "__main__":
         client=client,
         log_level=args.log_level,
         log_filepath=args.log_file,
+        dry_run=args.dry_run,
+        output_file=args.output_file,
     )
+
+
+if __name__ == "__main__":
+    main()
