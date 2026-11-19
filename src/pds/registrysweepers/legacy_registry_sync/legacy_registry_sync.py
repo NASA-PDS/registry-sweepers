@@ -25,6 +25,10 @@ log = logging.getLogger(__name__)
 
 
 SOLR_URL = "https://pds.nasa.gov/services/search/search"
+# The default Solr query handler returns only the latest version of each product.  qt=all returns every version, which
+# the legacy index needs so that older versions which are missing from the new registry can still be tracked.  The
+# solr_to_es paging iterator appends the query as-is to the URL, so the parameter is passed along with the query.
+SOLR_QUERY = "*&qt=all"
 OS_INDEX = "en-legacy-registry"
 MAX_RETRIES = 5
 
@@ -147,7 +151,7 @@ def build_solr_actions(client: OpenSearch, force: bool, run_id: int) -> SolrOsWr
     """
     Builds the iterable of OpenSearch actions for every document in Solr. Reads from OpenSearch, never writes.
     """
-    solr_itr = SlowSolrDocs(SOLR_URL, "*", rows=500)
+    solr_itr = SlowSolrDocs(SOLR_URL, SOLR_QUERY, rows=500)
 
     if force:
         prod_ids = {}

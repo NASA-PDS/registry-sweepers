@@ -222,3 +222,16 @@ class TestPreviewSync(unittest.TestCase):
         preview.assert_called_once_with(client, force=False)
         build_solr_actions.assert_not_called()
         client.indices.create.assert_not_called()
+
+
+def test_the_solr_query_asks_for_every_version_not_only_the_latest():
+    from unittest.mock import patch
+
+    from pds.registrysweepers.legacy_registry_sync import legacy_registry_sync as sync
+
+    with patch.object(sync, "SlowSolrDocs") as solr_docs, patch.object(sync, "get_online_resources", return_value={}), patch.object(
+        sync, "get_already_loaded_lidvids", return_value={}
+    ), patch.object(sync, "SolrOsWrapperIter"):
+        sync.build_solr_actions(object(), force=True, run_id=1)  # type: ignore[arg-type]
+
+    assert solr_docs.call_args.args[:2] == (sync.SOLR_URL, "*&qt=all")
