@@ -234,7 +234,10 @@ def query_registry_db_with_search_after(
                     return
 
                 # simpler to set the value after every hit than worry about OBO errors detecting the last hit in the page
-                search_after_values = [hit["_source"].get(field) for field in sort_fields]
+                # Prefer the hit's own sort values: they exist for every sort field, including metadata fields like
+                # _id/_doc which never appear in _source (reading those from _source yields a [null] cursor, which
+                # truncates or crashes the query after the first page).
+                search_after_values = hit.get("sort") or [hit["_source"].get(field) for field in sort_fields]
 
             # Flatten single-element search-after-values.  Attempting to sort/search-after on MCP AOSS by
             # ops:Harvest_Info/ops:harvest_date_time is throwing

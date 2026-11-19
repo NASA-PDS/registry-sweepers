@@ -551,3 +551,36 @@ def test_pending_queries_compare_versions_numerically(registry_db, monkeypatch, 
     assert pending_refs == {
         f"urn:nasa:pds:vcmp:refs_coll:p_{v if v is not None else 'none'}::1.0" for v in expected_pending
     }
+
+
+# ---------------------------------------------------------------------------
+# Deferred-updates query pagination
+# ---------------------------------------------------------------------------
+
+def test_deferred_update_query_returns_all_pages(registry_db, monkeypatch):
+    """
+    Regression: past one page of deferred updates, the search_after cursor was
+    built from _source (which never holds _doc), so the second page request
+    failed and the ancestry sweeper crashed.
+    """
+    from functools import partial
+
+    from opensearchpy.helpers import bulk
+    from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+
+    monkeypatch.setattr(
+        ancestry_queries,
+        "query_registry_db_with_search_after",
+        partial(query_registry_db_with_search_after, page_size=2),
+    )
+
+    deferred_index = registry_db.index_names["deferred-updates"]
+    ids = [f"urn:nasa:pds:deferred:collection:product{n}::1.0" for n in range(5)]
+    bulk(registry_db.client, [{"_index": deferred_index, "_id": i, "_source": {}} for i in ids])
+    registry_db.refresh()
+
+    docs = ancestry_queries.get_deferred_update_documents_without_content(
+        registry_db.client, registry_db.index_names["registry"]
+    )
+
+    assert sorted(d["_id"] for d in docs) == sorted(ids)
