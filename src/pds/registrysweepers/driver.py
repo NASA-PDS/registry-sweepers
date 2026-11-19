@@ -88,6 +88,9 @@ DEFAULT_SWEEPERS = ["provenance", "ancestry", "reindexer"]
 # Sweepers which track processed documents via version metadata and therefore accept a force argument
 FORCE_CAPABLE_SWEEPERS = {"provenance", "ancestry", "reindexer"}
 
+# Sweepers which can report what they would change without modifying the database
+DRY_RUN_CAPABLE_SWEEPERS = {"legacy-sync"}
+
 
 def run():
     configure_logging(filepath=None, log_level=logging.INFO)
@@ -130,10 +133,28 @@ def run():
 
     parser.add_argument("--force", "--overwrite", dest="force", action="store_true", help=FORCE_FLAG_HELP)
 
+    parser.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        help=(
+            "Report what would be changed without modifying the database. "
+            f"Only supported with --only for: {', '.join(sorted(DRY_RUN_CAPABLE_SWEEPERS))}"
+        ),
+    )
+
     args = parser.parse_args()
     force = resolve_force_reprocess(args.force)
 
     names = args.only if args.only else DEFAULT_SWEEPERS
+
+    if args.dry_run:
+        unsupported = [name for name in names if name not in DRY_RUN_CAPABLE_SWEEPERS]
+        if unsupported:
+            parser.error(
+                f"--dry-run is not supported by: {unsupported}. Use --only with: {sorted(DRY_RUN_CAPABLE_SWEEPERS)}"
+            )
+
     sweepers = [SWEEPER_REGISTRY[name] for name in names]
 
     sweeper_descriptions = [module_name(f) for f in sweepers]
@@ -157,6 +178,8 @@ def run():
     for name, sweeper in zip(names, sweepers):
         sweeper_execution_begin = datetime.now()
         extra_kwargs = {"force": force} if name in FORCE_CAPABLE_SWEEPERS else {}
+        if args.dry_run:
+            extra_kwargs["dry_run"] = True
         run_sweeper_f = run_factory(sweeper, **extra_kwargs)
 
         run_sweeper_f()

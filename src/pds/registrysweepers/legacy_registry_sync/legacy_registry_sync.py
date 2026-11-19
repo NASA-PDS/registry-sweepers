@@ -1,18 +1,22 @@
 import argparse
-import json
 import logging
 import sys
-from datetime import datetime
+import time
 from typing import Any
 from typing import Dict
-from typing import IO
+from typing import Iterator
+from typing import List
 from typing import Optional
+from typing import Set
 
 import opensearchpy.helpers
 import requests
 from opensearchpy import OpenSearch
+from opensearchpy.exceptions import NotFoundError
+from opensearchpy.exceptions import OpenSearchException
 from pds.registrysweepers.legacy_registry_sync.opensearch_loaded_product import get_already_loaded_lidvids
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
+from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SYNC_RUN_ID_FIELD
 from pds.registrysweepers.utils import configure_logging
 from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.misc import is_dev_mode
@@ -22,16 +26,27 @@ from solr_to_es.solrSource import SlowSolrDocs  # type: ignore
 log = logging.getLogger(__name__)
 
 
-class _DatetimeEncoder(json.JSONEncoder):
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        return super().default(obj)
-
-
 SOLR_URL = "https://pds.nasa.gov/services/search/search"
+# The default Solr query handler returns only the latest version of each product.  qt=all returns every version, which
+# the legacy index needs so that older versions which are missing from the new registry can still be tracked.  The
+# solr_to_es paging iterator appends the query as-is to the URL, so the parameter is passed along with the query.
+SOLR_QUERY = "*&qt=all"
 OS_INDEX = "en-legacy-registry"
 MAX_RETRIES = 5
+
+# Stale documents are only pruned if the run wrote at least this fraction of the documents already in the index.
+# This prevents a truncated or empty Solr response from wiping the index.
+MIN_PRUNE_RATIO = 0.9
+PRUNE_REQUEST_TIMEOUT_SECONDS = 300
+# Documents are deleted by id in bulk requests of this many, as OpenSearch Serverless has no delete-by-query.
+PRUNE_BATCH_SIZE = 1000
+DRY_RUN_STALE_SAMPLE_SIZE = 20
+# How long to wait for the documents written by a run to become searchable before pruning, and how often to check.
+VISIBILITY_TIMEOUT_SECONDS = 600
+VISIBILITY_POLL_SECONDS = 5
+# OpenSearch Serverless caps a page at 10,000 hits
+EXISTING_IDS_PAGE_SIZE = 5000
+EXISTING_IDS_REQUEST_TIMEOUT_SECONDS = 120
 
 
 def get_online_resources() -> Dict[str, str]:
@@ -70,26 +85,175 @@ def create_legacy_registry_index(es_conn: OpenSearch) -> None:
     log.info("index created %s", OS_INDEX)
 
 
-def run(
-    client: OpenSearch,
-    log_filepath: Optional[str] = None,
-    log_level: int = logging.INFO,
-    force: bool = False,
-) -> None:
+def iterate_existing_ids(
+    client: OpenSearch, page_size: int = EXISTING_IDS_PAGE_SIZE, query: Optional[Dict[str, Any]] = None
+) -> Iterator[str]:
     """
-    Runs the Solr Legacy Registry synchronization with OpenSearch.
+    Streams the ids of the documents in the legacy_registry index (every document unless a query is given), one page
+    at a time.
+
+    Pages with search_after sorted on _id, as the scroll API is not usable on OpenSearch Serverless. An empty index
+    yields nothing.
 
     @param client: OpenSearch client from the opensearchpy library
-    @param log_filepath:
-    @param log_level:
-    @return:
+    @param page_size: number of hits requested per page, at most 10,000
+    @param query: query selecting the documents, all documents if omitted
     """
+    search_after: Optional[List[Any]] = None
+    while True:
+        body: Dict[str, Any] = {"query": query or {"match_all": {}}, "sort": [{"_id": "asc"}], "_source": False}
+        if search_after is not None:
+            body["search_after"] = search_after
 
-    configure_logging(filepath=log_filepath, log_level=log_level)
+        response = client.search(
+            index=OS_INDEX, body=body, size=page_size, request_timeout=EXISTING_IDS_REQUEST_TIMEOUT_SECONDS
+        )
+        hits = response["hits"]["hits"]
+        for hit in hits:
+            yield hit["_id"]
 
-    solr_itr = SlowSolrDocs(SOLR_URL, "*", rows=500)
+        if len(hits) < page_size:
+            return
+        search_after = hits[-1]["sort"]
 
-    create_legacy_registry_index(es_conn=client)
+
+def prune_guard_passes(docs_written: int, docs_before: int) -> bool:
+    """Whether a run which wrote docs_written documents to an index holding docs_before may prune stale documents."""
+    return docs_written >= docs_before * MIN_PRUNE_RATIO
+
+
+def wait_until_written_documents_are_searchable(client: OpenSearch, run_id: int, docs_written: int) -> bool:
+    """
+    Waits until the documents written by the run are visible to search, which the prune query depends on: a document
+    which has been rewritten but is not yet visible still carries an older run id, and would be deleted as stale.
+
+    Ready means the count of documents carrying the run id reaches the number written, or stops growing between two
+    checks at no less than MIN_PRUNE_RATIO of it (the same document written twice counts once in the index).
+
+    @return: True when the written documents are searchable, False if that was not reached within the timeout
+    """
+    query = {"query": {"term": {SYNC_RUN_ID_FIELD: run_id}}}
+    deadline = time.monotonic() + VISIBILITY_TIMEOUT_SECONDS
+    previous = -1
+    while True:
+        visible = client.count(index=OS_INDEX, body=query)["count"]
+        if visible >= docs_written or (visible == previous and visible >= docs_written * MIN_PRUNE_RATIO):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        previous = visible
+        log.info("%d of %d written documents are searchable; waiting", visible, docs_written)
+        time.sleep(VISIBILITY_POLL_SECONDS)
+
+
+def prune_stale_documents(client: OpenSearch, run_id: int, docs_before: int, docs_written: int) -> int:
+    """
+    Deletes documents from the legacy_registry index which were not written by the given sync run, i.e. those which
+    no longer exist in Solr.
+
+    Pruning is skipped if the run wrote fewer than MIN_PRUNE_RATIO of the documents which were previously in the index.
+
+    @param client: OpenSearch client from the opensearchpy library
+    @param run_id: identifier of the sync run which has just completed
+    @param docs_before: number of documents in the index before the run started
+    @param docs_written: number of documents successfully written by the run
+    @return: number of documents deleted
+    """
+    if not prune_guard_passes(docs_written, docs_before):
+        log.error(
+            "Skipping prune of %s: run wrote %d documents but index previously held %d (minimum ratio %.2f)",
+            OS_INDEX,
+            docs_written,
+            docs_before,
+            MIN_PRUNE_RATIO,
+        )
+        return 0
+
+    # make the documents written by this run visible, so that superseded versions aren't mistaken for stale ones
+    try:
+        client.indices.refresh(index=OS_INDEX)
+    except OpenSearchException as err:
+        # OpenSearch Serverless has no refresh operation (404); it makes writes searchable by itself
+        log.info("Refresh of %s is not available (%s); waiting for the written documents to become searchable", OS_INDEX, err)
+
+    if not wait_until_written_documents_are_searchable(client, run_id, docs_written):
+        log.error(
+            "Skipping prune of %s: the documents written by this run did not all become searchable within %d seconds, "
+            "so documents not yet visible with this run's id could be mistaken for stale ones",
+            OS_INDEX,
+            VISIBILITY_TIMEOUT_SECONDS,
+        )
+        return 0
+
+    # documents which predate the run id field match too, as they are missing the term.  The ids are listed before
+    # anything is deleted, because deleting while paging would move the pages.  The guard above bounds how many there are.
+    stale_query = {"bool": {"must_not": [{"term": {SYNC_RUN_ID_FIELD: run_id}}]}}
+    stale_ids = list(iterate_existing_ids(client, query=stale_query))
+    log.info("Pruning %d stale documents from %s", len(stale_ids), OS_INDEX)
+
+    deleted = delete_documents(client, stale_ids)
+    log.info("Pruned %d stale documents from %s", deleted, OS_INDEX)
+    return deleted
+
+
+def _delete_one(client: OpenSearch, doc_id: str) -> Dict[str, Any]:
+    """Deletes one document by id and returns the outcome in the shape of a bulk response item."""
+    try:
+        client.delete(index=OS_INDEX, id=doc_id)
+        return {"delete": {"_id": doc_id, "status": 200, "result": "deleted"}}
+    except NotFoundError:
+        return {"delete": {"_id": doc_id, "status": 404, "result": "not_found"}}
+    except OpenSearchException:
+        return {"delete": {"_id": doc_id, "status": 500, "result": "error"}}
+
+
+def delete_documents(client: OpenSearch, doc_ids: List[str]) -> int:
+    """
+    Deletes documents from the legacy_registry index by id with bulk requests.  OpenSearch Serverless supports neither
+    delete-by-query nor update-by-query, so documents are deleted by id.
+
+    A document which is already gone counts as deleted.  Failures are logged and counted, and do not stop the run.
+
+    @param client: OpenSearch client from the opensearchpy library
+    @param doc_ids: ids of the documents to delete
+    @return: number of documents deleted (or already absent)
+    """
+    deleted = 0
+    failed: List[str] = []
+    for start in range(0, len(doc_ids), PRUNE_BATCH_SIZE):
+        batch = doc_ids[start : start + PRUNE_BATCH_SIZE]
+        actions = [{"delete": {"_index": OS_INDEX, "_id": doc_id}} for doc_id in batch]
+        try:
+            response = client.bulk(body=actions, request_timeout=PRUNE_REQUEST_TIMEOUT_SECONDS)
+            items = response.get("items", [])
+        except OpenSearchException as err:
+            # fall back to deleting the documents of this batch one by one (DELETE <index>/_doc/<id>)
+            log.warning("Bulk delete of %d documents failed (%s); deleting them one by one", len(batch), err)
+            items = [_delete_one(client, doc_id) for doc_id in batch]
+
+        for doc_id, item in zip(batch, items):
+            outcome = item.get("delete", {})
+            if outcome.get("result") in ("deleted", "not_found") or outcome.get("status") == 404:
+                deleted += 1
+            else:
+                failed.append(doc_id)
+
+    if failed:
+        log.error(
+            "Failed to delete %d of %d stale documents from %s, for example %s.  They are pruned by the next run.",
+            len(failed),
+            len(doc_ids),
+            OS_INDEX,
+            failed[:5],
+        )
+    return deleted
+
+
+def build_solr_actions(client: OpenSearch, force: bool, run_id: int) -> SolrOsWrapperIter:
+    """
+    Builds the iterable of OpenSearch actions for every document in Solr. Reads from OpenSearch, never writes.
+    """
+    solr_itr = SlowSolrDocs(SOLR_URL, SOLR_QUERY, rows=500)
 
     if force:
         prod_ids = {}
@@ -100,226 +264,127 @@ def run(
 
     online_resources = get_online_resources()
 
-    es_actions = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids=prod_ids, online_resources=online_resources, force=force)
+    return SolrOsWrapperIter(
+        solr_itr, OS_INDEX, found_ids=prod_ids, online_resources=online_resources, force=force, run_id=run_id
+    )
+
+
+def preview_sync(client: OpenSearch, force: bool = False) -> Dict[str, Any]:
+    """
+    Reports what a sync run would write to and prune from the legacy_registry index, without modifying OpenSearch.
+    Reads the full Solr index and the ids currently in the legacy_registry index.
+
+    @param client: OpenSearch client from the opensearchpy library
+    @param force: as for run()
+    @return: dictionary of statistics about the planned run
+    """
+    existing_ids: Set[str] = set()
+    if client.indices.exists(OS_INDEX):
+        log.info("Reading existing document ids from %s", OS_INDEX)
+        existing_ids = set(iterate_existing_ids(client))
+
+    es_actions = build_solr_actions(client, force=force, run_id=int(time.time() * 1000))
+
+    docs_to_write = 0
+    solr_ids: Set[str] = set()
+    for os_doc in es_actions:
+        docs_to_write += 1
+        solr_ids.add(os_doc["_id"])
+
+    stale_ids = sorted(existing_ids - solr_ids)
+    stats: Dict[str, Any] = {
+        "docs_before": len(existing_ids),
+        "docs_to_write": docs_to_write,
+        "docs_to_add": len(solr_ids - existing_ids),
+        "stale_ids": stale_ids,
+        "prune_guard_passes": prune_guard_passes(docs_to_write, len(existing_ids)),
+    }
+
+    log.info("DRY RUN - no changes made to OpenSearch")
+    log.info("Documents currently in %s: %d", OS_INDEX, stats["docs_before"])
+    log.info("Documents which would be written: %d (%d new)", stats["docs_to_write"], stats["docs_to_add"])
+    log.info("Documents which would be pruned: %d", len(stale_ids))
+    for stale_id in stale_ids[:DRY_RUN_STALE_SAMPLE_SIZE]:
+        log.info("  stale: %s", stale_id)
+    if len(stale_ids) > DRY_RUN_STALE_SAMPLE_SIZE:
+        log.info("  ... and %d more", len(stale_ids) - DRY_RUN_STALE_SAMPLE_SIZE)
+    if not stats["prune_guard_passes"]:
+        log.warning(
+            "Prune would be SKIPPED: run would write %d documents but index holds %d (minimum ratio %.2f)",
+            docs_to_write,
+            len(existing_ids),
+            MIN_PRUNE_RATIO,
+        )
+
+    return stats
+
+
+def run(
+    client: OpenSearch,
+    log_filepath: Optional[str] = None,
+    log_level: int = logging.INFO,
+    force: bool = False,
+    dry_run: bool = False,
+) -> None:
+    """
+    Runs the Solr Legacy Registry synchronization with OpenSearch.
+
+    @param client: OpenSearch client from the opensearchpy library
+    @param log_filepath:
+    @param log_level:
+    @param force:
+    @param dry_run: if True, only report what would be written and pruned. OpenSearch is read but never modified.
+    @return:
+    """
+
+    configure_logging(filepath=log_filepath, log_level=log_level)
+
+    if dry_run:
+        preview_sync(client, force=force)
+        return
+
+    create_legacy_registry_index(es_conn=client)
+
+    run_id = int(time.time() * 1000)
+    docs_before = client.count(index=OS_INDEX)["count"]
+
+    es_actions = build_solr_actions(client, force=force, run_id=run_id)
     dev_mode = is_dev_mode()
 
+    docs_written = 0
+    failure_count = 0
     for operation_successful, operation_info in opensearchpy.helpers.streaming_bulk(
         client, es_actions, chunk_size=50, max_chunk_bytes=50000000, max_retries=5, initial_backoff=10, timeout=120
     ):
-        if not operation_successful:
+        if operation_successful:
+            docs_written += 1
+        else:
+            failure_count += 1
             log.error(limit_log_length(operation_info))
 
         if dev_mode:
             break
 
+    if dev_mode:
+        log.info("Skipping prune of stale documents in dev mode")
+    elif failure_count > 0:
+        log.error("Skipping prune of stale documents: %d documents failed to write", failure_count)
+    else:
+        prune_stale_documents(client, run_id=run_id, docs_before=docs_before, docs_written=docs_written)
+
     print(es_actions._seen_domains)
     print(es_actions._seen_node_ids)
-
-
-def dry_run(
-    log_filepath: Optional[str] = None,
-    log_level: int = logging.INFO,
-    max_docs: Optional[int] = None,
-    show_sample_docs: bool = True,
-    sample_size: int = 5,
-    output_file: Optional[str] = None,
-    force: bool = False,
-) -> Dict[str, Any]:
-    """
-    Performs a dry run of the Solr Legacy Registry synchronization without interacting with OpenSearch.
-    This function only retrieves data from Solr and shows what would be processed.
-
-    @param log_filepath: Path to log file (default: stdout)
-    @param log_level: Logging level
-    @param max_docs: Maximum number of documents to process (default: None for all)
-    @param show_sample_docs: Whether to show sample documents (default: True)
-    @param sample_size: Number of sample documents to show (default: 5)
-    @param output_file: Path to write OpenSearch payloads as JSON lines (default: None)
-    @return: Dictionary with statistics about the dry run
-    """
-
-    configure_logging(filepath=log_filepath, log_level=log_level)
-
-    log.info("Starting dry run - Solr data retrieval only")
-    log.info("=" * 60)
-
-    # Get online resources from Solr
-    log.info("Retrieving online resources from Solr...")
-    online_resources = get_online_resources()
-    log.info("Retrieved %d online resources", len(online_resources))
-
-    # Initialize Solr iterator
-    log.info("Initializing Solr document iterator...")
-    solr_itr = SlowSolrDocs(SOLR_URL, "*", rows=500)
-
-    # Statistics tracking
-    stats: Dict[str, Any] = {
-        "total_docs": 0,
-        "docs_with_lidvid": 0,
-        "docs_without_lidvid": 0,
-        "seen_domains": set(),
-        "seen_node_ids": set(),
-        "node_distribution": {},
-        "product_class_distribution": {},
-        "node_by_product_class": {},
-        "sample_docs": [],
-        "errors": [],
-    }
-
-    # Use the existing SolrOsWrapperIter to analyze documents without OpenSearch
-    # We pass empty found_ids since we're not checking against OpenSearch
-    wrapper = SolrOsWrapperIter(solr_itr, OS_INDEX, found_ids={}, online_resources=online_resources, force=force)
-
-    output_fh: Optional[IO] = None
-    if output_file:
-        output_fh = open(output_file, "w")
-        log.info("Writing OpenSearch payloads to %s", output_file)
-
-    try:
-        for i, os_doc in enumerate(wrapper):
-            if max_docs and i >= max_docs:
-                log.info("Reached maximum document limit: %d", max_docs)
-                break
-
-            if output_fh:
-                output_fh.write(json.dumps(os_doc, cls=_DatetimeEncoder) + "\n")
-
-            # Extract the original Solr document from the OpenSearch document
-            solr_doc = os_doc["_source"]
-
-            # Analyze the document
-            stats["total_docs"] += 1
-
-            # Check for lidvid
-            if "lidvid" in solr_doc:
-                stats["docs_with_lidvid"] += 1
-            else:
-                stats["docs_without_lidvid"] += 1
-
-            # Get node assignment (already computed by SolrOsWrapperIter)
-            node = solr_doc.get("node", "UNK")
-            stats["node_distribution"][node] = stats["node_distribution"].get(node, 0) + 1
-
-            # Track product class distribution
-            product_class = "Unknown"
-            if "product_class" in solr_doc:
-                product_class = (
-                    solr_doc["product_class"][0]
-                    if isinstance(solr_doc["product_class"], list)
-                    else solr_doc["product_class"]
-                )
-                stats["product_class_distribution"][product_class] = (
-                    stats["product_class_distribution"].get(product_class, 0) + 1
-                )
-
-            # Track node by product class breakdown
-            if node not in stats["node_by_product_class"]:
-                stats["node_by_product_class"][node] = {}
-            stats["node_by_product_class"][node][product_class] = (
-                stats["node_by_product_class"][node].get(product_class, 0) + 1
-            )
-
-            # Collect sample documents
-            if show_sample_docs and len(stats["sample_docs"]) < sample_size:
-                sample_doc = {
-                    "lid": solr_doc.get("lid", "N/A"),
-                    "lidvid": solr_doc.get("lidvid", "N/A"),
-                    "product_class": solr_doc.get("product_class", ["N/A"])[0]
-                    if isinstance(solr_doc.get("product_class"), list)
-                    else solr_doc.get("product_class", "N/A"),
-                    "node": node,
-                    "resource_url": solr_doc.get("resource_url", ["N/A"])[0]
-                    if isinstance(solr_doc.get("resource_url"), list)
-                    else solr_doc.get("resource_url", "N/A"),
-                    "modification_date": solr_doc.get("modification_date", ["N/A"])[0]
-                    if isinstance(solr_doc.get("modification_date"), list)
-                    else solr_doc.get("modification_date", "N/A"),
-                }
-                stats["sample_docs"].append(sample_doc)
-
-            # Update seen domains and node IDs from the wrapper
-            stats["seen_domains"].update(wrapper._seen_domains)
-            stats["seen_node_ids"].update(wrapper._seen_node_ids)
-
-            if i % 1000 == 0 and i > 0:
-                log.debug("Processed %d documents...", i)
-
-    except StopIteration:
-        log.info("Finished processing all documents from Solr")
-    except Exception as e:
-        log.error("Error during dry run: %s", str(e))
-        stats["errors"].append(str(e))
-    finally:
-        if output_fh:
-            output_fh.close()
-            log.info("Payload written to %s", output_file)
-
-    # Print results
-    log.info("=" * 60)
-    log.info("DRY RUN RESULTS")
-    log.info("=" * 60)
-    log.info("Total documents processed: %d", stats["total_docs"])
-    log.info("Documents with lidvid: %d", stats["docs_with_lidvid"])
-    log.info("Documents without lidvid: %d", stats["docs_without_lidvid"])
-    log.info("Online resources retrieved: %d", len(online_resources))
-
-    log.info("\nNode Distribution:")
-    for node, count in sorted(stats["node_distribution"].items(), key=lambda x: x[1], reverse=True):
-        log.info("  %s: %d documents", node, count)
-
-    log.info("\nProduct Class Distribution (top 10):")
-    sorted_classes = sorted(stats["product_class_distribution"].items(), key=lambda x: x[1], reverse=True)
-    for product_class, count in sorted_classes[:10]:
-        log.info("  %s: %d documents", product_class, count)
-
-    log.info("\nSeen Domains (%d total):", len(stats["seen_domains"]))
-    for domain in sorted(stats["seen_domains"]):
-        log.info("  %s", domain)
-
-    log.info("\nSeen Node IDs (%d total):", len(stats["seen_node_ids"]))
-    for node_id in sorted(stats["seen_node_ids"]):
-        log.info("  %s", node_id)
-
-    if show_sample_docs and stats["sample_docs"]:
-        log.info("\nSample Documents:")
-        for i, doc in enumerate(stats["sample_docs"], 1):
-            log.info("  Sample %d:", i)
-            log.info("    LID: %s", doc["lid"])
-            log.info("    LIDVID: %s", doc["lidvid"])
-            log.info("    Product Class: %s", doc["product_class"])
-            log.info("    Assigned Node: %s", doc["node"])
-            log.info("    Resource URL: %s", doc["resource_url"])
-            log.info("    Modification Date: %s", doc["modification_date"])
-            log.info("")
-
-    if stats["errors"]:
-        log.info("\nErrors encountered:")
-        for error in stats["errors"]:
-            log.info("  %s", error)
-
-    log.info("=" * 60)
-    log.info("Dry run completed successfully")
-
-    return stats
 
 
 def main() -> None:
     """Main entry point for the legacy registry sync console script."""
     parser = argparse.ArgumentParser(
-        description="PDS Legacy Registry Sync - Test Solr data retrieval or sync to OpenSearch",
+        description="PDS Legacy Registry Sync - sync the legacy Solr registry to OpenSearch",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Dry run - test Solr data retrieval only
-  %(prog)s --dry-run --max-docs 10
-  %(prog)s --dry-run --max-docs 100 --log-file dry_run.log
-
-  # Dry run without showing sample documents
-  %(prog)s --dry-run --max-docs 50 --no-samples
-
-  # Dry run with more sample documents
-  %(prog)s --dry-run --max-docs 20 --sample-size 10
-  %(prog)s --dry-run --max-docs 100 --output-file /tmp/payload.jsonl
+  # Report what would be written and pruned, without modifying OpenSearch
+  %(prog)s --dry-run
 
   # Full sync to OpenSearch
   %(prog)s
@@ -328,11 +393,10 @@ Examples:
         """,
     )
 
-    # Dry run flag
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Perform dry run - only interact with Solr, no OpenSearch operations",
+        help="Report what would be written and pruned. OpenSearch is read but never modified",
     )
 
     parser.add_argument(
@@ -353,113 +417,16 @@ Examples:
         help="Log level (default: INFO)",
     )
 
-    # Dry run arguments
-    parser.add_argument(
-        "--max-docs",
-        type=int,
-        help="Maximum number of documents to process (default: process all)",
-    )
-    parser.add_argument(
-        "--no-samples",
-        action="store_true",
-        help="Don't show sample documents",
-    )
-    parser.add_argument(
-        "--sample-size",
-        type=int,
-        default=5,
-        help="Number of sample documents to show (default: 5)",
-    )
-    parser.add_argument(
-        "--output-file",
-        default="/tmp/legacy_registry_sync_payload.jsonl",
-        help="File to write OpenSearch payloads as JSON lines (default: /tmp/legacy_registry_sync_payload.jsonl)",
-    )
-
     args = parser.parse_args()
 
     # Convert log level string to integer
     log_level = getattr(logging, args.log_level)
 
-    if not args.dry_run:
-        try:
-            client = get_opensearch_client_from_environment(verify_certs=not is_dev_mode())
-            run(client=client, log_filepath=args.log_file, log_level=log_level, force=args.force)
-        except KeyboardInterrupt:
-            print("\nSync interrupted by user")
-            sys.exit(1)
-        return
-
-    # Run dry-run mode
     try:
-        print("Starting PDS Legacy Registry Sync - DRY RUN MODE")
-        print("=" * 60)
-        print("This will only interact with Solr - no OpenSearch operations")
-        print("=" * 60)
-
-        stats = dry_run(
-            log_filepath=args.log_file,
-            log_level=log_level,
-            max_docs=args.max_docs,
-            show_sample_docs=not args.no_samples,
-            sample_size=args.sample_size,
-            output_file=args.output_file,
-            force=args.force,
-        )
-
-        print("\n" + "=" * 60)
-        print("DRY RUN SUMMARY")
-        print("=" * 60)
-        print(f"Total documents processed: {stats['total_docs']}")
-        print(f"Documents with lidvid: {stats['docs_with_lidvid']}")
-        print(f"Documents without lidvid: {stats['docs_without_lidvid']}")
-        print(f"Unique domains found: {len(stats['seen_domains'])}")
-        print(f"Unique node IDs found: {len(stats['seen_node_ids'])}")
-        print(f"Node distribution: {len(stats['node_distribution'])} different nodes")
-        print(f"Product classes found: {len(stats['product_class_distribution'])} different classes")
-
-        # Show node distribution details
-        if stats["node_distribution"]:
-            print("\nNode Distribution:")
-            for node, count in sorted(stats["node_distribution"].items(), key=lambda x: x[1], reverse=True):
-                print(f"  {node}: {count} documents")
-
-        # Show node distribution by product class
-        if stats["node_by_product_class"]:
-            print("\nNode Distribution by Product Class:")
-            for node in sorted(
-                stats["node_distribution"].keys(), key=lambda x: stats["node_distribution"][x], reverse=True
-            ):
-                node_total = stats["node_distribution"][node]
-                print(f"\n  {node} ({node_total} total documents):")
-
-                # Sort product classes by count within this node
-                node_classes = stats["node_by_product_class"][node]
-                sorted_classes = sorted(node_classes.items(), key=lambda x: x[1], reverse=True)
-
-                for product_class, count in sorted_classes:
-                    percentage = (count / node_total) * 100
-                    print(f"    {product_class}: {count} documents ({percentage:.1f}%)")
-
-        # Show product class distribution details (top 10)
-        if stats["product_class_distribution"]:
-            print("\nProduct Class Distribution (top 10):")
-            sorted_classes = sorted(stats["product_class_distribution"].items(), key=lambda x: x[1], reverse=True)
-            for product_class, count in sorted_classes[:10]:
-                print(f"  {product_class}: {count} documents")
-
-        if stats["errors"]:
-            print(f"Errors encountered: {len(stats['errors'])}")
-            for error in stats["errors"]:
-                print(f"  - {error}")
-
-        print("\nDry run completed successfully!")
-
+        client = get_opensearch_client_from_environment(verify_certs=not is_dev_mode())
+        run(client=client, log_filepath=args.log_file, log_level=log_level, force=args.force, dry_run=args.dry_run)
     except KeyboardInterrupt:
-        print("\nDry run interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\nDry run failed: {str(e)}")
+        print("\nSync interrupted by user")
         sys.exit(1)
 
 

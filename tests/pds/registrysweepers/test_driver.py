@@ -1,6 +1,7 @@
 import logging
 import sys
 
+import pytest
 from pds.registrysweepers import driver
 from pds.registrysweepers.utils.misc import FORCE_REPROCESS_ENV_VAR
 
@@ -113,3 +114,33 @@ def test_force_is_not_passed_to_sweepers_which_do_not_support_it(monkeypatch):
     _run_driver_with_args(monkeypatch, ["--only", "legacy-sync", "--force"], sweeper_kwargs)
 
     assert "force" not in sweeper_kwargs["legacy-sync"]
+
+
+def test_dry_run_is_not_passed_by_default(monkeypatch):
+    sweeper_kwargs = {}
+
+    _run_driver_with_args(monkeypatch, ["--only", "legacy-sync"], sweeper_kwargs)
+
+    assert "dry_run" not in sweeper_kwargs["legacy-sync"]
+
+
+def test_dry_run_flag_is_passed_to_legacy_sync(monkeypatch):
+    sweeper_kwargs = {}
+
+    _run_driver_with_args(monkeypatch, ["--only", "legacy-sync", "--dry-run"], sweeper_kwargs)
+
+    assert sweeper_kwargs["legacy-sync"]["dry_run"] is True
+
+
+def test_dry_run_is_rejected_for_default_sweepers(monkeypatch):
+    sweeper_calls = []
+
+    with pytest.raises(SystemExit):
+        sweeper_calls = _run_driver_with_args(monkeypatch, ["--dry-run"])
+
+    assert sweeper_calls == []
+
+
+def test_dry_run_is_rejected_when_any_selected_sweeper_does_not_support_it(monkeypatch):
+    with pytest.raises(SystemExit):
+        _run_driver_with_args(monkeypatch, ["--only", "legacy-sync", "ancestry", "--dry-run"])
