@@ -34,21 +34,27 @@ def run(
         log_level: int = logging.INFO,
         ancestry_records_accumulator: Optional[List[AncestryRecord]] = None,
         bulk_updates_sink: Optional[List[Tuple[str, Dict[str, List]]]] = None,
+        force: bool = False,
 ):
     configure_logging(filepath=log_filepath, log_level=log_level)
 
     log.info(f"Starting ancestry v{SWEEPERS_ANCESTRY_VERSION} sweeper processing...")
+    if force:
+        log.warning(
+            "Force mode enabled - all documents will be reprocessed and re-stamped regardless of existing "
+            "ancestry version metadata (existing ancestry references are merged with, not replaced by, regenerated ones)"
+        )
 
     log.info("Updating bundle ancestries for collections...")
-    bundle_and_collection_update_records = process_collection_bundle_ancestry(client)
+    bundle_and_collection_update_records = process_collection_bundle_ancestry(client, force=force)
 
     logging.info("Updating collection ancestries for non-aggregate products...")
-    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client)
+    collection_nonaggregate_refs_updates = process_collection_ancestries_for_nonaggregates(client, force=force)
 
     product_update_records_to_write = filter(lambda r: not r._skip_write, chain(bundle_and_collection_update_records,
                                                                                 collection_nonaggregate_refs_updates))
     updates = convert_records_to_updates(
-        product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink
+        product_update_records_to_write, ancestry_records_accumulator, bulk_updates_sink, force=force
     )
 
     # TODO: BOOKMARK LMAO - CONTINUE WORK HERE VVV
@@ -117,9 +123,11 @@ def convert_records_to_updates(
         update_records: Iterable[ProductUpdateRecord],
         update_records_accumulator=None,
         bulk_updates_sink=None,
+        force: bool = False,
 ) -> Iterable[Update]:
     """
     Given a collection of ProductUpdateRecords, yield corresponding Update objects.
+    If force is set, the updates rewrite their documents even if the update changes nothing.
 
     Unlike prior implementations, this function does not have to reconcile deferred updates, as updates are now
     accumulative and do not have to be written to the db in a single operation
@@ -132,7 +140,7 @@ def convert_records_to_updates(
         if update_records_accumulator is not None:
             update_records_accumulator.append(record)
 
-        update = update_from_record(record)
+        update = update_from_record(record, force=force)
 
         # Tee the stream of bulk update KVs into the accumulator, if one was provided (functional testing).
         if bulk_updates_sink is not None:
@@ -149,7 +157,7 @@ if __name__ == "__main__":
     Retrieves existing published LIDVIDs from the registry, determines membership identities for each LID, and writes updated docs back to registry db
     """
 
-    args = parse_args(description=cli_description)
+    args = parse_args(description=cli_description, supports_force=True)
     client = get_userpass_opensearch_client(
         endpoint_url=args.base_URL, username=args.username, password=args.password, verify_certs=not args.insecure
     )
@@ -158,4 +166,5 @@ if __name__ == "__main__":
         client=client,
         log_level=args.log_level,
         log_filepath=args.log_file,
+        force=args.force,
     )

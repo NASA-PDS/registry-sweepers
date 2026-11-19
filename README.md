@@ -84,10 +84,25 @@ pds-registry-sweepers --only ancestry provenance
 
 # Run the legacy registry sync sweeper
 pds-registry-sweepers --only legacy-sync
+
+# Force every document in the index to be reprocessed and re-stamped
+pds-registry-sweepers --force
+
+# Equivalent, via environment variable (e.g. for containerized runs)
+SWEEPERS_FORCE_REPROCESS=true pds-registry-sweepers
 ```
 
 - With no flags, the full default suite runs: `provenance`, `ancestry`, `reindexer`.
 - With `--only <name> [name ...]`, only the named sweeper(s) run. Available names: `provenance`, `ancestry`, `reindexer`, `legacy-sync`.
+- With `--force` (alias `--overwrite`) or `SWEEPERS_FORCE_REPROCESS=true`, the `provenance`, `ancestry` and `reindexer` sweepers ignore the sweeper version metadata already present on documents, and reprocess and re-stamp every document in the index. `legacy-sync` ignores this option. The flag is also accepted by the `provenance`, `ancestry` and `reindexer` modules when run directly (e.g. `python -m pds.registrysweepers.provenance --force`).
+
+A forced run touches the whole index, so expect a runtime closer to a first run than a routine one.
+
+Every forced document is physically rewritten, even if the regenerated values equal those already stored. This is what makes documents searchable on a field that was added to the index mapping after they were written. The `provenance` and `reindexer` sweepers send their partial-document bulk updates with `"detect_noop": false`; without it OpenSearch skips an update which changes nothing. The `ancestry` sweeper uses an inline script, which has no `detect_noop` option, so a forced run uses a variant of the script that omits its `ctx.op = 'none'` no-op guard. What `ancestry` writes is the same either way. A forced `ancestry` run issues one update per ancestry record, so a document with several records is rewritten once per record.
+
+The `ancestry` sweeper merges regenerated ancestry references into those already on a document; it does not remove references that are no longer valid.
+
+These write behaviours have not been verified against a live OpenSearch Serverless (AOSS) collection. Verify a forced run on a representative index before relying on it in production.
 
 `PROV_ENDPOINT` and (for non-AWS OpenSearch) `PROV_CREDENTIALS` environment variables are required. See the Developer Quickstart section for details.
 

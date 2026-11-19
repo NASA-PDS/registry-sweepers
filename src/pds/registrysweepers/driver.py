@@ -67,11 +67,13 @@ from pds.registrysweepers import repairkit
 from pds.registrysweepers.ancestry import main as ancestry
 from pds.registrysweepers.reindexer import main as reindexer
 from pds.registrysweepers.utils import configure_logging
+from pds.registrysweepers.utils import FORCE_FLAG_HELP
 from pds.registrysweepers.utils import parse_log_level
 from pds.registrysweepers.utils.db.client import get_opensearch_client_from_environment
 from pds.registrysweepers.utils.misc import get_human_readable_elapsed_since
 from pds.registrysweepers.utils.misc import is_dev_mode
 from pds.registrysweepers.utils.misc import limit_log_length
+from pds.registrysweepers.utils.misc import resolve_force_reprocess
 
 
 SWEEPER_REGISTRY = {
@@ -82,6 +84,9 @@ SWEEPER_REGISTRY = {
 }
 
 DEFAULT_SWEEPERS = ["provenance", "ancestry", "reindexer"]
+
+# Sweepers which track processed documents via version metadata and therefore accept a force argument
+FORCE_CAPABLE_SWEEPERS = {"provenance", "ancestry", "reindexer"}
 
 
 def run():
@@ -97,13 +102,14 @@ def run():
 
     log_level = parse_log_level(os.environ.get("LOGLEVEL", "INFO"))
 
-    def run_factory(sweeper_f: Callable) -> Callable:
+    def run_factory(sweeper_f: Callable, **extra_kwargs) -> Callable:
         return functools.partial(
             sweeper_f,
             client=get_opensearch_client_from_environment(verify_certs=True if not dev_mode else False),
             # enable for development if required - not necessary in production
             # log_filepath='registry-sweepers.log',
             log_level=log_level,
+            **extra_kwargs,
         )
 
     def module_name(f: Callable) -> str:
@@ -122,7 +128,10 @@ def run():
         help=f"Only run the specified sweeper(s). Choices: {', '.join(SWEEPER_REGISTRY.keys())}",
     )
 
+    parser.add_argument("--force", "--overwrite", dest="force", action="store_true", help=FORCE_FLAG_HELP)
+
     args = parser.parse_args()
+    force = resolve_force_reprocess(args.force)
 
     names = args.only if args.only else DEFAULT_SWEEPERS
     sweepers = [SWEEPER_REGISTRY[name] for name in names]
@@ -130,13 +139,25 @@ def run():
     sweeper_descriptions = [module_name(f) for f in sweepers]
     log.info(limit_log_length(f"Running sweepers: {sweeper_descriptions}"))
 
+    if force:
+        log.warning(
+            limit_log_length(
+                "Force mode enabled - sweepers will reprocess and re-stamp all documents regardless of existing "
+                "version metadata"
+            )
+        )
+        ignoring_force = [name for name in names if name not in FORCE_CAPABLE_SWEEPERS]
+        if ignoring_force:
+            log.warning(limit_log_length(f"Force mode is not supported by, and will be ignored for: {ignoring_force}"))
+
     total_execution_begin = datetime.now()
 
     sweeper_execution_duration_strs = []
 
-    for sweeper in sweepers:
+    for name, sweeper in zip(names, sweepers):
         sweeper_execution_begin = datetime.now()
-        run_sweeper_f = run_factory(sweeper)
+        extra_kwargs = {"force": force} if name in FORCE_CAPABLE_SWEEPERS else {}
+        run_sweeper_f = run_factory(sweeper, **extra_kwargs)
 
         run_sweeper_f()
 
