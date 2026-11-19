@@ -4,7 +4,6 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from opensearchpy.exceptions import NotFoundError
-
 from pds.registrysweepers.legacy_registry_sync import legacy_registry_sync
 from pds.registrysweepers.legacy_registry_sync.legacy_registry_sync import iterate_existing_ids
 from pds.registrysweepers.legacy_registry_sync.legacy_registry_sync import MIN_PRUNE_RATIO
