@@ -21,41 +21,48 @@ The ancestry sweeper generates membership metadata for each product, i.e. which 
 The reindexer sweeper ensures that the registry index mappings are updated with all fields available in the registry-dd index, and then triggers reindexation on all products which have not yet been successfully processed previously.  This ensures that all products are searchable on all fields, provided a field type mapping is defined in the registry-dd index at the time of processing.
 
 #### [Legacy Registry Sync](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/legacy_registry_sync/legacy_registry_sync.py)
-The legacy registry sync tool migrates data from the legacy Solr-based PDS registry to the new OpenSearch-based registry. Every run writes all Solr documents to the `en-legacy-registry` index, then prunes documents which are no longer in Solr. Pruning is skipped if any document failed to write, or if the run wrote fewer than 90% of the documents already in the index.
 
-**Console Script Usage:**
+Keeps the `en-legacy-registry` index equal to the legacy Solr registry (`https://pds.nasa.gov/services/search/search`). The registry status reports read this index to list the bundles and collections that are still missing from the new registry.
+
+**What a run does**
+
+1. Reads every document in Solr, **all versions** of each product (`qt=all`; the default Solr handler returns only the latest version).
+2. Writes each document to `en-legacy-registry` with its id converted to the new registry's identifier, plus:
+   - `node`: the PDS node responsible for the product (from the document's URLs and agency, or from the new registry when the product is already loaded there);
+   - `found_in_registry`: `"true"` when the product is already in the new registry, otherwise `"false"`;
+   - `sweepers_legacy_sync_run_id`: the run's id (epoch milliseconds), the same on every document of the run.
+3. Waits until the documents it wrote are searchable, then **prunes**: deletes every document that does not carry this run's id, which are the documents no longer in Solr.
+
+The old data stays in the index until the prune, so the index is never empty. The prune is **skipped** (nothing is deleted) when a document failed to write, when `DEV_MODE` is set, when the run raised an error part-way, when the run wrote fewer than 90% of the documents already in the index (so a truncated Solr response cannot wipe the index), and when the written documents are not searchable within 10 minutes.
+
+**Usage**
+
+| Option | Effect |
+|---|---|
+| none | Full sync: write, then prune |
+| `--dry-run` | Reads Solr and the ids in the index, modifies nothing, and logs the documents currently in the index, how many would be written (and how many are new), how many would be pruned with a sample of 20 ids, and whether the 90% safeguard would skip the prune |
+| `--force` | Overwrite the node of documents that already have one in the new registry |
+| `--log-file FILE`, `--log-level LEVEL` | Logging |
 
 ```bash
-# Install the package first
 pip install -e .
 
-# Report what would be written and pruned, without modifying OpenSearch
-pds-legacy-registry-sync --dry-run
-
-# Full sync
-pds-legacy-registry-sync
-
-# Full sync, overwriting the node of documents which already have one
+pds-legacy-registry-sync --dry-run       # preview
+pds-legacy-registry-sync                 # sync and prune
 pds-legacy-registry-sync --force --log-file sync.log
 
-# Get help
-pds-legacy-registry-sync --help
-```
-
-The sweepers driver accepts the same flag:
-
-```bash
+# or through the sweepers driver
 python ./docker/sweepers_driver.py --only legacy-sync --dry-run
+python ./docker/sweepers_driver.py --only legacy-sync
 ```
 
-**Dry-Run Behavior:**
-- OpenSearch is read but never modified: the index is not created, written to, or pruned
-- Reads the full Solr index and the document ids currently in `en-legacy-registry`
-- Logs the number of documents that would be written, how many of those are new, and how many would be pruned
-- Logs a sample of the lidvids that would be pruned
-- Warns if the prune would be skipped by the 90% safeguard
+The driver refuses `--dry-run` unless every selected sweeper supports it, so `--dry-run` never runs another sweeper for real.
 
-**Full synchronization** (Solr + OpenSearch) is available programmatically via the `run()` function but is not yet implemented as a console script option.
+**Running on OpenSearch Serverless.** Serverless supports a subset of the OpenSearch API, so the sync pages with `search_after` (no scroll), does not rely on `_refresh` (it polls the document count carrying the run id instead), and deletes stale documents by id with `_bulk` (no `_delete_by_query`), falling back to one `DELETE <index>/_doc/<id>` per document if a bulk request is rejected. A document that is already gone counts as deleted; a failed delete is logged and left for the next run.
+
+**Before the first prune on an index:** a first run prunes everything that is no longer in Solr, which can be thousands of documents (documents that predate the run id field all count as stale until written). Run `--dry-run` first and review the count and sample.
+
+
 
 ## On-Demand Execution
 
