@@ -33,6 +33,7 @@ class TestPruneStaleDocuments(unittest.TestCase):
     def setUp(self):
         self.client = MagicMock()
         self.client.delete_by_query.return_value = {"deleted": 7}
+        self.client.count.return_value = {"count": 10**9}  # every written document is already searchable
 
     def test_deletes_documents_not_stamped_with_run_id(self):
         deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
@@ -235,3 +236,60 @@ def test_the_solr_query_asks_for_every_version_not_only_the_latest():
         sync.build_solr_actions(object(), force=True, run_id=1)  # type: ignore[arg-type]
 
     assert solr_docs.call_args.args[:2] == (sync.SOLR_URL, "*&qt=all")
+
+
+class TestPruneOnServerlessWithoutRefresh(unittest.TestCase):
+    def setUp(self):
+        from opensearchpy.exceptions import NotFoundError
+
+        self.client = MagicMock()
+        self.client.delete_by_query.return_value = {"deleted": 3}
+        self.client.indices.refresh.side_effect = NotFoundError(404, "")
+
+    def test_prunes_when_refresh_is_not_available_and_the_documents_are_searchable(self):
+        self.client.count.return_value = {"count": 100}
+
+        deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
+
+        self.assertEqual(3, deleted)
+        self.client.delete_by_query.assert_called_once()
+        self.assertEqual(
+            {"query": {"term": {SYNC_RUN_ID_FIELD: RUN_ID}}}, self.client.count.call_args.kwargs["body"]
+        )
+
+    def test_waits_for_the_written_documents_before_deleting(self):
+        from unittest.mock import patch
+
+        order = []
+        counts = iter([40, 80, 100])
+        self.client.count.side_effect = lambda **_: order.append("count") or {"count": next(counts)}
+        self.client.delete_by_query.side_effect = lambda **_: order.append("delete") or {"deleted": 0}
+
+        with patch("pds.registrysweepers.legacy_registry_sync.legacy_registry_sync.time.sleep") as sleep:
+            prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
+
+        self.assertEqual(["count", "count", "count", "delete"], order)
+        self.assertEqual(2, sleep.call_count)
+
+    def test_skips_the_prune_when_the_written_documents_never_become_searchable(self):
+        from unittest.mock import patch
+
+        self.client.count.return_value = {"count": 10}
+
+        with patch("pds.registrysweepers.legacy_registry_sync.legacy_registry_sync.time.sleep"), patch(
+            "pds.registrysweepers.legacy_registry_sync.legacy_registry_sync.time.monotonic", side_effect=[0, 1, 2, 10**6]
+        ):
+            deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
+
+        self.assertEqual(0, deleted)
+        self.client.delete_by_query.assert_not_called()
+
+    def test_accepts_a_stable_count_slightly_below_the_number_written(self):
+        from unittest.mock import patch
+
+        self.client.count.return_value = {"count": 98}  # the same document written twice counts once
+
+        with patch("pds.registrysweepers.legacy_registry_sync.legacy_registry_sync.time.sleep"):
+            deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
+
+        self.assertEqual(3, deleted)

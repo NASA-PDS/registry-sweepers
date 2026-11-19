@@ -12,6 +12,7 @@ from typing import Set
 import opensearchpy.helpers
 import requests
 from opensearchpy import OpenSearch
+from opensearchpy.exceptions import OpenSearchException
 from pds.registrysweepers.legacy_registry_sync.opensearch_loaded_product import get_already_loaded_lidvids
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SYNC_RUN_ID_FIELD
@@ -37,6 +38,9 @@ MAX_RETRIES = 5
 MIN_PRUNE_RATIO = 0.9
 PRUNE_REQUEST_TIMEOUT_SECONDS = 3600
 DRY_RUN_STALE_SAMPLE_SIZE = 20
+# How long to wait for the documents written by a run to become searchable before pruning, and how often to check.
+VISIBILITY_TIMEOUT_SECONDS = 600
+VISIBILITY_POLL_SECONDS = 5
 # OpenSearch Serverless caps a page at 10,000 hits
 EXISTING_IDS_PAGE_SIZE = 5000
 EXISTING_IDS_REQUEST_TIMEOUT_SECONDS = 120
@@ -111,6 +115,30 @@ def prune_guard_passes(docs_written: int, docs_before: int) -> bool:
     return docs_written >= docs_before * MIN_PRUNE_RATIO
 
 
+def wait_until_written_documents_are_searchable(client: OpenSearch, run_id: int, docs_written: int) -> bool:
+    """
+    Waits until the documents written by the run are visible to search, which the prune query depends on: a document
+    which has been rewritten but is not yet visible still carries an older run id, and would be deleted as stale.
+
+    Ready means the count of documents carrying the run id reaches the number written, or stops growing between two
+    checks at no less than MIN_PRUNE_RATIO of it (the same document written twice counts once in the index).
+
+    @return: True when the written documents are searchable, False if that was not reached within the timeout
+    """
+    query = {"query": {"term": {SYNC_RUN_ID_FIELD: run_id}}}
+    deadline = time.monotonic() + VISIBILITY_TIMEOUT_SECONDS
+    previous = -1
+    while True:
+        visible = client.count(index=OS_INDEX, body=query)["count"]
+        if visible >= docs_written or (visible == previous and visible >= docs_written * MIN_PRUNE_RATIO):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        previous = visible
+        log.info("%d of %d written documents are searchable; waiting", visible, docs_written)
+        time.sleep(VISIBILITY_POLL_SECONDS)
+
+
 def prune_stale_documents(client: OpenSearch, run_id: int, docs_before: int, docs_written: int) -> int:
     """
     Deletes documents from the legacy_registry index which were not written by the given sync run, i.e. those which
@@ -135,7 +163,20 @@ def prune_stale_documents(client: OpenSearch, run_id: int, docs_before: int, doc
         return 0
 
     # make the documents written by this run visible, so that superseded versions aren't mistaken for stale ones
-    client.indices.refresh(index=OS_INDEX)
+    try:
+        client.indices.refresh(index=OS_INDEX)
+    except OpenSearchException as err:
+        # OpenSearch Serverless has no refresh operation (404); it makes writes searchable by itself
+        log.info("Refresh of %s is not available (%s); waiting for the written documents to become searchable", OS_INDEX, err)
+
+    if not wait_until_written_documents_are_searchable(client, run_id, docs_written):
+        log.error(
+            "Skipping prune of %s: the documents written by this run did not all become searchable within %d seconds, "
+            "so documents not yet visible with this run's id could be mistaken for stale ones",
+            OS_INDEX,
+            VISIBILITY_TIMEOUT_SECONDS,
+        )
+        return 0
 
     # documents which predate the run id field match too, as they are missing the term
     query = {"query": {"bool": {"must_not": [{"term": {SYNC_RUN_ID_FIELD: run_id}}]}}}
