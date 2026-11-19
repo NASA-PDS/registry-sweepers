@@ -12,6 +12,7 @@ from typing import Set
 import opensearchpy.helpers
 import requests
 from opensearchpy import OpenSearch
+from opensearchpy.exceptions import NotFoundError
 from opensearchpy.exceptions import OpenSearchException
 from pds.registrysweepers.legacy_registry_sync.opensearch_loaded_product import get_already_loaded_lidvids
 from pds.registrysweepers.legacy_registry_sync.solr_doc_export_to_opensearch import SolrOsWrapperIter
@@ -36,7 +37,9 @@ MAX_RETRIES = 5
 # Stale documents are only pruned if the run wrote at least this fraction of the documents already in the index.
 # This prevents a truncated or empty Solr response from wiping the index.
 MIN_PRUNE_RATIO = 0.9
-PRUNE_REQUEST_TIMEOUT_SECONDS = 3600
+PRUNE_REQUEST_TIMEOUT_SECONDS = 300
+# Documents are deleted by id in bulk requests of this many, as OpenSearch Serverless has no delete-by-query.
+PRUNE_BATCH_SIZE = 1000
 DRY_RUN_STALE_SAMPLE_SIZE = 20
 # How long to wait for the documents written by a run to become searchable before pruning, and how often to check.
 VISIBILITY_TIMEOUT_SECONDS = 600
@@ -82,19 +85,23 @@ def create_legacy_registry_index(es_conn: OpenSearch) -> None:
     log.info("index created %s", OS_INDEX)
 
 
-def iterate_existing_ids(client: OpenSearch, page_size: int = EXISTING_IDS_PAGE_SIZE) -> Iterator[str]:
+def iterate_existing_ids(
+    client: OpenSearch, page_size: int = EXISTING_IDS_PAGE_SIZE, query: Optional[Dict[str, Any]] = None
+) -> Iterator[str]:
     """
-    Streams the ids of every document in the legacy_registry index, one page at a time.
+    Streams the ids of the documents in the legacy_registry index (every document unless a query is given), one page
+    at a time.
 
     Pages with search_after sorted on _id, as the scroll API is not usable on OpenSearch Serverless. An empty index
     yields nothing.
 
     @param client: OpenSearch client from the opensearchpy library
     @param page_size: number of hits requested per page, at most 10,000
+    @param query: query selecting the documents, all documents if omitted
     """
     search_after: Optional[List[Any]] = None
     while True:
-        body: Dict[str, Any] = {"query": {"match_all": {}}, "sort": [{"_id": "asc"}], "_source": False}
+        body: Dict[str, Any] = {"query": query or {"match_all": {}}, "sort": [{"_id": "asc"}], "_source": False}
         if search_after is not None:
             body["search_after"] = search_after
 
@@ -178,13 +185,67 @@ def prune_stale_documents(client: OpenSearch, run_id: int, docs_before: int, doc
         )
         return 0
 
-    # documents which predate the run id field match too, as they are missing the term
-    query = {"query": {"bool": {"must_not": [{"term": {SYNC_RUN_ID_FIELD: run_id}}]}}}
-    response = client.delete_by_query(
-        index=OS_INDEX, body=query, conflicts="proceed", request_timeout=PRUNE_REQUEST_TIMEOUT_SECONDS
-    )
-    deleted = response.get("deleted", 0)
+    # documents which predate the run id field match too, as they are missing the term.  The ids are listed before
+    # anything is deleted, because deleting while paging would move the pages.  The guard above bounds how many there are.
+    stale_query = {"bool": {"must_not": [{"term": {SYNC_RUN_ID_FIELD: run_id}}]}}
+    stale_ids = list(iterate_existing_ids(client, query=stale_query))
+    log.info("Pruning %d stale documents from %s", len(stale_ids), OS_INDEX)
+
+    deleted = delete_documents(client, stale_ids)
     log.info("Pruned %d stale documents from %s", deleted, OS_INDEX)
+    return deleted
+
+
+def _delete_one(client: OpenSearch, doc_id: str) -> Dict[str, Any]:
+    """Deletes one document by id and returns the outcome in the shape of a bulk response item."""
+    try:
+        client.delete(index=OS_INDEX, id=doc_id)
+        return {"delete": {"_id": doc_id, "status": 200, "result": "deleted"}}
+    except NotFoundError:
+        return {"delete": {"_id": doc_id, "status": 404, "result": "not_found"}}
+    except OpenSearchException:
+        return {"delete": {"_id": doc_id, "status": 500, "result": "error"}}
+
+
+def delete_documents(client: OpenSearch, doc_ids: List[str]) -> int:
+    """
+    Deletes documents from the legacy_registry index by id with bulk requests.  OpenSearch Serverless supports neither
+    delete-by-query nor update-by-query, so documents are deleted by id.
+
+    A document which is already gone counts as deleted.  Failures are logged and counted, and do not stop the run.
+
+    @param client: OpenSearch client from the opensearchpy library
+    @param doc_ids: ids of the documents to delete
+    @return: number of documents deleted (or already absent)
+    """
+    deleted = 0
+    failed: List[str] = []
+    for start in range(0, len(doc_ids), PRUNE_BATCH_SIZE):
+        batch = doc_ids[start : start + PRUNE_BATCH_SIZE]
+        actions = [{"delete": {"_index": OS_INDEX, "_id": doc_id}} for doc_id in batch]
+        try:
+            response = client.bulk(body=actions, request_timeout=PRUNE_REQUEST_TIMEOUT_SECONDS)
+            items = response.get("items", [])
+        except OpenSearchException as err:
+            # fall back to deleting the documents of this batch one by one (DELETE <index>/_doc/<id>)
+            log.warning("Bulk delete of %d documents failed (%s); deleting them one by one", len(batch), err)
+            items = [_delete_one(client, doc_id) for doc_id in batch]
+
+        for doc_id, item in zip(batch, items):
+            outcome = item.get("delete", {})
+            if outcome.get("result") in ("deleted", "not_found") or outcome.get("status") == 404:
+                deleted += 1
+            else:
+                failed.append(doc_id)
+
+    if failed:
+        log.error(
+            "Failed to delete %d of %d stale documents from %s, for example %s.  They are pruned by the next run.",
+            len(failed),
+            len(doc_ids),
+            OS_INDEX,
+            failed[:5],
+        )
     return deleted
 
 

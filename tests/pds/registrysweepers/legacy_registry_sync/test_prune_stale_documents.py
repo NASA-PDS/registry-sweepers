@@ -3,6 +3,8 @@ import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+from opensearchpy.exceptions import NotFoundError
+
 from pds.registrysweepers.legacy_registry_sync import legacy_registry_sync
 from pds.registrysweepers.legacy_registry_sync.legacy_registry_sync import iterate_existing_ids
 from pds.registrysweepers.legacy_registry_sync.legacy_registry_sync import MIN_PRUNE_RATIO
@@ -29,66 +31,185 @@ class TestRunIdStamping(unittest.TestCase):
         self.assertNotIn(SYNC_RUN_ID_FIELD, os_doc["_source"])
 
 
+class FakeServerlessClient:
+    """
+    An in-memory legacy index which behaves like OpenSearch Serverless for the calls the prune makes: there is no
+    refresh, no delete-by-query and no scroll, documents are listed with search_after and deleted by id in bulk.
+    """
+
+    def __init__(self, docs, visible_after_polls=0, failing_ids=()):
+        self.docs = dict(docs)  # id -> run id (None when the document predates the run id field)
+        self.visible_after_polls = visible_after_polls
+        self.failing_ids = set(failing_ids)
+        self.calls = []
+        self.indices = MagicMock()
+        self.indices.refresh.side_effect = NotFoundError(404, "")
+
+    def delete_by_query(self, **kwargs):
+        raise NotFoundError(404, "")
+
+    def scroll(self, **kwargs):
+        raise ScrollNotSupportedError("scroll is not usable on OpenSearch Serverless")
+
+    def count(self, index, body):
+        self.calls.append("count")
+        run_id = body["query"]["term"][SYNC_RUN_ID_FIELD]
+        matching = [d for d, r in self.docs.items() if r == run_id]
+        if self.visible_after_polls > 0:
+            self.visible_after_polls -= 1
+            return {"count": len(matching) // 2}
+        return {"count": len(matching)}
+
+    def search(self, index, body, size, request_timeout=None):
+        self.calls.append("search")
+        query = body["query"]
+        if "bool" in query:
+            run_id = query["bool"]["must_not"][0]["term"][SYNC_RUN_ID_FIELD]
+            ids = sorted(d for d, r in self.docs.items() if r != run_id)
+        else:
+            ids = sorted(self.docs)
+        after = body.get("search_after")
+        if after:
+            ids = [d for d in ids if d > after[0]]
+        return {"hits": {"hits": [{"_id": d, "sort": [d]} for d in ids[:size]]}}
+
+    def bulk(self, body, request_timeout=None):
+        self.calls.append("bulk")
+        items = []
+        for action in body:
+            doc_id = action["delete"]["_id"]
+            if doc_id in self.failing_ids:
+                items.append({"delete": {"_id": doc_id, "status": 429, "error": {"type": "rejected"}}})
+            elif doc_id in self.docs:
+                del self.docs[doc_id]
+                items.append({"delete": {"_id": doc_id, "status": 200, "result": "deleted"}})
+            else:
+                items.append({"delete": {"_id": doc_id, "status": 404, "result": "not_found"}})
+        return {"errors": any(i["delete"]["status"] >= 400 and i["delete"]["status"] != 404 for i in items), "items": items}
+
+
+def current_and_stale(current=100, stale=3):
+    docs = {f"urn:x:current{i:03d}::1.0": RUN_ID for i in range(current)}
+    docs.update({f"urn:x:stale{i:03d}::1.0": 111 for i in range(stale)})
+    docs["urn:x:unstamped::1.0"] = None  # predates the run id field
+    return docs
+
+
+@patch("pds.registrysweepers.legacy_registry_sync.legacy_registry_sync.time.sleep", MagicMock())
 class TestPruneStaleDocuments(unittest.TestCase):
-    def setUp(self):
-        self.client = MagicMock()
-        self.client.delete_by_query.return_value = {"deleted": 7}
-        self.client.count.return_value = {"count": 10**9}  # every written document is already searchable
+    def test_deletes_only_the_documents_not_stamped_with_the_run_id(self):
+        client = FakeServerlessClient(current_and_stale())
 
-    def test_deletes_documents_not_stamped_with_run_id(self):
-        deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
+        deleted = prune_stale_documents(client, run_id=RUN_ID, docs_before=104, docs_written=100)
 
-        self.assertEqual(7, deleted)
-        self.client.indices.refresh.assert_called_once_with(index=OS_INDEX)
-        kwargs = self.client.delete_by_query.call_args.kwargs
-        self.assertEqual(OS_INDEX, kwargs["index"])
-        self.assertEqual(
-            {"query": {"bool": {"must_not": [{"term": {SYNC_RUN_ID_FIELD: RUN_ID}}]}}},
-            kwargs["body"],
-        )
+        self.assertEqual(4, deleted)  # three stale and the unstamped one
+        self.assertEqual(100, len(client.docs))
+        self.assertTrue(all(run_id == RUN_ID for run_id in client.docs.values()))
 
-    def test_prune_does_not_use_scroll(self):
-        self.client.scroll.side_effect = ScrollNotSupportedError("scroll is not usable on OpenSearch Serverless")
-        self.client.clear_scroll.side_effect = ScrollNotSupportedError("scroll is not usable on OpenSearch Serverless")
-        self.client.search.side_effect = ScrollNotSupportedError("prune must not list documents")
+    def test_deletes_with_one_bulk_request_and_never_uses_delete_by_query(self):
+        client = FakeServerlessClient(current_and_stale())  # delete_by_query and scroll raise on this client
 
-        deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
+        prune_stale_documents(client, run_id=RUN_ID, docs_before=104, docs_written=100)
 
-        self.assertEqual(7, deleted)
+        self.assertEqual(1, client.calls.count("bulk"))
 
-    def test_refreshes_before_deleting(self):
-        order = []
-        self.client.indices.refresh.side_effect = lambda **_: order.append("refresh")
-        self.client.delete_by_query.side_effect = lambda **_: order.append("delete") or {"deleted": 0}
+    def test_deletes_in_batches_of_the_configured_size(self):
+        client = FakeServerlessClient(current_and_stale(stale=7))
+        with patch.object(legacy_registry_sync, "PRUNE_BATCH_SIZE", 3):
+            deleted = prune_stale_documents(client, run_id=RUN_ID, docs_before=108, docs_written=100)
 
-        prune_stale_documents(self.client, run_id=RUN_ID, docs_before=10, docs_written=10)
+        self.assertEqual(8, deleted)
+        self.assertEqual(3, client.calls.count("bulk"))  # 8 documents in batches of 3
 
-        self.assertEqual(["refresh", "delete"], order)
+    def test_lists_all_stale_ids_before_deleting_any(self):
+        client = FakeServerlessClient(current_and_stale(stale=7))
+        with patch.object(legacy_registry_sync, "PRUNE_BATCH_SIZE", 2):
+            prune_stale_documents(client, run_id=RUN_ID, docs_before=108, docs_written=100)
+
+        searches = [i for i, c in enumerate(client.calls) if c == "search"]
+        bulks = [i for i, c in enumerate(client.calls) if c == "bulk"]
+        self.assertLess(max(searches), min(bulks))
+
+    def test_documents_already_absent_count_as_deleted_and_failures_are_reported_not_raised(self):
+        client = FakeServerlessClient(current_and_stale(stale=3), failing_ids={"urn:x:stale001::1.0"})
+
+        with self.assertLogs(legacy_registry_sync.log, level="ERROR") as logs:
+            deleted = prune_stale_documents(client, run_id=RUN_ID, docs_before=104, docs_written=100)
+
+        self.assertEqual(3, deleted)  # one of the four failed
+        self.assertIn("Failed to delete 1 of 4 stale documents", logs.output[0])
+        self.assertIn("urn:x:stale001::1.0", client.docs)
+
+    def test_falls_back_to_deleting_one_by_one_when_bulk_delete_is_rejected(self):
+        client = FakeServerlessClient(current_and_stale())
+        client.bulk = MagicMock(side_effect=NotFoundError(404, ""))
+
+        def delete(index, id):
+            if id not in client.docs:
+                raise NotFoundError(404, "")
+            del client.docs[id]
+
+        client.delete = delete
+
+        deleted = prune_stale_documents(client, run_id=RUN_ID, docs_before=104, docs_written=100)
+
+        self.assertEqual(4, deleted)
+        self.assertEqual(100, len(client.docs))
+
+    def test_waits_for_the_written_documents_before_listing_and_deleting(self):
+        client = FakeServerlessClient(current_and_stale(), visible_after_polls=2)
+
+        prune_stale_documents(client, run_id=RUN_ID, docs_before=104, docs_written=100)
+
+        self.assertEqual(["count", "count", "count", "search", "bulk"], client.calls)
+
+    def test_skips_the_prune_when_the_written_documents_never_become_searchable(self):
+        client = FakeServerlessClient(current_and_stale(), visible_after_polls=10**6)
+        clock = iter([0, 1, 2, 10**6])
+
+        with patch.object(legacy_registry_sync.time, "monotonic", lambda: next(clock)):
+            deleted = prune_stale_documents(client, run_id=RUN_ID, docs_before=104, docs_written=100)
+
+        self.assertEqual(0, deleted)
+        self.assertEqual(104, len(client.docs))
+
+    def test_accepts_a_stable_count_slightly_below_the_number_written(self):
+        docs = current_and_stale(current=98, stale=2)
+        client = FakeServerlessClient(docs)
+
+        deleted = prune_stale_documents(client, run_id=RUN_ID, docs_before=101, docs_written=100)  # 100 written, 98 distinct
+
+        self.assertEqual(3, deleted)
 
     def test_skips_prune_when_run_wrote_too_few_documents(self):
         docs_before = 1000
         docs_written = int(docs_before * MIN_PRUNE_RATIO) - 1
+        client = FakeServerlessClient(current_and_stale())
 
-        deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=docs_before, docs_written=docs_written)
+        deleted = prune_stale_documents(client, run_id=RUN_ID, docs_before=docs_before, docs_written=docs_written)
 
         self.assertEqual(0, deleted)
-        self.client.delete_by_query.assert_not_called()
+        self.assertNotIn("bulk", client.calls)
 
     def test_skips_prune_when_run_wrote_nothing_to_populated_index(self):
-        deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=50, docs_written=0)
+        client = FakeServerlessClient(current_and_stale())
+
+        deleted = prune_stale_documents(client, run_id=RUN_ID, docs_before=50, docs_written=0)
 
         self.assertEqual(0, deleted)
-        self.client.delete_by_query.assert_not_called()
+        self.assertNotIn("bulk", client.calls)
 
     def test_prunes_at_exact_minimum_ratio(self):
-        prune_stale_documents(self.client, run_id=RUN_ID, docs_before=1000, docs_written=int(1000 * MIN_PRUNE_RATIO))
+        client = FakeServerlessClient(current_and_stale(current=9, stale=0))  # 9 stamped and 1 unstamped: 10 before
 
-        self.client.delete_by_query.assert_called_once()
+        deleted = prune_stale_documents(client, run_id=RUN_ID, docs_before=10, docs_written=9)
 
-    def test_prunes_when_index_was_empty(self):
-        prune_stale_documents(self.client, run_id=RUN_ID, docs_before=0, docs_written=0)
+        self.assertEqual(1, deleted)  # 9 of 10 is exactly the minimum ratio, so the unstamped document is pruned
 
-        self.client.delete_by_query.assert_called_once()
+    def test_prunes_nothing_when_the_index_was_empty(self):
+        client = FakeServerlessClient({})
+
+        self.assertEqual(0, prune_stale_documents(client, run_id=RUN_ID, docs_before=0, docs_written=0))
 
 
 if __name__ == "__main__":
@@ -236,60 +357,3 @@ def test_the_solr_query_asks_for_every_version_not_only_the_latest():
         sync.build_solr_actions(object(), force=True, run_id=1)  # type: ignore[arg-type]
 
     assert solr_docs.call_args.args[:2] == (sync.SOLR_URL, "*&qt=all")
-
-
-class TestPruneOnServerlessWithoutRefresh(unittest.TestCase):
-    def setUp(self):
-        from opensearchpy.exceptions import NotFoundError
-
-        self.client = MagicMock()
-        self.client.delete_by_query.return_value = {"deleted": 3}
-        self.client.indices.refresh.side_effect = NotFoundError(404, "")
-
-    def test_prunes_when_refresh_is_not_available_and_the_documents_are_searchable(self):
-        self.client.count.return_value = {"count": 100}
-
-        deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
-
-        self.assertEqual(3, deleted)
-        self.client.delete_by_query.assert_called_once()
-        self.assertEqual(
-            {"query": {"term": {SYNC_RUN_ID_FIELD: RUN_ID}}}, self.client.count.call_args.kwargs["body"]
-        )
-
-    def test_waits_for_the_written_documents_before_deleting(self):
-        from unittest.mock import patch
-
-        order = []
-        counts = iter([40, 80, 100])
-        self.client.count.side_effect = lambda **_: order.append("count") or {"count": next(counts)}
-        self.client.delete_by_query.side_effect = lambda **_: order.append("delete") or {"deleted": 0}
-
-        with patch("pds.registrysweepers.legacy_registry_sync.legacy_registry_sync.time.sleep") as sleep:
-            prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
-
-        self.assertEqual(["count", "count", "count", "delete"], order)
-        self.assertEqual(2, sleep.call_count)
-
-    def test_skips_the_prune_when_the_written_documents_never_become_searchable(self):
-        from unittest.mock import patch
-
-        self.client.count.return_value = {"count": 10}
-
-        with patch("pds.registrysweepers.legacy_registry_sync.legacy_registry_sync.time.sleep"), patch(
-            "pds.registrysweepers.legacy_registry_sync.legacy_registry_sync.time.monotonic", side_effect=[0, 1, 2, 10**6]
-        ):
-            deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
-
-        self.assertEqual(0, deleted)
-        self.client.delete_by_query.assert_not_called()
-
-    def test_accepts_a_stable_count_slightly_below_the_number_written(self):
-        from unittest.mock import patch
-
-        self.client.count.return_value = {"count": 98}  # the same document written twice counts once
-
-        with patch("pds.registrysweepers.legacy_registry_sync.legacy_registry_sync.time.sleep"):
-            deleted = prune_stale_documents(self.client, run_id=RUN_ID, docs_before=100, docs_written=100)
-
-        self.assertEqual(3, deleted)
