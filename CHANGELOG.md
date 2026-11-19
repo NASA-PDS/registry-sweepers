@@ -1,30 +1,72 @@
 # Changelog
 
+## [release/1.7.5](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.7.5) (2026-11-19)
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-08-17)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5-rc.2...release/1.7.5)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.0...«unknown»)
+## [v1.7.5-rc.2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.5-rc.2) (2026-11-18)
 
-## [«unknown»](https://github.com/NASA-PDS/registry-sweepers/tree/«unknown») (2026-08-17)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5rc2...v1.7.5-rc.2)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.0...«unknown»)
+**Defects:**
 
-**Requirements:**
+- ancestry sweeper does not link a bundle to a re-harvested collection when the bundle is already stamped, leaving collection ancestor\_refs empty and /members at 0 [\#284](https://github.com/NASA-PDS/registry-sweepers/issues/284) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 
-- As a node operator, I want `pds-registry-sweepers` available as an installed CLI command [\#229](https://github.com/NASA-PDS/registry-sweepers/issues/229)
-- As a node operator, I want to run any individual sweeper by name from the command line [\#228](https://github.com/NASA-PDS/registry-sweepers/issues/228)
-- As a PDS cloud operator, I want to automatically deploy sweepers with specific docker commands [\#211](https://github.com/NASA-PDS/registry-sweepers/issues/211)
-- As a registry administrator, I want the system to enforce that only one sweeper can operate on a single node concurrently [\#203](https://github.com/NASA-PDS/registry-sweepers/issues/203)
+## [v1.7.5rc2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.5rc2) (2026-11-12)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5rc1...v1.7.5rc2)
+
+## [v1.7.5rc1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.5rc1) (2026-11-12)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5-rc.1...v1.7.5rc1)
+
+## [v1.7.5-rc.1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.5-rc.1) (2026-11-12)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.4...v1.7.5-rc.1)
+
+## [v1.7.4](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.4) (2026-11-03)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.3...v1.7.4)
+
+**Improvements:**
+
+- \(re\)implement handling of partially-uploaded collections, missing products, etc [\#200](https://github.com/NASA-PDS/registry-sweepers/issues/200)
+
+**Defects:**
+
+- Missing ancestry\_version = 7 for ATM registry products [\#260](https://github.com/NASA-PDS/registry-sweepers/issues/260) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
+- Ancestry not working properly for SBN in Prod [\#171](https://github.com/NASA-PDS/registry-sweepers/issues/171) [[s.critical](https://github.com/NASA-PDS/registry-sweepers/labels/s.critical)]
 
 **Other closed issues:**
 
-- Document on-demand sweeper execution for operators [\#231](https://github.com/NASA-PDS/registry-sweepers/issues/231)
-- Update sweepers to support new structured metadata [\#189](https://github.com/NASA-PDS/registry-sweepers/issues/189)
+- Activate the new sweepers 1.7.3 in production  with Airflow [\#259](https://github.com/NASA-PDS/registry-sweepers/issues/259)
+- Implement replacement for orphan detection [\#199](https://github.com/NASA-PDS/registry-sweepers/issues/199)
+- Deploy and/or execute sweeper upgrade in production to close our membership issues in API [\#197](https://github.com/NASA-PDS/registry-sweepers/issues/197)
+- Implement support in ancestry for tracking history of non-aggregate products and collections which do not yet exist in the db [\#188](https://github.com/NASA-PDS/registry-sweepers/issues/188)
 
-## [v1.7.0](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.0) (2026-06-23)
+## [v1.7.3](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.3) (2026-09-03)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.6.2...v1.7.0)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.3-rc.2...v1.7.3)
 
+## [v1.7.3-rc.2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.3-rc.2) (2026-09-03)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.2...v1.7.3-rc.2)
+
+## [v1.7.2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.2) (2026-09-02)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.3rc2...v1.7.2)
+
+## [v1.7.3rc2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.3rc2) (2026-09-02)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/1.7.1-deploy...v1.7.3rc2)
+
+## [1.7.1-deploy](https://github.com/NASA-PDS/registry-sweepers/tree/1.7.1-deploy) (2026-08-28)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.0-deploy...1.7.1-deploy)
+
+## [v1.7.0-deploy](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.0-deploy) (2026-08-17)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.0...v1.7.0-deploy)
 
 **Requirements:**
 
