@@ -1,0 +1,66 @@
+[
+  {
+    "index": "registry",
+    "_id": "urn:nasa:pds:paginated_bundle::1.0",
+    "_source": {
+      "lidvid": "urn:nasa:pds:paginated_bundle::1.0",
+      "product_class": "Product_Bundle",
+      "title": "Paginated bundle",
+      "alternate_ids": [],
+      "ref_lid_collection": ["urn:nasa:pds:paginated_collection"]
+    }
+  },
+  {
+    "index": "registry",
+    "_id": "urn:nasa:pds:paginated_collection::1.0",
+    "_source": {
+      "lidvid": "urn:nasa:pds:paginated_collection::1.0",
+      "product_class": "Product_Collection",
+      "title": "Paginated collection",
+      "alternate_ids": []
+    }
+  },
+  {
+    "index": "registry",
+    "_id": "urn:nasa:pds:paginated_collection:product_1::1.0",
+    "_source": {
+      "lidvid": "urn:nasa:pds:paginated_collection:product_1::1.0",
+      "product_class": "Product_Observational",
+      "title": "Product 1",
+      "alternate_ids": []
+    }
+  },
+  {
+    "index": "registry",
+    "_id": "urn:nasa:pds:paginated_collection:product_2::1.0",
+    "_source": {
+      "lidvid": "urn:nasa:pds:paginated_collection:product_2::1.0",
+      "product_class": "Product_Observational",
+      "title": "Product 2",
+      "alternate_ids": []
+    }
+  },
+  {
+    "index": "registry",
+    "_id": "urn:nasa:pds:paginated_collection:product_3::1.0",
+    "_source": {
+      "lidvid": "urn:nasa:pds:paginated_collection:product_3::1.0",
+      "product_class": "Product_Observational",
+      "title": "Product 3",
+      "alternate_ids": []
+    }
+  },
+  {
+    "index": "registry-refs",
+    "_id": "urn:nasa:pds:paginated_collection::1.0::batch_1",
+    "_source": {
+      "collection_lidvid": "urn:nasa:pds:paginated_collection::1.0",
+      "batch_id": 1,
+      "product_lidvid": [
+        "urn:nasa:pds:paginated_collection:product_1::1.0",
+        "urn:nasa:pds:paginated_collection:product_2::1.0",
+        "urn:nasa:pds:paginated_collection:product_3::1.0"
+      ]
+    }
+  }
+]

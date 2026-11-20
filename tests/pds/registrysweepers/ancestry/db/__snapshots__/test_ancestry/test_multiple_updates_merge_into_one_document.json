@@ -1,0 +1,89 @@
+[
+  {
+    "_id": "urn:nasa:pds:merge:bundle1::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:merge:bundle1::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Bundle",
+      "ref_lid_collection": [
+        "urn:nasa:pds:merge:shared"
+      ],
+      "title": "Test Product"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:merge:bundle2::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:merge:bundle2::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Bundle",
+      "ref_lid_collection": [
+        "urn:nasa:pds:merge:shared"
+      ],
+      "title": "Test Product"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:merge:bundle_xy::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:merge:bundle_xy::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Bundle",
+      "ref_lid_collection": [
+        "urn:nasa:pds:merge:x",
+        "urn:nasa:pds:merge:y"
+      ],
+      "title": "Test Product"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:merge:shared::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:merge:shared::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:merge:bundle1",
+        "urn:nasa:pds:merge:bundle1::1.0",
+        "urn:nasa:pds:merge:bundle2",
+        "urn:nasa:pds:merge:bundle2::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Test Collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:merge:x::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:merge:x::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:merge:bundle_xy",
+        "urn:nasa:pds:merge:bundle_xy::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Test Collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:merge:y::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:merge:y::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:merge:bundle_xy",
+        "urn:nasa:pds:merge:bundle_xy::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Test Collection"
+    }
+  }
+]

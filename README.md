@@ -147,6 +147,90 @@ When run against the production OpenSearch instance with ~1.1M products, no cros
 The overwhelming bottleneck ops are the O(docs_count) db writes in ancestry.
 
 
+## Testing
+
+Install the dev extras first: `pip install --editable '.[dev]'`.
+
+Tests come in two kinds:
+
+- **Unit tests** need nothing running.
+- **DB tests** run the sweepers against a real OpenSearch (`opensearchproject/opensearch:2.19.x`, version pinned in [`tests/support/opensearch_server.py`](tests/support/opensearch_server.py)). Any test that uses the `registry_db` fixture is marked `db` automatically.
+
+```sh
+pytest -m "not db"   # unit tests only; no Docker or OpenSearch needed
+pytest -m db         # DB tests only
+tox                  # unit tests (py312, py313), docs and lint; never needs Docker
+tox -e db            # DB tests on py3.13 with coverage, as CI runs them
+```
+
+Tests run in parallel by default (`-n auto`). Pass `-n 0` to run them serially, which is easier to debug.
+
+### Where the DB tests get OpenSearch
+
+1. **`TEST_OPENSEARCH_URL`.** If this is set (e.g. `http://localhost:9200`), the tests use that instance, which must have security disabled.
+2. **Devcontainer sidecar.** The [`.devcontainer/claude-code`](.devcontainer/claude-code) devcontainer starts an OpenSearch sidecar and sets `TEST_OPENSEARCH_URL=http://opensearch:9200`, so DB tests work there with no extra setup.
+3. **testcontainers.** If `TEST_OPENSEARCH_URL` is unset and Docker is available, pytest starts a throwaway OpenSearch container for the session and removes it at exit. CI's `db-testing` job uses this route.
+
+If none of these is available, DB tests are **skipped** locally. With `CI` set, they **fail** instead, so a CI job can't pass without having run them.
+
+Each test gets its own indices under a random node prefix (`MULTITENANCY_NODE_ID`), which resolve to `<node>-registry-structured`, `-refs`, `-dd` and `-deferred-updates`. The indices are deleted when the test finishes, so tests can share one instance and run in parallel. Only structured-metadata mode is tested.
+
+### Index mappings
+
+The test indices are created from the committed mapping files in [`tests/resources/mappings/`](tests/resources/mappings/). That README says where they came from and how to refresh them. If any are missing, DB tests skip (or fail under `CI`) with a message naming the missing files.
+
+Seed documents are checked against these mappings when loaded. A field that isn't in the mapping, such as a stale flat-schema name like `ops:Sweepers/ops:ancestry_version`, fails the load with an error listing the unknown fields. Pass `validate=False` to `registry_db.load()` to seed deliberately invalid documents.
+
+### Writing a DB test
+
+Request the `registry_db` fixture, seed documents, run the sweeper with `registry_db.client`, then inspect the indices. Documents can be seeded three ways, and all three go through the same loader:
+
+```python
+from pds.registrysweepers.ancestry import main as ancestry
+from tests.support.builders import CollectionRefsBuilder, build_bundle, build_collection, build_product
+
+
+def test_example(registry_db, snapshot):
+    # Builders: best for small, readable cases
+    registry_db.load(
+        [build_bundle("urn:nasa:pds:b::1.0", "urn:nasa:pds:b:c"),
+         build_collection("urn:nasa:pds:b:c::1.0"),
+         build_product("urn:nasa:pds:b:c:p::1.0")],
+        index="registry",
+    )
+    registry_db.load([CollectionRefsBuilder("urn:nasa:pds:b:c::1.0").with_product("urn:nasa:pds:b:c:p::1.0").to_seed()])
+
+    # Raw dicts: {"_id": ..., "_source": {...}}, plus "index" or the index= argument
+    # JSON files: a list of such dicts under tests/resources/fixtures/, best for larger or irregular data
+    # registry_db.load_json("ancestry/lid_ref_hierarchy.json")
+
+    ancestry.run(client=registry_db.client)
+
+    registry_db.refresh()
+    docs = registry_db.dump("registry")   # sorted by _id
+    assert docs == snapshot               # plus targeted asserts on the fields the test is about
+```
+
+See [`tests/pds/registrysweepers/ancestry/db/test_ancestry.py`](tests/pds/registrysweepers/ancestry/db/test_ancestry.py) for complete examples.
+
+### Snapshots
+
+DB tests compare dumped index contents with JSON snapshots under `__snapshots__/` next to the test file, using [syrupy](https://github.com/syrupy-project/syrupy). Two kinds of value are normalised so that snapshots stay stable:
+
+- Ancestry reference lists are sorted.
+- The current ancestry software version is written as `<SWEEPERS_ANCESTRY_VERSION>`, so bumping the version doesn't rewrite every snapshot.
+
+A mismatch fails with a diff. After an intended behaviour change, regenerate the snapshots and review the diff before committing:
+
+```sh
+pytest -m db -n 0 --snapshot-update
+```
+
+### End-to-end smoke test
+
+[`tests/pds/registrysweepers/test_driver_smoke.py`](tests/pds/registrysweepers/test_driver_smoke.py) runs `docker/sweepers_driver.py` as a subprocess with the default sweeper set against a seeded registry. It checks that the entry point wires everything together and exits cleanly. Sweeper logic is covered by the in-process DB tests.
+
+
 ## Code of Conduct
 
 All users and developers of the NASA-PDS software are expected to abide by our [Code of Conduct](https://github.com/NASA-PDS/.github/blob/main/CODE_OF_CONDUCT.md). Please read this to ensure you understand the expectations of our community.
