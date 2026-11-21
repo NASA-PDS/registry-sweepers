@@ -26,6 +26,12 @@ class Update:
     primary_term: Union[int, None] = None
     seq_no: Union[int, None] = None
 
+    # Set when the document must be physically rewritten even if the update changes none of its values, e.g. so that
+    # the document is indexed on a field which was added to the index mapping after it was written.  Applies to
+    # partial-document updates only: inline scripts decide for themselves whether to rewrite the document (see ctx.op
+    # in ancestry/constants.py)
+    force_rewrite: bool = False
+
     def has_versioning_information(self) -> bool:
         has_primary_term = self.primary_term is not None
         has_sequence_number = self.seq_no is not None
