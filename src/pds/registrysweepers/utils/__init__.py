@@ -1,16 +1,22 @@
 import argparse
 import logging
 from argparse import Namespace
+from typing import Callable
 from typing import List
+from typing import Optional
 from typing import Union
 
 log = logging.getLogger(__name__)
 
 
-def parse_args(description: str = "", epilog: str = "") -> Namespace:
+def parse_args(
+    description: str = "",
+    epilog: str = "",
+    configure_parser: Optional[Callable[[argparse.ArgumentParser], None]] = None,
+) -> Namespace:
     """
     Provides a consistent CLI for sweepers.  May need to be re-thought in future but a standardized interface makes
-    sense for the time being.
+    sense for the time being.  A sweeper with options of its own can add them with configure_parser.
     """
     ap = argparse.ArgumentParser(
         description=description,
@@ -42,6 +48,9 @@ def parse_args(description: str = "", epilog: str = "") -> Namespace:
         help="username to login to the registry db, leaving it blank if db does not require login",
     )
     ap.add_argument("--insecure", action="store_true", default=False, help="skip verification of the host certificates")
+
+    if configure_parser is not None:
+        configure_parser(ap)
 
     args = ap.parse_args()
     return args
