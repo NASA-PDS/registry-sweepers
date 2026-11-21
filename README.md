@@ -19,6 +19,35 @@ and LIDVID) reference a given product. These values will be stored in property `
 
 Ancestry is processed collection-by-collection.  Any ancestry metadata generated for products which do not yet exist in registry is stored in a deferral index, and merged if/when the corresponding document is written to the registry.  Processing is skipped for collections (and their respective child non-aggregates) where the collection is considered up-to-date, i.e. where their `ops:Registry_Sweepers/ops:ancestry_software_version` metadata value is up-to-date relative to the sweeper codebase.
 
+##### Ancestry: bundle links, dry run and output file
+
+The ancestry sweeper also links a bundle that was loaded after its collection was stamped. A diff-based pass over the already-stamped collections adds only the missing bundle to the collection's `ancestor_refs`; products are not read or written, the deferral logic above is untouched, collections stamped by a newer ancestry version are left alone, and a second run writes nothing.
+
+| Flag | Effect |
+|---|---|
+| `--dry-run` | Runs the full read path through a read-only client (any write raises `ReadOnlyClientViolation`) and prints a report of counts by kind. |
+| `--output-file FILE` | Writes a TSV (`collection_lidvid`, `bundle_lidvid_added`) of the bundle links added, or with `--dry-run` that would be added. Optional, with or without `--dry-run`. |
+| Driver | `--dry-run` is refused unless every selected sweeper supports it (only `ancestry` does), so it requires `--only ancestry`. `--output-file` has no effect unless `ancestry` is selected. |
+
+```bash
+pds-registry-sweepers --only ancestry --dry-run
+OUTPUT_FILE="ancestry-bundle-links.tsv"
+pds-registry-sweepers --only ancestry --dry-run --output-file "${OUTPUT_FILE}"
+pds-registry-sweepers --only ancestry --output-file "${OUTPUT_FILE}"
+python -m pds.registrysweepers.ancestry --base-URL "${PROV_ENDPOINT}" --log-level INFO --dry-run
+```
+
+Reading the report (logged at INFO and printed to stdout):
+
+- `Document updates a real run would write`: the sum of the lines below.
+- `Pending collections`: collections not yet at the current ancestry version; each is written twice (the second write is `marked complete`).
+- `Bundles`: bundles not yet stamped with the current version.
+- `Collections already at vN that only get a bundle link added`: collections stamped before their bundle was loaded, with the number of bundle links in parentheses (`0` means none are missing); `--output-file` lists these links.
+- `Non-aggregate products`: the products of the pending collections, counted as they are read.
+- A closing block estimates, from reads only, the updates a real run would defer, the deferred updates waiting, and those it would merge.
+
+**Guarantees:** no document update, mapping change, index creation, or write to the deferred-updates index is sent, and no deferred update is merged. **Does not:** skip the reads; it reads the whole registry, takes about as long as the read part of a real run, and its counts are a snapshot.
+
 #### [Reindexer](https://github.com/NASA-PDS/registry-sweepers/blob/main/src/pds/registrysweepers/reindexer/main.py)
 The reindexer sweeper ensures that the registry index mappings are updated with all fields available in the registry-dd index, and then triggers reindexation on all products which have not yet been successfully processed previously.  This ensures that all products are searchable on all fields, provided a field type mapping is defined in the registry-dd index at the time of processing.
 
@@ -90,6 +119,8 @@ pds-registry-sweepers --only legacy-sync
 
 - With no flags, the full default suite runs: `provenance`, `ancestry`, `reindexer`.
 - With `--only <name> [name ...]`, only the named sweeper(s) run. Available names: `provenance`, `ancestry`, `reindexer`, `legacy-sync`.
+- With `--dry-run`, the ancestry sweeper reads and reports but writes nothing (see [Ancestry dry run](#ancestry-dry-run)). It must be combined with `--only ancestry`.
+- With `--output-file FILE`, the ancestry sweeper also lists the bundle links it adds (or, with `--dry-run`, would add) to already-stamped collections in `FILE` (see [Bundle link listing](#bundle-link-listing)). It has no effect unless `ancestry` is selected.
 
 `PROV_ENDPOINT` and (for non-AWS OpenSearch) `PROV_CREDENTIALS` environment variables are required. See the Developer Quickstart section for details.
 

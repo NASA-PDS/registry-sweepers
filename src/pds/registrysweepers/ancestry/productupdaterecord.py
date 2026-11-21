@@ -2,6 +2,7 @@ from collections.abc import Callable
 from collections.abc import Iterable
 from dataclasses import dataclass
 from dataclasses import field
+from enum import Enum
 from typing import Optional
 from typing import Set
 
@@ -9,6 +10,16 @@ from pds.registrysweepers.ancestry.typedefs import SerializableAncestryRecordTyp
 from pds.registrysweepers.utils.productidentifiers.pdslid import PdsLid
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 from pds.registrysweepers.utils.productidentifiers.pdsproductidentifier import PdsProductIdentifier
+
+
+class UpdateKind(Enum):
+    """What an update record is for.  Only used to report the content of a dry run; it does not affect the write."""
+
+    PENDING_COLLECTION = "pending collection"  # a collection which is not stamped with the current version
+    COLLECTION_COMPLETE = "collection complete"  # stamps a pending collection once its non-aggregates are processed
+    STAMPED_COLLECTION_LINK = "stamped collection bundle link"  # adds a bundle to an already-stamped collection
+    BUNDLE = "bundle"
+    NONAGGREGATE = "non-aggregate"
 
 
 @dataclass
@@ -22,13 +33,15 @@ class ProductUpdateRecord:
     _skip_write: bool = False
     _complete: bool = False
 
-    def __init__(self, product: PdsLidVid, direct_ancestor_refs: Optional[Iterable[PdsProductIdentifier]] = None, skip_write: bool = False):
+    def __init__(self, product: PdsLidVid, direct_ancestor_refs: Optional[Iterable[PdsProductIdentifier]] = None, skip_write: bool = False,
+                 kind: Optional[UpdateKind] = None):
         if not isinstance(product, PdsLidVid):
             raise ValueError('Cannot initialise ProductUpdateRecord with non-PdsLidVid value for "product"')
         self._product = product
         self._direct_ancestor_refs = set(direct_ancestor_refs or [])
         self._skip_write = skip_write
         self._complete = False
+        self._kind = kind
 
     def __post_init__(self):
         if not isinstance(self._product, PdsLidVid):
@@ -51,6 +64,10 @@ class ProductUpdateRecord:
     @property
     def product(self):
         return self._product
+
+    @property
+    def kind(self) -> Optional[UpdateKind]:
+        return self._kind
 
     @property
     def skippable(self):
