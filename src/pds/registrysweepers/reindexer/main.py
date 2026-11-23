@@ -7,6 +7,7 @@ from time import sleep
 from typing import Collection
 from typing import Dict
 from typing import Iterable
+from typing import List
 from typing import Optional
 from typing import Union
 
@@ -83,6 +84,17 @@ def get_mapping_field_types_by_field_name(client: OpenSearch, index_name: str) -
 
 # Registry documents store fields under literal dotted top-level _source keys, not as nested objects
 HARVEST_DATE_TIME_KEY = "ops:Harvest_Info.ops:harvest_date_time"
+HARVEST_VERSION_KEY = "ops:Harvest_Info.ops:harvest_version"
+
+
+def _get_harvest_versions(doc: Dict) -> List[str]:
+    """
+    Return a document's harvest version values, accepting a list or a bare string. A missing version yields no values
+    and no log, as logging each one was too noisy.
+    """
+    value = doc["_source"].get(HARVEST_VERSION_KEY)
+    values = value if isinstance(value, list) else [value]
+    return [str(v) for v in values if v is not None]
 
 
 def _parse_harvest_time(doc: Dict) -> Optional[datetime]:
@@ -210,12 +222,7 @@ def accumulate_missing_mappings(
                         doc_harvest_time, latest_problem_doc_harvested_at or doc_harvest_time
                     )
 
-                try:
-                    problematic_harvest_versions.update(doc["_source"]["ops:Harvest_Info/ops:harvest_version"])
-                except KeyError as err:
-                    # Noisy log temporarily disabled but may be re-enabled at jpadams' discretion
-                    # log.warning(limit_log_length(f'Unable to extract harvest version from document {doc["_id"]}: {err}'))
-                    pass
+                problematic_harvest_versions.update(_get_harvest_versions(doc))
 
             if mapping_missing and property_name not in missing_mapping_updates:
                 if canonical_type_is_defined:
