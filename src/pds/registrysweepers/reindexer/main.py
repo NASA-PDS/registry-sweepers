@@ -322,7 +322,10 @@ def run(
     # within generate_updates() to ensure that the second stage (update generation) hasn't picked up any products which
     # weren't processed in the first stage (missing mapping accumulation)
     batch_size_limit = 100000
-    sort_fields = ["ops:Harvest_Info.ops:harvest_date_time"]
+    # lidvid breaks ties between documents sharing a harvest timestamp. Without it, the search_after cursor skips the
+    # rest of a tie group that straddles a page boundary. lidvid equals _id but is a keyword field with doc values, so
+    # sorting on it doesn't load _id fielddata (heap proportional to the whole index) into memory.
+    sort_fields = ["ops:Harvest_Info.ops:harvest_date_time", "lidvid"]
     total_outstanding_doc_count = get_updated_hits_count()
 
     # disable=None enables auto-detection: progress bar is shown in interactive terminals (TTY)
