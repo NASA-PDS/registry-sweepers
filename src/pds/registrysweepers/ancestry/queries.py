@@ -10,6 +10,7 @@ from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import get_query_hits_count
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+from pds.registrysweepers.utils.db.indexing import ensure_index_has_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
@@ -135,6 +136,10 @@ def get_deferred_update_documents_without_content(client: OpenSearch, index_name
     query: Dict = {"query": {"match_all": {}}}
     source: Dict = {"includes": []}
 
-    docs = query_registry_db_with_search_after(client, deferred_updates_index_name, query, source, sort_fields=["_doc"])
+    # Sort on _id rather than _doc: _doc values are shard-local Lucene doc ids, which tie across shards and are not
+    # stable across segment merges, so paging on them with search_after silently skips documents. Sorting on _id
+    # requires the index to have mapping metadata, which a bare, never-written deferred-updates index lacks.
+    ensure_index_has_mapping(client, deferred_updates_index_name)
+    docs = query_registry_db_with_search_after(client, deferred_updates_index_name, query, source, sort_fields=["_id"])
 
     return docs

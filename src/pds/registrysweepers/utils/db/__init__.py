@@ -321,7 +321,8 @@ def write_updated_docs(
             raise RuntimeError(f"index '{deferred_index_name}' does not exist and must be created before "
                                f"running sweepers'")
 
-        # no index mappings should be necessary, as deferred updates will only be accessed by _id
+        # no field mappings are necessary, as deferred updates are only accessed by _id (sorting on _id does need the
+        # index to have mapping metadata, which get_deferred_update_documents_without_content() ensures)
 
         update_deferral_tracker = UpdateDeferralTracker(updates)
         updates = iter(update_deferral_tracker)

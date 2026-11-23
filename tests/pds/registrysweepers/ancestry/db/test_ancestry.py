@@ -557,11 +557,14 @@ def test_pending_queries_compare_versions_numerically(registry_db, monkeypatch, 
 # Deferred-updates query pagination
 # ---------------------------------------------------------------------------
 
-def test_deferred_update_query_returns_all_pages(registry_db, monkeypatch):
+@pytest.mark.parametrize("shards", [1, 3])
+def test_deferred_update_query_returns_all_pages(registry_db, monkeypatch, shards):
     """
-    Regression: past one page of deferred updates, the search_after cursor was
-    built from _source (which never holds _doc), so the second page request
-    failed and the ancestry sweeper crashed.
+    Regression: the deferred-updates query must return every deferred update
+    across pages. Past one page, a search_after cursor built from _source (which
+    never holds the sort field) failed the second page request. Sorting on _doc
+    also lost documents on multi-shard indices, because _doc values are
+    shard-local and tie across shards.
     """
     from functools import partial
 
@@ -575,12 +578,35 @@ def test_deferred_update_query_returns_all_pages(registry_db, monkeypatch):
     )
 
     deferred_index = registry_db.index_names["deferred-updates"]
-    ids = [f"urn:nasa:pds:deferred:collection:product{n}::1.0" for n in range(5)]
+    registry_db.client.indices.delete(index=deferred_index)
+    registry_db.client.indices.create(
+        index=deferred_index, body={"settings": {"number_of_shards": shards, "number_of_replicas": 0}}
+    )
+    ids = [f"urn:nasa:pds:deferred:collection:product{n}::1.0" for n in range(30)]
     bulk(registry_db.client, [{"_index": deferred_index, "_id": i, "_source": {}} for i in ids])
     registry_db.refresh()
+
+    docs = list(
+        ancestry_queries.get_deferred_update_documents_without_content(
+            registry_db.client, registry_db.index_names["registry"]
+        )
+    )
+
+    assert sorted(d["_id"] for d in docs) == sorted(ids)
+    assert len(docs) == len(ids), "pages must not overlap"
+
+
+def test_deferred_update_query_on_never_written_index(registry_db):
+    """
+    Regression: sorting on _id fails ("No mapping found for [_id] in order to
+    sort on") on an index created without mappings and never written to. The
+    harness creates the deferred-updates index that way.
+    """
+    deferred_index = registry_db.index_names["deferred-updates"]
+    assert registry_db.client.indices.get_mapping(index=deferred_index)[deferred_index]["mappings"] == {}
 
     docs = ancestry_queries.get_deferred_update_documents_without_content(
         registry_db.client, registry_db.index_names["registry"]
     )
 
-    assert sorted(d["_id"] for d in docs) == sorted(ids)
+    assert list(docs) == []
