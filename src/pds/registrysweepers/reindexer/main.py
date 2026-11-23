@@ -7,6 +7,7 @@ from time import sleep
 from typing import Collection
 from typing import Dict
 from typing import Iterable
+from typing import Optional
 from typing import Union
 
 import dateutil.parser
@@ -78,6 +79,30 @@ def get_mapping_field_types_by_field_name(client: OpenSearch, index_name: str) -
     mappings = client.indices.get_mapping(index_name)[index_name]["mappings"]
     flattened_mappings = flatten_mappings(mappings)
     return flattened_mappings
+
+
+# Registry documents store fields under literal dotted top-level _source keys, not as nested objects
+HARVEST_DATE_TIME_KEY = "ops:Harvest_Info.ops:harvest_date_time"
+
+
+def _parse_harvest_time(doc: Dict) -> Optional[datetime]:
+    """
+    Return a document's harvest timestamp as a UTC datetime, or None (with a warning) if it is missing or unparseable.
+    Accepts the usual single-element list as well as a bare string.
+    """
+    attr_value = doc["_source"].get(HARVEST_DATE_TIME_KEY)
+    value = attr_value[0] if isinstance(attr_value, list) and len(attr_value) > 0 else attr_value
+    try:
+        if not isinstance(value, str):
+            raise ValueError("expected an ISO-formatted date string")
+        return dateutil.parser.isoparse(value).astimezone(timezone.utc)
+    except ValueError as err:
+        log.warning(
+            limit_log_length(
+                f'Unable to parse "{HARVEST_DATE_TIME_KEY}" as ISO-formatted date from document {doc["_id"]}: {attr_value} ({err})'
+            )
+        )
+        return None
 
 
 def accumulate_missing_mappings(
@@ -176,21 +201,13 @@ def accumulate_missing_mappings(
             if (mapping_missing or mapping_is_bad) and not problem_detected_in_document_already:
                 problem_detected_in_document_already = True
                 problem_docs_count += 1
-                attr_value = doc["_source"].get("ops:Harvest_Info", {}).get("ops:harvest_date_time", None)
-                try:
-                    doc_harvest_time = dateutil.parser.isoparse(attr_value[0]).astimezone(timezone.utc)
-
+                doc_harvest_time = _parse_harvest_time(doc)
+                if doc_harvest_time is not None:
                     earliest_problem_doc_harvested_at = min(
                         doc_harvest_time, earliest_problem_doc_harvested_at or doc_harvest_time
                     )
                     latest_problem_doc_harvested_at = max(
                         doc_harvest_time, latest_problem_doc_harvested_at or doc_harvest_time
-                    )
-                except (KeyError, ValueError) as err:
-                    log.warning(
-                        limit_log_length(
-                            f'Unable to parse first element of "ops:Harvest_Info.ops:harvest_date_time" as ISO-formatted date from document {doc["_id"]}: {attr_value} ({err})'
-                        )
                     )
 
                 try:
@@ -231,10 +248,14 @@ def accumulate_missing_mappings(
     )
 
     if problem_docs_count > 0:
-        log.warning(
-            limit_log_length(
-                f"RESULT: Problems were detected with docs having harvest timestamps between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"  # type: ignore
+        if earliest_problem_doc_harvested_at is not None and latest_problem_doc_harvested_at is not None:
+            harvest_time_range = (
+                f"between {earliest_problem_doc_harvested_at.isoformat()} and {latest_problem_doc_harvested_at.isoformat()}"
             )
+        else:
+            harvest_time_range = "unknown (no problem doc had a parseable harvest timestamp)"
+        log.warning(
+            limit_log_length(f"RESULT: Problems were detected with docs having harvest timestamps {harvest_time_range}")
         )
         log.warning(
             limit_log_length(
