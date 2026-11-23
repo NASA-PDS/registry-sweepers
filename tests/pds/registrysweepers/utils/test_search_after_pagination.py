@@ -62,3 +62,35 @@ def test_source_sort_field_paginates_all_hits(registry_db):
     )
 
     assert [h["_source"]["lidvid"] for h in hits] == sorted(lidvids)
+
+
+def test_date_sort_field_paginates_all_hits(registry_db):
+    """
+    The reindexer pages on ops:Harvest_Info.ops:harvest_date_time. The cursor for a date
+    sort is epoch millis (from hit["sort"]), not the stored ISO string. Harvest times are
+    deliberately out of lidvid order, so the assertion checks date ordering, not insertion order.
+    """
+    sort_field = "ops:Harvest_Info.ops:harvest_date_time"
+    harvest_days = [4, 1, 5, 2, 3]  # distinct: a single-field search_after cursor skips ties
+    docs = []
+    for n, day in enumerate(harvest_days):
+        doc = build_product(f"urn:nasa:pds:paging:dated{n}::1.0")
+        doc["_source"][sort_field] = [f"2024-01-0{day}T00:00:00.000Z"]  # dotted top-level key, as in production
+        docs.append(doc)
+    registry_db.load(docs, index="registry")
+    registry_db.refresh()
+
+    hits = list(
+        query_registry_db_with_search_after(
+            registry_db.client,
+            registry_db.index_names["registry"],
+            {"query": {"match_all": {}}},
+            {},  # as the reindexer passes it
+            page_size=PAGE_SIZE,
+            sort_fields=[sort_field],
+        )
+    )
+
+    returned_ids = [h["_id"] for h in hits]
+    expected_ids = [d["_id"] for _, d in sorted(zip(harvest_days, docs), key=lambda pair: pair[0])]
+    assert returned_ids == expected_ids
