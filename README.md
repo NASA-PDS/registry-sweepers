@@ -179,7 +179,7 @@ Each test gets its own indices under a random node prefix (`MULTITENANCY_NODE_ID
 
 The test indices are created from the committed mapping files in [`tests/resources/mappings/`](tests/resources/mappings/). That README says where they came from and how to refresh them. If any are missing, DB tests skip (or fail under `CI`) with a message naming the missing files.
 
-Seed documents are checked against these mappings when loaded. A field that isn't in the mapping, such as a stale flat-schema name like `ops:Sweepers/ops:ancestry_version`, fails the load with an error listing the unknown fields. Pass `validate=False` to `registry_db.load()` to seed deliberately invalid documents.
+Seed documents are checked against these mappings when loaded. A field that isn't in the mapping, such as a stale flat-schema name like `ops:Sweepers/ops:ancestry_version`, fails the load with an error listing the unknown fields. So does a nested object such as `{"ops:Harvest_Info": {...}}`: registry documents store fields under dotted top-level keys (`"ops:Harvest_Info.ops:harvest_date_time"`), so seed documents must too. Pass `validate=False` to `registry_db.load()` to seed deliberately invalid documents.
 
 ### Writing a DB test
 

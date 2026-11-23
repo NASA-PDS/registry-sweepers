@@ -95,15 +95,21 @@ def _validate_docs(seed_docs: list, mappings: dict) -> None:
         valid_fields = _extract_mapping_fields(mapping_props) | _RUNTIME_ADDED_FIELDS
         if not valid_fields:
             continue
+        object_fields = _extract_mapping_objects(mapping_props)
         doc_fields = set(sd.source.keys())
         unknown = doc_fields - valid_fields
         if unknown:
-            errors[sd.id] = sorted(unknown)
+            errors[sd.id] = [
+                f"{f} (a mapping object: use its dotted leaf keys, e.g. {f}.<field>, as production does)"
+                if f in object_fields
+                else f
+                for f in sorted(unknown)
+            ]
 
     if errors:
         lines = [f"  {doc_id}: {fields}" for doc_id, fields in errors.items()]
         raise ValueError(
-            "Unknown fields in seed docs (builders or fixtures may be using stale field names):\n"
+            "Unknown fields in seed docs (builders or fixtures may be using stale field names or nested objects):\n"
             + "\n".join(lines)
         )
 
@@ -117,10 +123,27 @@ def _get_properties(mapping_body: dict) -> dict:
 
 
 def _extract_mapping_fields(properties: dict, prefix: str = "") -> set:
+    """
+    Return the dotted paths of the mapping's leaf fields. Object fields are excluded: registry documents store
+    fields under dotted top-level _source keys (e.g. "ops:Harvest_Info.ops:harvest_date_time"), never as nested
+    objects, so a seed doc with a nested object would not represent production data.
+    """
     fields = set()
     for name, defn in properties.items():
         full = f"{prefix}.{name}" if prefix else name
-        fields.add(full)
         if isinstance(defn, dict) and "properties" in defn:
             fields.update(_extract_mapping_fields(defn["properties"], full))
+        else:
+            fields.add(full)
     return fields
+
+
+def _extract_mapping_objects(properties: dict, prefix: str = "") -> set:
+    """Return the dotted paths of the mapping's object fields."""
+    objects = set()
+    for name, defn in properties.items():
+        full = f"{prefix}.{name}" if prefix else name
+        if isinstance(defn, dict) and "properties" in defn:
+            objects.add(full)
+            objects.update(_extract_mapping_objects(defn["properties"], full))
+    return objects
