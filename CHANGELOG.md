@@ -1,8 +1,12 @@
 # Changelog
 
-## [release/1.7.6](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.7.6) (2026-11-23)
+## [release/1.7.7](https://github.com/NASA-PDS/registry-sweepers/tree/release/1.7.7) (2026-11-24)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.6-rc.1...release/1.7.6)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.6...release/1.7.7)
+
+## [v1.7.6](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.6) (2026-11-23)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.6-rc.1...v1.7.6)
 
 ## [v1.7.6-rc.1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.6-rc.1) (2026-11-23)
 
@@ -18,19 +22,19 @@
 
 ## [v1.7.5-rc.2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.5-rc.2) (2026-11-18)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5rc1...v1.7.5-rc.2)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5rc2...v1.7.5-rc.2)
 
 **Defects:**
 
 - ancestry sweeper does not link a bundle to a re-harvested collection when the bundle is already stamped, leaving collection ancestor\_refs empty and /members at 0 [\#284](https://github.com/NASA-PDS/registry-sweepers/issues/284) [[s.medium](https://github.com/NASA-PDS/registry-sweepers/labels/s.medium)]
 
-## [v1.7.5rc1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.5rc1) (2026-11-12)
-
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5rc2...v1.7.5rc1)
-
 ## [v1.7.5rc2](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.5rc2) (2026-11-12)
 
-[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5-rc.1...v1.7.5rc2)
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5rc1...v1.7.5rc2)
+
+## [v1.7.5rc1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.5rc1) (2026-11-12)
+
+[Full Changelog](https://github.com/NASA-PDS/registry-sweepers/compare/v1.7.5-rc.1...v1.7.5rc1)
 
 ## [v1.7.5-rc.1](https://github.com/NASA-PDS/registry-sweepers/tree/v1.7.5-rc.1) (2026-11-12)
 
