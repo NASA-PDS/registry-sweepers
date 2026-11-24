@@ -147,11 +147,14 @@ def process_collection_bundle_ancestry(
 def bundle_update_records_from_docs(docs: Iterable[dict]) -> Iterable[ProductUpdateRecord]:
     """
     Generate ProductUpdateRecords from bundle docs, indicating whether they are up-to-date or require processing.
+
+    A bundle is up to date only if stamped with exactly the current version, consistent with the version filter in
+    queries._is_at_current_ancestry_version (so bundles stamped by a newer sweeper are reprocessed after a downgrade).
     """
     for doc in docs:
         try:
             sweeper_version_in_doc = doc["_source"].get(SWEEPERS_ANCESTRY_VERSION_METADATA_KEY, 0)
-            skip_write = sweeper_version_in_doc >= SWEEPERS_ANCESTRY_VERSION
+            skip_write = sweeper_version_in_doc == SWEEPERS_ANCESTRY_VERSION
             yield ProductUpdateRecord(product=PdsLidVid.from_string(doc["_source"]["lidvid"]),
                                       skip_write=skip_write)
         except (ValueError, KeyError) as err:

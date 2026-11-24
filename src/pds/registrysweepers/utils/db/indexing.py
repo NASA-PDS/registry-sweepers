@@ -66,6 +66,17 @@ def _await_mapping_creation(client: OpenSearch, index_name: str, property_name: 
     _check_mapping(client, index_name, property_name, property_type)
 
 
+def ensure_index_has_mapping(client: OpenSearch, index_name: str) -> None:
+    """
+    Ensures the index has mapping metadata, without adding or altering any field mappings.
+
+    An index created without a mappings body, and never written to, has no mapping metadata, and sorting it on a
+    metadata field such as _id fails with "No mapping found for [_id] in order to sort on". An empty put_mapping
+    creates that metadata. It is idempotent, and cannot conflict with existing field mappings.
+    """
+    client.indices.put_mapping(index=index_name, body={"properties": {}})
+
+
 def ensure_index_mapping(client: OpenSearch, index_name: str, property_key: str, property_type: str) -> None:
     """
     Ensures a given property mapping exists with the expected type in the given index,

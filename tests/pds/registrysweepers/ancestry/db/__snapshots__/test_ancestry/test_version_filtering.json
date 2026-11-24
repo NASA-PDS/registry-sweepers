@@ -1,0 +1,65 @@
+[
+  {
+    "_id": "urn:nasa:pds:vf:bundle::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:vf:bundle::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Bundle",
+      "ref_lid_collection": [
+        "urn:nasa:pds:vf:unversioned",
+        "urn:nasa:pds:vf:old",
+        "urn:nasa:pds:vf:current"
+      ],
+      "title": "Test Product"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:vf:current::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:vf:current::1.0",
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Test Collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:vf:current:p1::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:vf:current:p1::1.0",
+      "product_class": "Product_Observational",
+      "title": "Test Product"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:vf:old::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:vf:old::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:vf:bundle",
+        "urn:nasa:pds:vf:bundle::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Test Collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:vf:unversioned::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:vf:unversioned::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:vf:bundle",
+        "urn:nasa:pds:vf:bundle::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Test Collection"
+    }
+  }
+]

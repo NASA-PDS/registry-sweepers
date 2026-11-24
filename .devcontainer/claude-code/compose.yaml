@@ -1,0 +1,55 @@
+name: registry-sweepers-claude
+
+services:
+  devcontainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TZ: ${TZ:-America/Los_Angeles}
+        CLAUDE_CODE_VERSION: latest
+        GIT_DELTA_VERSION: 0.18.2
+        ZSH_IN_DOCKER_VERSION: 1.2.0
+    command: sleep infinity
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ../..:/workspace:cached
+      - bashhistory:/commandhistory
+      - claude-config:/home/node/.claude
+    environment:
+      NODE_OPTIONS: --max-old-space-size=4096
+      CLAUDE_CONFIG_DIR: /home/node/.claude
+      POWERLEVEL9K_DISABLE_GITSTATUS: "true"
+      # Used by the test suite to reach the OpenSearch sidecar instead of starting a container
+      TEST_OPENSEARCH_URL: http://opensearch:9200
+    depends_on:
+      opensearch:
+        # Ensures the sidecar is reachable before init-firewall.sh (postStartCommand) verifies it
+        condition: service_healthy
+
+  opensearch:
+    # TODO: confirm this matches the production managed-OpenSearch version.
+    # Keep in sync with OPENSEARCH_IMAGE in tests/support/opensearch_server.py.
+    image: opensearchproject/opensearch:2.19.4
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  # These replace the previous per-devcontainerId volumes, so they start empty (you'll need to log in to Claude
+  # Code again). To keep the old ones, replace each with e.g.
+  #   claude-config:
+  #     external: true
+  #     name: claude-code-config-<id>      # find with: docker volume ls | grep claude-code
+  bashhistory:
+  claude-config:

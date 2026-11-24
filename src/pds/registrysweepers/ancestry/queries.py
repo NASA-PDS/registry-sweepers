@@ -10,6 +10,7 @@ from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION
 from pds.registrysweepers.ancestry.versioning import SWEEPERS_ANCESTRY_VERSION_METADATA_KEY
 from pds.registrysweepers.utils.db import get_query_hits_count
 from pds.registrysweepers.utils.db import query_registry_db_with_search_after
+from pds.registrysweepers.utils.db.indexing import ensure_index_has_mapping
 from pds.registrysweepers.utils.db.multitenancy import resolve_multitenant_index_name
 from pds.registrysweepers.utils.productidentifiers.pdslidvid import PdsLidVid
 
@@ -34,6 +35,21 @@ def product_class_query_factory(cls: ProductClass) -> Dict:
     return {"query": queries[cls]}
 
 
+def _is_at_current_ancestry_version() -> Dict:
+    """
+    Query clause matching docs stamped with exactly the current ancestry version; use under must_not to select
+    docs which require processing.
+
+    The version field is mapped as keyword (see ancestry/main.py), so a range clause would compare versions as
+    strings ("9" >= "10"), and once SWEEPERS_ANCESTRY_VERSION reached 10 every doc stamped 2-9 would be treated as
+    up to date. An exact match avoids that. Docs stamped by a newer sweeper version are treated as pending, so
+    they are reprocessed after a downgrade.
+
+    Built at call time rather than import time, so the current version is always read from this module.
+    """
+    return {"term": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: str(SWEEPERS_ANCESTRY_VERSION)}}
+
+
 def query_for_pending_bundles(client: OpenSearch) -> Iterable[Dict]:
     """Query the registry for all bundle LIDVIDs which require ancestry processing"""
     from pds.registrysweepers.utils.db import query_registry_db_with_search_after
@@ -52,7 +68,7 @@ def query_for_pending_collections(client: OpenSearch) -> Iterable[Dict]:
 
     query = product_class_query_factory(ProductClass.COLLECTION)
     query["query"]["bool"].update(
-        {"must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]}
+        {"must_not": [_is_at_current_ancestry_version()]}
     )
 
     _source = {"includes": ["lidvid", SWEEPERS_ANCESTRY_VERSION_METADATA_KEY]}
@@ -71,7 +87,7 @@ def query_for_collection_nonaggregate_refs(
     query: Dict = {
         "query": {
             "bool": {
-                "must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}],
+                "must_not": [_is_at_current_ancestry_version()],
                 "filter": [{"term": {"collection_lidvid": str(collection_lidvid)}}],
             }
         },
@@ -95,11 +111,8 @@ def query_for_collection_nonaggregate_refs(
             yield PdsLidVid.from_string(ref)
 
 
-_orphaned_docs_query = {
-    "query": {
-        "bool": {"must_not": [{"range": {SWEEPERS_ANCESTRY_VERSION_METADATA_KEY: {"gte": SWEEPERS_ANCESTRY_VERSION}}}]}
-    }
-}
+def _orphaned_docs_query() -> Dict:
+    return {"query": {"bool": {"must_not": [_is_at_current_ancestry_version()]}}}
 
 
 def get_orphaned_documents(client: OpenSearch, index_name: str) -> Iterable[Dict]:
@@ -107,7 +120,7 @@ def get_orphaned_documents(client: OpenSearch, index_name: str) -> Iterable[Dict
     # which is orphaned and is getting missed in processing
 
     _source: Dict = {"includes": []}
-    docs = query_registry_db_with_search_after(client, index_name, _orphaned_docs_query, _source)
+    docs = query_registry_db_with_search_after(client, index_name, _orphaned_docs_query(), _source)
 
     return docs
 
@@ -115,7 +128,7 @@ def get_orphaned_documents(client: OpenSearch, index_name: str) -> Iterable[Dict
 def get_orphaned_documents_count(client: OpenSearch, index_name: str) -> int:
     # Query an index documents without an up-to-date ancestry version reference - this would indicate a product which is
     # orphaned and is getting missed in processing
-    return get_query_hits_count(client, index_name, _orphaned_docs_query)
+    return get_query_hits_count(client, index_name, _orphaned_docs_query())
 
 
 def get_deferred_update_documents_without_content(client: OpenSearch, index_name: str) -> Iterable[Dict]:
@@ -123,6 +136,10 @@ def get_deferred_update_documents_without_content(client: OpenSearch, index_name
     query: Dict = {"query": {"match_all": {}}}
     source: Dict = {"includes": []}
 
+    # Sort on _id rather than _doc: _doc values are shard-local Lucene doc ids, which tie across shards and are not
+    # stable across segment merges, so paging on them with search_after silently skips documents. Sorting on _id
+    # requires the index to have mapping metadata, which a bare, never-written deferred-updates index lacks.
+    ensure_index_has_mapping(client, deferred_updates_index_name)
     docs = query_registry_db_with_search_after(client, deferred_updates_index_name, query, source, sort_fields=["_id"])
 
     return docs

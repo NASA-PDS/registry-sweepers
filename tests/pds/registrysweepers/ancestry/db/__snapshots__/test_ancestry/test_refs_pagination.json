@@ -1,0 +1,72 @@
+[
+  {
+    "_id": "urn:nasa:pds:paginated_bundle::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:paginated_bundle::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Bundle",
+      "ref_lid_collection": [
+        "urn:nasa:pds:paginated_collection"
+      ],
+      "title": "Paginated bundle"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:paginated_collection::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:paginated_collection::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:paginated_bundle",
+        "urn:nasa:pds:paginated_bundle::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Collection",
+      "title": "Paginated collection"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:paginated_collection:product_1::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:paginated_collection:product_1::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:paginated_collection",
+        "urn:nasa:pds:paginated_collection::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Observational",
+      "title": "Product 1"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:paginated_collection:product_2::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:paginated_collection:product_2::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:paginated_collection",
+        "urn:nasa:pds:paginated_collection::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Observational",
+      "title": "Product 2"
+    }
+  },
+  {
+    "_id": "urn:nasa:pds:paginated_collection:product_3::1.0",
+    "_source": {
+      "alternate_ids": [],
+      "lidvid": "urn:nasa:pds:paginated_collection:product_3::1.0",
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:paginated_collection",
+        "urn:nasa:pds:paginated_collection::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>",
+      "product_class": "Product_Observational",
+      "title": "Product 3"
+    }
+  }
+]

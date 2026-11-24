@@ -234,7 +234,10 @@ def query_registry_db_with_search_after(
                     return
 
                 # simpler to set the value after every hit than worry about OBO errors detecting the last hit in the page
-                search_after_values = [hit["_source"].get(field) for field in sort_fields]
+                # Prefer the hit's own sort values: they exist for every sort field, including metadata fields like
+                # _id/_doc which never appear in _source (reading those from _source yields a [null] cursor, which
+                # truncates or crashes the query after the first page).
+                search_after_values = hit.get("sort") or [hit["_source"].get(field) for field in sort_fields]
 
             # Flatten single-element search-after-values.  Attempting to sort/search-after on MCP AOSS by
             # ops:Harvest_Info/ops:harvest_date_time is throwing
@@ -318,7 +321,8 @@ def write_updated_docs(
             raise RuntimeError(f"index '{deferred_index_name}' does not exist and must be created before "
                                f"running sweepers'")
 
-        # no index mappings should be necessary, as deferred updates will only be accessed by _id
+        # no field mappings are necessary, as deferred updates are only accessed by _id (sorting on _id does need the
+        # index to have mapping metadata, which get_deferred_update_documents_without_content() ensures)
 
         update_deferral_tracker = UpdateDeferralTracker(updates)
         updates = iter(update_deferral_tracker)
@@ -378,9 +382,9 @@ def write_updated_docs(
         bulk_updates_buffer.extend(update_statement_strs)
         total_update_count += 1
 
-    if buffered_updates_count > 0:
+    if bulk_updates_buffer:
         log.debug(
-            limit_log_length(f"Writing documents updates for {buffered_updates_count} remaining products to db...")
+            limit_log_length(f"Writing documents updates for {len(bulk_updates_buffer) // 2} remaining products to db...")
         )
         _write_bulk_updates_chunk(client, index_name, bulk_updates_buffer,
                                   update_deferral_tracker=update_deferral_tracker)

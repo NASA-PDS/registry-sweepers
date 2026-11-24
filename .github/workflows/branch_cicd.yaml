@@ -61,3 +61,49 @@ jobs:
 
                     tox
                 shell: bash
+
+    db-testing:
+        name: 🗄️ DB-backed Tests
+        runs-on: ubuntu-latest
+        if: github.actor != 'pdsen-ci'
+        timeout-minutes: 20
+
+        # No services: block. The tests start OpenSearch themselves via testcontainers (Docker is preinstalled on
+        # ubuntu-latest), using the image pinned in tests/support/opensearch_server.py. This is the same path a
+        # developer running `tox -e db` with Docker takes, so CI is what verifies it.
+
+        steps:
+            -
+                name: 💳 Checkout
+                uses: actions/checkout@v3
+                with:
+                    lfs: true
+                    fetch-depth: 0
+                    token: ${{secrets.ADMIN_GITHUB_TOKEN}}
+            -
+                name: Set up Python 3
+                uses: actions/setup-python@v1
+                with:
+                    python-version: '3.13'
+            -
+                name: 💵 Python Cache
+                uses: actions/cache@v3
+                with:
+                    path: ~/.cache/pip
+                    key: pds-${{runner.os}}-py-${{hashFiles('**/*.whl')}}
+                    restore-keys: pds-${{runner.os}}-py-
+            -
+                name: 🗄️ Run DB Tests
+                run:
+                    pip install --editable '.[dev]'
+
+                    tox -e db
+                shell: bash
+            -
+                name: 📊 Upload DB Test Coverage
+                if: always()
+                uses: actions/upload-artifact@v4
+                with:
+                    name: db-test-coverage
+                    path: coverage.xml
+                    if-no-files-found: warn

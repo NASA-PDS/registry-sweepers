@@ -1,0 +1,12 @@
+[
+  {
+    "_id": "urn:nasa:pds:deferred:collection:orphan::1.0",
+    "_source": {
+      "ops:Registry_Sweepers.ops:ancestor_refs": [
+        "urn:nasa:pds:deferred:collection",
+        "urn:nasa:pds:deferred:collection::1.0"
+      ],
+      "ops:Registry_Sweepers.ops:ancestry_software_version": "<SWEEPERS_ANCESTRY_VERSION>"
+    }
+  }
+]

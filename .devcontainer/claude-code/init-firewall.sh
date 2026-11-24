@@ -92,6 +92,16 @@ for domain in \
     done < <(echo "$ips")
 done
 
+# Allow the OpenSearch test sidecar (see compose.yaml)
+echo "Resolving opensearch sidecar..."
+OS_IP=$(getent hosts opensearch | awk '{print $1}' | head -1)
+if [ -z "$OS_IP" ]; then
+    echo "ERROR: Failed to resolve opensearch sidecar"
+    exit 1
+fi
+echo "Adding $OS_IP for opensearch sidecar"
+ipset add allowed-domains "$OS_IP"
+
 # Get host IP from default route
 HOST_IP=$(ip route | grep default | cut -d" " -f3)
 if [ -z "$HOST_IP" ]; then
@@ -136,4 +146,12 @@ if ! curl --connect-timeout 5 https://api.github.com/zen >/dev/null 2>&1; then
     exit 1
 else
     echo "Firewall verification passed - able to reach https://api.github.com as expected"
+fi
+
+# Verify OpenSearch sidecar access
+if ! curl --connect-timeout 5 -fs http://opensearch:9200 >/dev/null 2>&1; then
+    echo "ERROR: Firewall verification failed - unable to reach http://opensearch:9200"
+    exit 1
+else
+    echo "Firewall verification passed - able to reach http://opensearch:9200 as expected"
 fi
